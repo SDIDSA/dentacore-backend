@@ -6,6 +6,13 @@ const db = require('../config/database');
 
 const router = express.Router();
 
+const success = (res, message) => {
+    return res.json({success : true, message : JSON.stringify(message)})
+}
+const error = (res, error) => {
+    return res.json({success : false, error : error})
+}
+
 // Login
 router.post('/login',
   body('email').isEmail(),
@@ -14,7 +21,7 @@ router.post('/login',
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+        return error(res, 'validation.error');
       }
 
       const { email, password } = req.body;
@@ -34,16 +41,16 @@ router.post('/login',
         .executeTakeFirst();
 
       if (!user) {
-        return res.status(401).json({ error: 'auth.error.invalid_credentials' });
+        return error(res, 'auth.error.invalid_credentials')
       }
 
       if (!user.is_active) {
-        return res.status(403).json({ error: 'auth.error.account_inactive' });
+        return error(res, 'auth.error.account_inactive');
       }
 
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
       if (!isValidPassword) {
-        return res.status(401).json({ error: 'auth.error.invalid_credentials' });
+        return error(res, 'auth.error.invalid_credentials')
       }
 
       const token = jwt.sign(
@@ -58,7 +65,7 @@ router.post('/login',
         .where('id', '=', user.id)
         .execute();
 
-      res.json({
+        success(res, {
         token,
         user: {
           id: user.id,
@@ -66,7 +73,7 @@ router.post('/login',
           full_name: user.full_name,
           role_key: user.role_key,
         },
-      });
+      })
     } catch (error) {
       next(error);
     }
