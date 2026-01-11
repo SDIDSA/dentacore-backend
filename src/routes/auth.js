@@ -7,10 +7,10 @@ const db = require('../config/database');
 const router = express.Router();
 
 const success = (res, message) => {
-    return res.json({success : true, message : message})
+  return res.json({ success: true, message: message })
 }
 const error = (res, code, error) => {
-    return res.status(code).json({success : false, error : error})
+  return res.status(code).json({ success: false, error: error })
 }
 
 // Login
@@ -65,15 +65,13 @@ router.post('/login',
         .where('id', '=', user.id)
         .execute();
 
-        success(res, {
+      return res.json({
         token,
-        user: {
-          id: user.id,
-          email: user.email,
-          full_name: user.full_name,
-          role_key: user.role_key,
-        },
-      })
+        id: user.id,
+        fullName: user.full_name,
+        roleKey: user.role_key,
+
+      });
     } catch (error) {
       next(error);
     }
