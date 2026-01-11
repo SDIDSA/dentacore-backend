@@ -53,7 +53,7 @@ CREATE TABLE users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
-    phone VARCHAR(20) NOT NULL,
+    phone VARCHAR(20) UNIQUE NOT NULL,
     wilaya_id SMALLINT REFERENCES wilayas(id) ON DELETE SET NULL,
     address TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
