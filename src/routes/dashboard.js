@@ -7,66 +7,116 @@ const router = express.Router();
 
 router.use(authenticate);
 
-// Get dashboard statistics and today's appointments
-router.get('/', async (req, res, next) => {
+// Get patient statistics with comparative insights
+router.get('/patients', async (req, res, next) => {
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+    const [totalPatients, activePatients, thisMonthPatients, lastMonthPatients] = await Promise.all([
+      db.selectFrom('patients')
+        .select(sql`COUNT(*)`.as('count'))
+        .executeTakeFirst(),
+      db.selectFrom('patients')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('is_active', '=', true)
+        .executeTakeFirst(),
+      db.selectFrom('patients')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('created_at', '>=', startOfMonth.toISOString())
+        .executeTakeFirst(),
+      db.selectFrom('patients')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('created_at', '>=', startOfLastMonth.toISOString())
+        .where('created_at', '<=', endOfLastMonth.toISOString())
+        .executeTakeFirst()
+    ]);
+
+    const thisMonth = parseInt(thisMonthPatients.count);
+    const lastMonth = parseInt(lastMonthPatients.count);
+    const monthlyChange = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth * 100) : 0;
+
+    res.json({
+      total: parseInt(totalPatients.count),
+      active: parseInt(activePatients.count),
+      this_month: thisMonth,
+      last_month: lastMonth,
+      monthly_change_percent: parseFloat(monthlyChange.toFixed(2)),
+      trend: monthlyChange > 0 ? 'up' : monthlyChange < 0 ? 'down' : 'stable'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get appointment statistics with comparative insights
+router.get('/appointments', async (req, res, next) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Get statistics
-    const [
-      totalPatients,
-      activePatients,
-      todayAppointments,
-      completedToday,
-      pendingInvoices,
-      totalRevenue
-    ] = await Promise.all([
-      // Total patients
-      db.selectFrom('patients')
-        .select(sql`COUNT(*)`.as('count'))
-        .executeTakeFirst(),
+    // Calculate week's date range (Monday to Sunday)
+    const startOfWeek = new Date(today);
+    const dayOfWeek = today.getDay();
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday = 0, Monday = 1
+    startOfWeek.setDate(today.getDate() - daysToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
 
-      // Active patients
-      db.selectFrom('patients')
-        .select(sql`COUNT(*)`.as('count'))
-        .where('is_active', '=', true)
-        .executeTakeFirst(),
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
 
-      // Today's appointments count
+    const [todayAppointments, completedToday, weekAppointments] = await Promise.all([
       db.selectFrom('appointments')
         .select(sql`COUNT(*)`.as('count'))
         .where('appointment_date', '>=', today.toISOString())
         .where('appointment_date', '<', tomorrow.toISOString())
         .executeTakeFirst(),
-
-      // Completed appointments today
       db.selectFrom('appointments')
         .select(sql`COUNT(*)`.as('count'))
         .where('appointment_date', '>=', today.toISOString())
         .where('appointment_date', '<', tomorrow.toISOString())
         .where('status_key', '=', 'appt.status.completed')
         .executeTakeFirst(),
-
-      // Pending invoices
-      db.selectFrom('invoices')
-        .select([
-          sql`COUNT(*)`.as('count'),
-          sql`COALESCE(SUM(total_dzd - paid_amount_dzd), 0)`.as('total_pending')
-        ])
-        .where('payment_status_key', 'in', ['invoice.status.unpaid', 'invoice.status.partial', 'invoice.status.overdue'])
-        .executeTakeFirst(),
-
-      // Total revenue (this month)
-      db.selectFrom('payments')
-        .select(sql`COALESCE(SUM(amount_dzd), 0)`.as('total'))
-        .where(sql`DATE_TRUNC('month', payment_date)`, '=', sql`DATE_TRUNC('month', CURRENT_DATE)`)
+      db.selectFrom('appointments')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('appointment_date', '>=', startOfWeek.toISOString())
+        .where('appointment_date', '<=', endOfWeek.toISOString())
         .executeTakeFirst()
     ]);
 
-    // Get today's appointments with details
+    const todayCount = parseInt(todayAppointments.count);
+    const completedCount = parseInt(completedToday.count);
+    const weekTotal = parseInt(weekAppointments.count);
+    const weekAverage = weekTotal / 7;
+    const todayVsAverage = weekAverage > 0 ? ((todayCount - weekAverage) / weekAverage * 100) : 0;
+
+    res.json({
+      today: todayCount,
+      completed: completedCount,
+      pending: todayCount - completedCount,
+      week_total: weekTotal,
+      week_average: parseFloat(weekAverage.toFixed(1)),
+      today_vs_average_percent: parseFloat(todayVsAverage.toFixed(2)),
+      trend: todayVsAverage > 0 ? 'above_average' : todayVsAverage < 0 ? 'below_average' : 'average'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get today's appointments with details
+router.get('/appointments/today', async (req, res, next) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
     const appointments = await db
       .selectFrom('appointments')
       .innerJoin('patients', 'appointments.patient_id', 'patients.id')
@@ -86,27 +136,285 @@ router.get('/', async (req, res, next) => {
       .orderBy('appointments.appointment_date', 'asc')
       .execute();
 
+    res.json(appointments);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get invoice statistics with comparative insights
+router.get('/invoices', async (req, res, next) => {
+  try {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+    const [pendingInvoices, thisMonthInvoices, lastMonthInvoices] = await Promise.all([
+      db.selectFrom('invoices')
+        .select([
+          sql`COUNT(*)`.as('count'),
+          sql`COALESCE(SUM(total_dzd - paid_amount_dzd), 0)`.as('total_pending')
+        ])
+        .where('payment_status_key', 'in', ['invoice.status.unpaid', 'invoice.status.partial', 'invoice.status.overdue'])
+        .executeTakeFirst(),
+      db.selectFrom('invoices')
+        .select([
+          sql`COUNT(*)`.as('count'),
+          sql`COALESCE(SUM(total_dzd), 0)`.as('total_amount')
+        ])
+        .where('issue_date', '>=', startOfMonth.toISOString())
+        .executeTakeFirst(),
+      db.selectFrom('invoices')
+        .select([
+          sql`COUNT(*)`.as('count'),
+          sql`COALESCE(SUM(total_dzd), 0)`.as('total_amount')
+        ])
+        .where('issue_date', '>=', startOfLastMonth.toISOString())
+        .where('issue_date', '<=', endOfLastMonth.toISOString())
+        .executeTakeFirst()
+    ]);
+
+    const thisMonthCount = parseInt(thisMonthInvoices.count);
+    const lastMonthCount = parseInt(lastMonthInvoices.count);
+    const thisMonthAmount = parseFloat(thisMonthInvoices.total_amount);
+    const lastMonthAmount = parseFloat(lastMonthInvoices.total_amount);
+    
+    const countChange = lastMonthCount > 0 ? ((thisMonthCount - lastMonthCount) / lastMonthCount * 100) : 0;
+    const amountChange = lastMonthAmount > 0 ? ((thisMonthAmount - lastMonthAmount) / lastMonthAmount * 100) : 0;
+
     res.json({
-      statistics: {
-        patients: {
-          total: parseInt(totalPatients.count),
-          active: parseInt(activePatients.count)
-        },
-        appointments: {
-          today: parseInt(todayAppointments.count),
-          completed: parseInt(completedToday.count),
-          pending: parseInt(todayAppointments.count) - parseInt(completedToday.count)
-        },
-        invoices: {
-          pending_count: parseInt(pendingInvoices.count),
-          pending_amount_dzd: parseFloat(pendingInvoices.total_pending)
-        },
-        revenue: {
-          this_month_dzd: parseFloat(totalRevenue.total)
-        }
-      },
-      today_appointments: appointments
+      pending_count: parseInt(pendingInvoices.count),
+      pending_amount_dzd: parseFloat(pendingInvoices.total_pending),
+      this_month_count: thisMonthCount,
+      last_month_count: lastMonthCount,
+      this_month_amount_dzd: thisMonthAmount,
+      last_month_amount_dzd: lastMonthAmount,
+      count_change_percent: parseFloat(countChange.toFixed(2)),
+      amount_change_percent: parseFloat(amountChange.toFixed(2)),
+      count_trend: countChange > 0 ? 'up' : countChange < 0 ? 'down' : 'stable',
+      amount_trend: amountChange > 0 ? 'up' : amountChange < 0 ? 'down' : 'stable'
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get revenue statistics with comparative insights
+router.get('/revenue', async (req, res, next) => {
+  try {
+    const period = req.query.period || 'month'; // month, week, year
+    const now = new Date();
+    
+    let currentStart, currentEnd, previousStart, previousEnd, periodName;
+    
+    switch (period) {
+      case 'week':
+        // Current week (Monday to Sunday)
+        currentStart = new Date(now);
+        const dayOfWeek = now.getDay();
+        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        currentStart.setDate(now.getDate() - daysToMonday);
+        currentStart.setHours(0, 0, 0, 0);
+        
+        currentEnd = new Date(currentStart);
+        currentEnd.setDate(currentStart.getDate() + 6);
+        currentEnd.setHours(23, 59, 59, 999);
+        
+        // Previous week
+        previousStart = new Date(currentStart);
+        previousStart.setDate(currentStart.getDate() - 7);
+        previousEnd = new Date(currentEnd);
+        previousEnd.setDate(currentEnd.getDate() - 7);
+        periodName = 'week';
+        break;
+        
+      case 'year':
+        currentStart = new Date(now.getFullYear(), 0, 1);
+        currentEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+        previousStart = new Date(now.getFullYear() - 1, 0, 1);
+        previousEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
+        periodName = 'year';
+        break;
+        
+      default: // month
+        currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        previousStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        previousEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        periodName = 'month';
+    }
+
+    const [currentRevenue, previousRevenue] = await Promise.all([
+      db.selectFrom('payments')
+        .select(sql`COALESCE(SUM(amount_dzd), 0)`.as('total'))
+        .where('payment_date', '>=', currentStart.toISOString())
+        .where('payment_date', '<=', currentEnd.toISOString())
+        .executeTakeFirst(),
+      db.selectFrom('payments')
+        .select(sql`COALESCE(SUM(amount_dzd), 0)`.as('total'))
+        .where('payment_date', '>=', previousStart.toISOString())
+        .where('payment_date', '<=', previousEnd.toISOString())
+        .executeTakeFirst()
+    ]);
+
+    const currentAmount = parseFloat(currentRevenue.total);
+    const previousAmount = parseFloat(previousRevenue.total);
+    const changePercent = previousAmount > 0 ? ((currentAmount - previousAmount) / previousAmount * 100) : 0;
+
+    res.json({
+      period: periodName,
+      current_period_dzd: currentAmount,
+      previous_period_dzd: previousAmount,
+      change_percent: parseFloat(changePercent.toFixed(2)),
+      trend: changePercent > 0 ? 'up' : changePercent < 0 ? 'down' : 'stable',
+      // Legacy field for backward compatibility
+      total_dzd: currentAmount
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get overview with comparative insights (lightweight summary)
+router.get('/overview', async (req, res, next) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59);
+
+    // Calculate week's date range for appointment average
+    const startOfWeek = new Date(today);
+    const dayOfWeek = today.getDay();
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    startOfWeek.setDate(today.getDate() - daysToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const [
+      activePatients,
+      newPatientsThisMonth,
+      newPatientsLastMonth,
+      todayAppointments,
+      weekAppointments,
+      pendingInvoices,
+      monthlyRevenue,
+      lastMonthRevenue
+    ] = await Promise.all([
+      db.selectFrom('patients')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('is_active', '=', true)
+        .executeTakeFirst(),
+      db.selectFrom('patients')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('created_at', '>=', startOfMonth.toISOString())
+        .executeTakeFirst(),
+      db.selectFrom('patients')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('created_at', '>=', startOfLastMonth.toISOString())
+        .where('created_at', '<=', endOfLastMonth.toISOString())
+        .executeTakeFirst(),
+      db.selectFrom('appointments')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('appointment_date', '>=', today.toISOString())
+        .where('appointment_date', '<', tomorrow.toISOString())
+        .executeTakeFirst(),
+      db.selectFrom('appointments')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('appointment_date', '>=', startOfWeek.toISOString())
+        .where('appointment_date', '<=', endOfWeek.toISOString())
+        .executeTakeFirst(),
+      db.selectFrom('invoices')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('payment_status_key', 'in', ['invoice.status.unpaid', 'invoice.status.partial', 'invoice.status.overdue'])
+        .executeTakeFirst(),
+      db.selectFrom('payments')
+        .select(sql`COALESCE(SUM(amount_dzd), 0)`.as('total'))
+        .where('payment_date', '>=', startOfMonth.toISOString())
+        .executeTakeFirst(),
+      db.selectFrom('payments')
+        .select(sql`COALESCE(SUM(amount_dzd), 0)`.as('total'))
+        .where('payment_date', '>=', startOfLastMonth.toISOString())
+        .where('payment_date', '<=', endOfLastMonth.toISOString())
+        .executeTakeFirst()
+    ]);
+
+    // Calculate comparative metrics
+    const newThisMonth = parseInt(newPatientsThisMonth.count);
+    const newLastMonth = parseInt(newPatientsLastMonth.count);
+    const patientGrowth = newLastMonth > 0 ? ((newThisMonth - newLastMonth) / newLastMonth * 100) : 0;
+
+    const todayAppts = parseInt(todayAppointments.count);
+    const weekTotal = parseInt(weekAppointments.count);
+    const weekAverage = weekTotal / 7;
+    const appointmentTrend = weekAverage > 0 ? ((todayAppts - weekAverage) / weekAverage * 100) : 0;
+
+    const currentRevenue = parseFloat(monthlyRevenue.total);
+    const previousRevenue = parseFloat(lastMonthRevenue.total);
+    const revenueGrowth = previousRevenue > 0 ? ((currentRevenue - previousRevenue) / previousRevenue * 100) : 0;
+
+    res.json({
+      active_patients: parseInt(activePatients.count),
+      new_patients_this_month: newThisMonth,
+      patient_growth_percent: parseFloat(patientGrowth.toFixed(2)),
+      patient_trend: patientGrowth > 0 ? 'up' : patientGrowth < 0 ? 'down' : 'stable',
+      
+      today_appointments: todayAppts,
+      week_average_appointments: parseFloat(weekAverage.toFixed(1)),
+      appointment_trend_percent: parseFloat(appointmentTrend.toFixed(2)),
+      appointment_trend: appointmentTrend > 0 ? 'above_average' : appointmentTrend < 0 ? 'below_average' : 'average',
+      
+      pending_invoices: parseInt(pendingInvoices.count),
+      
+      monthly_revenue_dzd: currentRevenue,
+      last_month_revenue_dzd: previousRevenue,
+      revenue_growth_percent: parseFloat(revenueGrowth.toFixed(2)),
+      revenue_trend: revenueGrowth > 0 ? 'up' : revenueGrowth < 0 ? 'down' : 'stable'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get recent activity for dashboard
+router.get('/recent-activity', async (req, res, next) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const days = parseInt(req.query.days) || 7;
+    
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    // Get recent audit logs with user information - raw data
+    const recentActivity = await db
+      .selectFrom('audit_logs')
+      .leftJoin('users', 'audit_logs.user_id', 'users.id')
+      .select([
+        'audit_logs.id',
+        'audit_logs.action',
+        'audit_logs.entity_type',
+        'audit_logs.entity_id',
+        'audit_logs.old_values',
+        'audit_logs.new_values',
+        'audit_logs.ip_address',
+        'audit_logs.user_agent',
+        'audit_logs.created_at',
+        'users.full_name as user_name',
+        'users.email as user_email'
+      ])
+      .where('audit_logs.created_at', '>=', cutoffDate.toISOString())
+      .orderBy('audit_logs.created_at', 'desc')
+      .limit(limit)
+      .execute();
+
+    res.json(recentActivity);
   } catch (error) {
     next(error);
   }

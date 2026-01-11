@@ -153,6 +153,14 @@ router.post('/',
         .returningAll()
         .executeTakeFirst();
 
+      // Log the patient creation
+      await req.audit.log({
+        action: 'CREATE',
+        entityType: 'patients',
+        entityId: patient.id,
+        newValues: patient
+      });
+
       res.status(201).json(patient);
     } catch (error) {
       next(error);

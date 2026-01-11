@@ -88,6 +88,14 @@ router.post('/',
         .returningAll()
         .executeTakeFirst();
 
+      // Log the appointment creation
+      await req.audit.log({
+        action: 'CREATE',
+        entityType: 'appointments',
+        entityId: appointment.id,
+        newValues: appointment
+      });
+
       res.status(201).json(appointment);
     } catch (error) {
       next(error);
@@ -108,19 +116,37 @@ router.patch('/:id/status',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
+      const { status_key } = req.body;
+
+      // Get the current appointment for audit logging
+      const currentAppointment = await db
+        .selectFrom('appointments')
+        .selectAll()
+        .where('id', '=', req.params.id)
+        .executeTakeFirst();
+
+      if (!currentAppointment) {
+        return res.status(404).json({ error: 'appointment.error.not_found' });
+      }
+
       const appointment = await db
         .updateTable('appointments')
         .set({ 
-          status_key: req.body.status_key,
+          status_key,
           updated_at: new Date()
         })
         .where('id', '=', req.params.id)
         .returningAll()
         .executeTakeFirst();
 
-      if (!appointment) {
-        return res.status(404).json({ error: 'appointment.error.not_found' });
-      }
+      // Log the status update
+      await req.audit.log({
+        action: 'UPDATE',
+        entityType: 'appointments',
+        entityId: appointment.id,
+        oldValues: { status_key: currentAppointment.status_key },
+        newValues: { status_key: appointment.status_key }
+      });
 
       res.json(appointment);
     } catch (error) {
