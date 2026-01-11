@@ -81,7 +81,7 @@ CREATE TABLE patients (
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     date_of_birth DATE NOT NULL,
-    gender VARCHAR(20) NOT NULL,
+    gender VARCHAR(50) NOT NULL,
     phone VARCHAR(20) UNIQUE NOT NULL,
     email VARCHAR(255),
     wilaya_id SMALLINT REFERENCES wilayas(id) ON DELETE SET NULL,
