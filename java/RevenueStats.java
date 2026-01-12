@@ -1,37 +1,37 @@
 package com.dentalms.dashboard.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import java.math.BigDecimal;
+import com.google.gson.annotations.SerializedName;
 
 /**
  * Revenue statistics with period comparison insights
  * Corresponds to /dashboard/revenue endpoint
+ * Optimized for Retrofit with Gson
  */
 public class RevenueStats {
     
-    @JsonProperty("period")
+    @SerializedName("period")
     private String period; // "week", "month", "year"
     
-    @JsonProperty("current_period_dzd")
-    private BigDecimal currentPeriodDzd;
+    @SerializedName("current_period_dzd")
+    private double currentPeriodDzd;
     
-    @JsonProperty("previous_period_dzd")
-    private BigDecimal previousPeriodDzd;
+    @SerializedName("previous_period_dzd")
+    private double previousPeriodDzd;
     
-    @JsonProperty("change_percent")
-    private BigDecimal changePercent;
+    @SerializedName("change_percent")
+    private double changePercent;
     
-    @JsonProperty("trend")
+    @SerializedName("trend")
     private String trend; // "up", "down", "stable"
     
-    @JsonProperty("total_dzd")
-    private BigDecimal totalDzd; // Legacy field for backward compatibility
+    @SerializedName("total_dzd")
+    private double totalDzd; // Legacy field for backward compatibility
     
     // Constructors
     public RevenueStats() {}
     
-    public RevenueStats(String period, BigDecimal currentPeriodDzd, BigDecimal previousPeriodDzd,
-                       BigDecimal changePercent, String trend, BigDecimal totalDzd) {
+    public RevenueStats(String period, double currentPeriodDzd, double previousPeriodDzd,
+                       double changePercent, String trend, double totalDzd) {
         this.period = period;
         this.currentPeriodDzd = currentPeriodDzd;
         this.previousPeriodDzd = previousPeriodDzd;
@@ -44,24 +44,41 @@ public class RevenueStats {
     public String getPeriod() { return period; }
     public void setPeriod(String period) { this.period = period; }
     
-    public BigDecimal getCurrentPeriodDzd() { return currentPeriodDzd; }
-    public void setCurrentPeriodDzd(BigDecimal currentPeriodDzd) { 
+    public double getCurrentPeriodDzd() { return currentPeriodDzd; }
+    public void setCurrentPeriodDzd(double currentPeriodDzd) { 
         this.currentPeriodDzd = currentPeriodDzd; 
     }
     
-    public BigDecimal getPreviousPeriodDzd() { return previousPeriodDzd; }
-    public void setPreviousPeriodDzd(BigDecimal previousPeriodDzd) { 
+    public double getPreviousPeriodDzd() { return previousPeriodDzd; }
+    public void setPreviousPeriodDzd(double previousPeriodDzd) { 
         this.previousPeriodDzd = previousPeriodDzd; 
     }
     
-    public BigDecimal getChangePercent() { return changePercent; }
-    public void setChangePercent(BigDecimal changePercent) { this.changePercent = changePercent; }
+    public double getChangePercent() { return changePercent; }
+    public void setChangePercent(double changePercent) { this.changePercent = changePercent; }
     
     public String getTrend() { return trend; }
     public void setTrend(String trend) { this.trend = trend; }
     
-    public BigDecimal getTotalDzd() { return totalDzd; }
-    public void setTotalDzd(BigDecimal totalDzd) { this.totalDzd = totalDzd; }
+    public double getTotalDzd() { return totalDzd; }
+    public void setTotalDzd(double totalDzd) { this.totalDzd = totalDzd; }
+    
+    // Helper methods
+    public String getFormattedChangePercent() {
+        return String.format("%.2f%%", changePercent);
+    }
+    
+    public String getFormattedCurrentAmount() {
+        return String.format("%.2f DZD", currentPeriodDzd);
+    }
+    
+    public String getFormattedPreviousAmount() {
+        return String.format("%.2f DZD", previousPeriodDzd);
+    }
+    
+    public boolean isGrowthPositive() {
+        return changePercent > 0;
+    }
     
     @Override
     public String toString() {

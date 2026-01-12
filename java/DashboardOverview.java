@@ -1,66 +1,66 @@
 package com.dentalms.dashboard.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import java.math.BigDecimal;
+import com.google.gson.annotations.SerializedName;
 
 /**
  * Comprehensive dashboard overview with comparative insights
  * Corresponds to /dashboard/overview endpoint
+ * Optimized for Retrofit with Gson
  */
 public class DashboardOverview {
     
     // Patient metrics
-    @JsonProperty("active_patients")
+    @SerializedName("active_patients")
     private int activePatients;
     
-    @JsonProperty("new_patients_this_month")
+    @SerializedName("new_patients_this_month")
     private int newPatientsThisMonth;
     
-    @JsonProperty("patient_growth_percent")
-    private BigDecimal patientGrowthPercent;
+    @SerializedName("patient_growth_percent")
+    private double patientGrowthPercent;
     
-    @JsonProperty("patient_trend")
+    @SerializedName("patient_trend")
     private String patientTrend; // "up", "down", "stable"
     
     // Appointment metrics
-    @JsonProperty("today_appointments")
+    @SerializedName("today_appointments")
     private int todayAppointments;
     
-    @JsonProperty("week_average_appointments")
-    private BigDecimal weekAverageAppointments;
+    @SerializedName("week_average_appointments")
+    private double weekAverageAppointments;
     
-    @JsonProperty("appointment_trend_percent")
-    private BigDecimal appointmentTrendPercent;
+    @SerializedName("appointment_trend_percent")
+    private double appointmentTrendPercent;
     
-    @JsonProperty("appointment_trend")
+    @SerializedName("appointment_trend")
     private String appointmentTrend; // "above_average", "below_average", "average"
     
     // Invoice metrics
-    @JsonProperty("pending_invoices")
+    @SerializedName("pending_invoices")
     private int pendingInvoices;
     
     // Revenue metrics
-    @JsonProperty("monthly_revenue_dzd")
-    private BigDecimal monthlyRevenueDzd;
+    @SerializedName("monthly_revenue_dzd")
+    private double monthlyRevenueDzd;
     
-    @JsonProperty("last_month_revenue_dzd")
-    private BigDecimal lastMonthRevenueDzd;
+    @SerializedName("last_month_revenue_dzd")
+    private double lastMonthRevenueDzd;
     
-    @JsonProperty("revenue_growth_percent")
-    private BigDecimal revenueGrowthPercent;
+    @SerializedName("revenue_growth_percent")
+    private double revenueGrowthPercent;
     
-    @JsonProperty("revenue_trend")
+    @SerializedName("revenue_trend")
     private String revenueTrend; // "up", "down", "stable"
     
     // Constructors
     public DashboardOverview() {}
     
     public DashboardOverview(int activePatients, int newPatientsThisMonth, 
-                           BigDecimal patientGrowthPercent, String patientTrend,
-                           int todayAppointments, BigDecimal weekAverageAppointments,
-                           BigDecimal appointmentTrendPercent, String appointmentTrend,
-                           int pendingInvoices, BigDecimal monthlyRevenueDzd,
-                           BigDecimal lastMonthRevenueDzd, BigDecimal revenueGrowthPercent,
+                           double patientGrowthPercent, String patientTrend,
+                           int todayAppointments, double weekAverageAppointments,
+                           double appointmentTrendPercent, String appointmentTrend,
+                           int pendingInvoices, double monthlyRevenueDzd,
+                           double lastMonthRevenueDzd, double revenueGrowthPercent,
                            String revenueTrend) {
         this.activePatients = activePatients;
         this.newPatientsThisMonth = newPatientsThisMonth;
@@ -86,8 +86,8 @@ public class DashboardOverview {
         this.newPatientsThisMonth = newPatientsThisMonth; 
     }
     
-    public BigDecimal getPatientGrowthPercent() { return patientGrowthPercent; }
-    public void setPatientGrowthPercent(BigDecimal patientGrowthPercent) { 
+    public double getPatientGrowthPercent() { return patientGrowthPercent; }
+    public void setPatientGrowthPercent(double patientGrowthPercent) { 
         this.patientGrowthPercent = patientGrowthPercent; 
     }
     
@@ -99,13 +99,13 @@ public class DashboardOverview {
         this.todayAppointments = todayAppointments; 
     }
     
-    public BigDecimal getWeekAverageAppointments() { return weekAverageAppointments; }
-    public void setWeekAverageAppointments(BigDecimal weekAverageAppointments) { 
+    public double getWeekAverageAppointments() { return weekAverageAppointments; }
+    public void setWeekAverageAppointments(double weekAverageAppointments) { 
         this.weekAverageAppointments = weekAverageAppointments; 
     }
     
-    public BigDecimal getAppointmentTrendPercent() { return appointmentTrendPercent; }
-    public void setAppointmentTrendPercent(BigDecimal appointmentTrendPercent) { 
+    public double getAppointmentTrendPercent() { return appointmentTrendPercent; }
+    public void setAppointmentTrendPercent(double appointmentTrendPercent) { 
         this.appointmentTrendPercent = appointmentTrendPercent; 
     }
     
@@ -117,23 +117,40 @@ public class DashboardOverview {
     public int getPendingInvoices() { return pendingInvoices; }
     public void setPendingInvoices(int pendingInvoices) { this.pendingInvoices = pendingInvoices; }
     
-    public BigDecimal getMonthlyRevenueDzd() { return monthlyRevenueDzd; }
-    public void setMonthlyRevenueDzd(BigDecimal monthlyRevenueDzd) { 
+    public double getMonthlyRevenueDzd() { return monthlyRevenueDzd; }
+    public void setMonthlyRevenueDzd(double monthlyRevenueDzd) { 
         this.monthlyRevenueDzd = monthlyRevenueDzd; 
     }
     
-    public BigDecimal getLastMonthRevenueDzd() { return lastMonthRevenueDzd; }
-    public void setLastMonthRevenueDzd(BigDecimal lastMonthRevenueDzd) { 
+    public double getLastMonthRevenueDzd() { return lastMonthRevenueDzd; }
+    public void setLastMonthRevenueDzd(double lastMonthRevenueDzd) { 
         this.lastMonthRevenueDzd = lastMonthRevenueDzd; 
     }
     
-    public BigDecimal getRevenueGrowthPercent() { return revenueGrowthPercent; }
-    public void setRevenueGrowthPercent(BigDecimal revenueGrowthPercent) { 
+    public double getRevenueGrowthPercent() { return revenueGrowthPercent; }
+    public void setRevenueGrowthPercent(double revenueGrowthPercent) { 
         this.revenueGrowthPercent = revenueGrowthPercent; 
     }
     
     public String getRevenueTrend() { return revenueTrend; }
     public void setRevenueTrend(String revenueTrend) { this.revenueTrend = revenueTrend; }
+    
+    // Helper methods for formatted display
+    public String getFormattedPatientGrowth() {
+        return String.format("%.2f%%", patientGrowthPercent);
+    }
+    
+    public String getFormattedAppointmentTrend() {
+        return String.format("%.2f%%", appointmentTrendPercent);
+    }
+    
+    public String getFormattedRevenueGrowth() {
+        return String.format("%.2f%%", revenueGrowthPercent);
+    }
+    
+    public String getFormattedMonthlyRevenue() {
+        return String.format("%.2f DZD", monthlyRevenueDzd);
+    }
     
     @Override
     public String toString() {

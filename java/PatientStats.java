@@ -1,37 +1,37 @@
 package com.dentalms.dashboard.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import java.math.BigDecimal;
+import com.google.gson.annotations.SerializedName;
 
 /**
  * Patient statistics with comparative insights
  * Corresponds to /dashboard/patients endpoint
+ * Optimized for Retrofit with Gson
  */
 public class PatientStats {
     
-    @JsonProperty("total")
+    @SerializedName("total")
     private int total;
     
-    @JsonProperty("active")
+    @SerializedName("active")
     private int active;
     
-    @JsonProperty("this_month")
+    @SerializedName("this_month")
     private int thisMonth;
     
-    @JsonProperty("last_month")
+    @SerializedName("last_month")
     private int lastMonth;
     
-    @JsonProperty("monthly_change_percent")
-    private BigDecimal monthlyChangePercent;
+    @SerializedName("monthly_change_percent")
+    private double monthlyChangePercent; // Use primitive double, Gson handles null as 0.0
     
-    @JsonProperty("trend")
+    @SerializedName("trend")
     private String trend; // "up", "down", "stable"
     
     // Constructors
     public PatientStats() {}
     
     public PatientStats(int total, int active, int thisMonth, int lastMonth, 
-                       BigDecimal monthlyChangePercent, String trend) {
+                       double monthlyChangePercent, String trend) {
         this.total = total;
         this.active = active;
         this.thisMonth = thisMonth;
@@ -53,13 +53,22 @@ public class PatientStats {
     public int getLastMonth() { return lastMonth; }
     public void setLastMonth(int lastMonth) { this.lastMonth = lastMonth; }
     
-    public BigDecimal getMonthlyChangePercent() { return monthlyChangePercent; }
-    public void setMonthlyChangePercent(BigDecimal monthlyChangePercent) { 
+    public double getMonthlyChangePercent() { return monthlyChangePercent; }
+    public void setMonthlyChangePercent(double monthlyChangePercent) { 
         this.monthlyChangePercent = monthlyChangePercent; 
     }
     
     public String getTrend() { return trend; }
     public void setTrend(String trend) { this.trend = trend; }
+    
+    // Helper methods for display
+    public String getFormattedChangePercent() {
+        return String.format("%.2f%%", monthlyChangePercent);
+    }
+    
+    public boolean isGrowthPositive() {
+        return monthlyChangePercent > 0;
+    }
     
     @Override
     public String toString() {

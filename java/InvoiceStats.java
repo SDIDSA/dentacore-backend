@@ -1,51 +1,51 @@
 package com.dentalms.dashboard.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import java.math.BigDecimal;
+import com.google.gson.annotations.SerializedName;
 
 /**
  * Invoice statistics with monthly comparison insights
  * Corresponds to /dashboard/invoices endpoint
+ * Optimized for Retrofit with Gson
  */
 public class InvoiceStats {
     
-    @JsonProperty("pending_count")
+    @SerializedName("pending_count")
     private int pendingCount;
     
-    @JsonProperty("pending_amount_dzd")
-    private BigDecimal pendingAmountDzd;
+    @SerializedName("pending_amount_dzd")
+    private double pendingAmountDzd;
     
-    @JsonProperty("this_month_count")
+    @SerializedName("this_month_count")
     private int thisMonthCount;
     
-    @JsonProperty("last_month_count")
+    @SerializedName("last_month_count")
     private int lastMonthCount;
     
-    @JsonProperty("this_month_amount_dzd")
-    private BigDecimal thisMonthAmountDzd;
+    @SerializedName("this_month_amount_dzd")
+    private double thisMonthAmountDzd;
     
-    @JsonProperty("last_month_amount_dzd")
-    private BigDecimal lastMonthAmountDzd;
+    @SerializedName("last_month_amount_dzd")
+    private double lastMonthAmountDzd;
     
-    @JsonProperty("count_change_percent")
-    private BigDecimal countChangePercent;
+    @SerializedName("count_change_percent")
+    private double countChangePercent;
     
-    @JsonProperty("amount_change_percent")
-    private BigDecimal amountChangePercent;
+    @SerializedName("amount_change_percent")
+    private double amountChangePercent;
     
-    @JsonProperty("count_trend")
+    @SerializedName("count_trend")
     private String countTrend; // "up", "down", "stable"
     
-    @JsonProperty("amount_trend")
+    @SerializedName("amount_trend")
     private String amountTrend; // "up", "down", "stable"
     
     // Constructors
     public InvoiceStats() {}
     
-    public InvoiceStats(int pendingCount, BigDecimal pendingAmountDzd, 
+    public InvoiceStats(int pendingCount, double pendingAmountDzd, 
                        int thisMonthCount, int lastMonthCount,
-                       BigDecimal thisMonthAmountDzd, BigDecimal lastMonthAmountDzd,
-                       BigDecimal countChangePercent, BigDecimal amountChangePercent,
+                       double thisMonthAmountDzd, double lastMonthAmountDzd,
+                       double countChangePercent, double amountChangePercent,
                        String countTrend, String amountTrend) {
         this.pendingCount = pendingCount;
         this.pendingAmountDzd = pendingAmountDzd;
@@ -63,8 +63,8 @@ public class InvoiceStats {
     public int getPendingCount() { return pendingCount; }
     public void setPendingCount(int pendingCount) { this.pendingCount = pendingCount; }
     
-    public BigDecimal getPendingAmountDzd() { return pendingAmountDzd; }
-    public void setPendingAmountDzd(BigDecimal pendingAmountDzd) { 
+    public double getPendingAmountDzd() { return pendingAmountDzd; }
+    public void setPendingAmountDzd(double pendingAmountDzd) { 
         this.pendingAmountDzd = pendingAmountDzd; 
     }
     
@@ -74,23 +74,23 @@ public class InvoiceStats {
     public int getLastMonthCount() { return lastMonthCount; }
     public void setLastMonthCount(int lastMonthCount) { this.lastMonthCount = lastMonthCount; }
     
-    public BigDecimal getThisMonthAmountDzd() { return thisMonthAmountDzd; }
-    public void setThisMonthAmountDzd(BigDecimal thisMonthAmountDzd) { 
+    public double getThisMonthAmountDzd() { return thisMonthAmountDzd; }
+    public void setThisMonthAmountDzd(double thisMonthAmountDzd) { 
         this.thisMonthAmountDzd = thisMonthAmountDzd; 
     }
     
-    public BigDecimal getLastMonthAmountDzd() { return lastMonthAmountDzd; }
-    public void setLastMonthAmountDzd(BigDecimal lastMonthAmountDzd) { 
+    public double getLastMonthAmountDzd() { return lastMonthAmountDzd; }
+    public void setLastMonthAmountDzd(double lastMonthAmountDzd) { 
         this.lastMonthAmountDzd = lastMonthAmountDzd; 
     }
     
-    public BigDecimal getCountChangePercent() { return countChangePercent; }
-    public void setCountChangePercent(BigDecimal countChangePercent) { 
+    public double getCountChangePercent() { return countChangePercent; }
+    public void setCountChangePercent(double countChangePercent) { 
         this.countChangePercent = countChangePercent; 
     }
     
-    public BigDecimal getAmountChangePercent() { return amountChangePercent; }
-    public void setAmountChangePercent(BigDecimal amountChangePercent) { 
+    public double getAmountChangePercent() { return amountChangePercent; }
+    public void setAmountChangePercent(double amountChangePercent) { 
         this.amountChangePercent = amountChangePercent; 
     }
     
@@ -99,6 +99,19 @@ public class InvoiceStats {
     
     public String getAmountTrend() { return amountTrend; }
     public void setAmountTrend(String amountTrend) { this.amountTrend = amountTrend; }
+    
+    // Helper methods
+    public String getFormattedCountChange() {
+        return String.format("%.2f%%", countChangePercent);
+    }
+    
+    public String getFormattedAmountChange() {
+        return String.format("%.2f%%", amountChangePercent);
+    }
+    
+    public String getFormattedPendingAmount() {
+        return String.format("%.2f DZD", pendingAmountDzd);
+    }
     
     @Override
     public String toString() {

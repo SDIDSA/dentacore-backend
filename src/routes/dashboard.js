@@ -7,6 +7,14 @@ const router = express.Router();
 
 router.use(authenticate);
 
+// Helper function to safely format numbers and avoid null/NaN/Infinity
+function safeNumber(value, decimals = 2) {
+  if (value === null || value === undefined || !isFinite(value)) {
+    return 0;
+  }
+  return parseFloat(value.toFixed(decimals));
+}
+
 // Get patient statistics with comparative insights
 router.get('/patients', async (req, res, next) => {
   try {
@@ -36,14 +44,26 @@ router.get('/patients', async (req, res, next) => {
 
     const thisMonth = parseInt(thisMonthPatients.count);
     const lastMonth = parseInt(lastMonthPatients.count);
-    const monthlyChange = lastMonth > 0 ? ((thisMonth - lastMonth) / lastMonth * 100) : 0;
+    
+    let monthlyChange = 0;
+    if (lastMonth > 0) {
+      monthlyChange = ((thisMonth - lastMonth) / lastMonth * 100);
+    } else if (thisMonth > 0) {
+      monthlyChange = 100; // 100% growth when going from 0 to any positive number
+    }
+    
+    // Ensure we don't have NaN or Infinity
+    if (!isFinite(monthlyChange)) {
+      monthlyChange = 0;
+    }
 
+    console.log(monthlyChange)
     res.json({
       total: parseInt(totalPatients.count),
       active: parseInt(activePatients.count),
       this_month: thisMonth,
       last_month: lastMonth,
-      monthly_change_percent: parseFloat(monthlyChange.toFixed(2)),
+      monthly_change_percent: safeNumber(monthlyChange),
       trend: monthlyChange > 0 ? 'up' : monthlyChange < 0 ? 'down' : 'stable'
     });
   } catch (error) {
@@ -59,18 +79,16 @@ router.get('/appointments', async (req, res, next) => {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Calculate week's date range (Monday to Sunday)
-    const startOfWeek = new Date(today);
-    const dayOfWeek = today.getDay();
-    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Sunday = 0, Monday = 1
-    startOfWeek.setDate(today.getDate() - daysToMonday);
-    startOfWeek.setHours(0, 0, 0, 0);
+    // Calculate last 7 business days (excluding today)
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
 
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    yesterday.setHours(23, 59, 59, 999);
 
-    const [todayAppointments, completedToday, weekAppointments] = await Promise.all([
+    const [todayAppointments, completedToday, last7DaysAppointments] = await Promise.all([
       db.selectFrom('appointments')
         .select(sql`COUNT(*)`.as('count'))
         .where('appointment_date', '>=', today.toISOString())
@@ -84,25 +102,36 @@ router.get('/appointments', async (req, res, next) => {
         .executeTakeFirst(),
       db.selectFrom('appointments')
         .select(sql`COUNT(*)`.as('count'))
-        .where('appointment_date', '>=', startOfWeek.toISOString())
-        .where('appointment_date', '<=', endOfWeek.toISOString())
+        .where('appointment_date', '>=', sevenDaysAgo.toISOString())
+        .where('appointment_date', '<=', yesterday.toISOString())
         .executeTakeFirst()
     ]);
 
     const todayCount = parseInt(todayAppointments.count);
     const completedCount = parseInt(completedToday.count);
-    const weekTotal = parseInt(weekAppointments.count);
-    const weekAverage = weekTotal / 7;
-    const todayVsAverage = weekAverage > 0 ? ((todayCount - weekAverage) / weekAverage * 100) : 0;
+    const last7DaysTotal = parseInt(last7DaysAppointments.count);
+    const weekAverage = last7DaysTotal / 7;
+    
+    let todayVsAverage = 0;
+    if (weekAverage > 0) {
+      todayVsAverage = ((todayCount - weekAverage) / weekAverage * 100);
+    } else if (todayCount > 0) {
+      todayVsAverage = 100; // 100% above average when average is 0 but today has appointments
+    }
+    
+    // Ensure we don't have NaN or Infinity
+    if (!isFinite(todayVsAverage)) {
+      todayVsAverage = 0;
+    }
 
     res.json({
       today: todayCount,
       completed: completedCount,
       pending: todayCount - completedCount,
-      week_total: weekTotal,
-      week_average: parseFloat(weekAverage.toFixed(1)),
-      today_vs_average_percent: parseFloat(todayVsAverage.toFixed(2)),
-      trend: todayVsAverage > 0 ? 'above_average' : todayVsAverage < 0 ? 'below_average' : 'average'
+      last_7_days_total: last7DaysTotal,
+      week_average: safeNumber(weekAverage, 1),
+      today_vs_average_percent: safeNumber(todayVsAverage),
+      trend: todayVsAverage > 0 ? 'up' : todayVsAverage < 0 ? 'down' : 'stable'
     });
   } catch (error) {
     next(error);
@@ -180,18 +209,33 @@ router.get('/invoices', async (req, res, next) => {
     const thisMonthAmount = parseFloat(thisMonthInvoices.total_amount);
     const lastMonthAmount = parseFloat(lastMonthInvoices.total_amount);
     
-    const countChange = lastMonthCount > 0 ? ((thisMonthCount - lastMonthCount) / lastMonthCount * 100) : 0;
-    const amountChange = lastMonthAmount > 0 ? ((thisMonthAmount - lastMonthAmount) / lastMonthAmount * 100) : 0;
+    let countChange = 0;
+    if (lastMonthCount > 0) {
+      countChange = ((thisMonthCount - lastMonthCount) / lastMonthCount * 100);
+    } else if (thisMonthCount > 0) {
+      countChange = 100;
+    }
+    
+    let amountChange = 0;
+    if (lastMonthAmount > 0) {
+      amountChange = ((thisMonthAmount - lastMonthAmount) / lastMonthAmount * 100);
+    } else if (thisMonthAmount > 0) {
+      amountChange = 100;
+    }
+    
+    // Ensure we don't have NaN or Infinity
+    if (!isFinite(countChange)) countChange = 0;
+    if (!isFinite(amountChange)) amountChange = 0;
 
     res.json({
       pending_count: parseInt(pendingInvoices.count),
-      pending_amount_dzd: parseFloat(pendingInvoices.total_pending),
+      pending_amount_dzd: safeNumber(parseFloat(pendingInvoices.total_pending)),
       this_month_count: thisMonthCount,
       last_month_count: lastMonthCount,
-      this_month_amount_dzd: thisMonthAmount,
-      last_month_amount_dzd: lastMonthAmount,
-      count_change_percent: parseFloat(countChange.toFixed(2)),
-      amount_change_percent: parseFloat(amountChange.toFixed(2)),
+      this_month_amount_dzd: safeNumber(thisMonthAmount),
+      last_month_amount_dzd: safeNumber(lastMonthAmount),
+      count_change_percent: safeNumber(countChange),
+      amount_change_percent: safeNumber(amountChange),
       count_trend: countChange > 0 ? 'up' : countChange < 0 ? 'down' : 'stable',
       amount_trend: amountChange > 0 ? 'up' : amountChange < 0 ? 'down' : 'stable'
     });
@@ -260,16 +304,27 @@ router.get('/revenue', async (req, res, next) => {
 
     const currentAmount = parseFloat(currentRevenue.total);
     const previousAmount = parseFloat(previousRevenue.total);
-    const changePercent = previousAmount > 0 ? ((currentAmount - previousAmount) / previousAmount * 100) : 0;
+    
+    let changePercent = 0;
+    if (previousAmount > 0) {
+      changePercent = ((currentAmount - previousAmount) / previousAmount * 100);
+    } else if (currentAmount > 0) {
+      changePercent = 100;
+    }
+    
+    // Ensure we don't have NaN or Infinity
+    if (!isFinite(changePercent)) {
+      changePercent = 0;
+    }
 
     res.json({
       period: periodName,
-      current_period_dzd: currentAmount,
-      previous_period_dzd: previousAmount,
-      change_percent: parseFloat(changePercent.toFixed(2)),
+      current_period_dzd: safeNumber(currentAmount),
+      previous_period_dzd: safeNumber(previousAmount),
+      change_percent: safeNumber(changePercent),
       trend: changePercent > 0 ? 'up' : changePercent < 0 ? 'down' : 'stable',
       // Legacy field for backward compatibility
-      total_dzd: currentAmount
+      total_dzd: safeNumber(currentAmount)
     });
   } catch (error) {
     next(error);
@@ -288,22 +343,21 @@ router.get('/overview', async (req, res, next) => {
     const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59);
 
-    // Calculate week's date range for appointment average
-    const startOfWeek = new Date(today);
-    const dayOfWeek = today.getDay();
-    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-    startOfWeek.setDate(today.getDate() - daysToMonday);
-    startOfWeek.setHours(0, 0, 0, 0);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
+    // Calculate last 7 days for appointment average (excluding today)
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(today.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    yesterday.setHours(23, 59, 59, 999);
 
     const [
       activePatients,
       newPatientsThisMonth,
       newPatientsLastMonth,
       todayAppointments,
-      weekAppointments,
+      last7DaysAppointments,
       pendingInvoices,
       monthlyRevenue,
       lastMonthRevenue
@@ -328,8 +382,8 @@ router.get('/overview', async (req, res, next) => {
         .executeTakeFirst(),
       db.selectFrom('appointments')
         .select(sql`COUNT(*)`.as('count'))
-        .where('appointment_date', '>=', startOfWeek.toISOString())
-        .where('appointment_date', '<=', endOfWeek.toISOString())
+        .where('appointment_date', '>=', sevenDaysAgo.toISOString())
+        .where('appointment_date', '<=', yesterday.toISOString())
         .executeTakeFirst(),
       db.selectFrom('invoices')
         .select(sql`COUNT(*)`.as('count'))
@@ -349,33 +403,54 @@ router.get('/overview', async (req, res, next) => {
     // Calculate comparative metrics
     const newThisMonth = parseInt(newPatientsThisMonth.count);
     const newLastMonth = parseInt(newPatientsLastMonth.count);
-    const patientGrowth = newLastMonth > 0 ? ((newThisMonth - newLastMonth) / newLastMonth * 100) : 0;
+    
+    let patientGrowth = 0;
+    if (newLastMonth > 0) {
+      patientGrowth = ((newThisMonth - newLastMonth) / newLastMonth * 100);
+    } else if (newThisMonth > 0) {
+      patientGrowth = 100;
+    }
+    if (!isFinite(patientGrowth)) patientGrowth = 0;
 
     const todayAppts = parseInt(todayAppointments.count);
-    const weekTotal = parseInt(weekAppointments.count);
-    const weekAverage = weekTotal / 7;
-    const appointmentTrend = weekAverage > 0 ? ((todayAppts - weekAverage) / weekAverage * 100) : 0;
+    const last7DaysTotal = parseInt(last7DaysAppointments.count);
+    const weekAverage = last7DaysTotal / 7;
+    
+    let appointmentTrend = 0;
+    if (weekAverage > 0) {
+      appointmentTrend = ((todayAppts - weekAverage) / weekAverage * 100);
+    } else if (todayAppts > 0) {
+      appointmentTrend = 100;
+    }
+    if (!isFinite(appointmentTrend)) appointmentTrend = 0;
 
     const currentRevenue = parseFloat(monthlyRevenue.total);
     const previousRevenue = parseFloat(lastMonthRevenue.total);
-    const revenueGrowth = previousRevenue > 0 ? ((currentRevenue - previousRevenue) / previousRevenue * 100) : 0;
+    
+    let revenueGrowth = 0;
+    if (previousRevenue > 0) {
+      revenueGrowth = ((currentRevenue - previousRevenue) / previousRevenue * 100);
+    } else if (currentRevenue > 0) {
+      revenueGrowth = 100;
+    }
+    if (!isFinite(revenueGrowth)) revenueGrowth = 0;
 
     res.json({
       active_patients: parseInt(activePatients.count),
       new_patients_this_month: newThisMonth,
-      patient_growth_percent: parseFloat(patientGrowth.toFixed(2)),
+      patient_growth_percent: safeNumber(patientGrowth),
       patient_trend: patientGrowth > 0 ? 'up' : patientGrowth < 0 ? 'down' : 'stable',
       
       today_appointments: todayAppts,
-      week_average_appointments: parseFloat(weekAverage.toFixed(1)),
-      appointment_trend_percent: parseFloat(appointmentTrend.toFixed(2)),
+      week_average_appointments: safeNumber(weekAverage, 1),
+      appointment_trend_percent: safeNumber(appointmentTrend),
       appointment_trend: appointmentTrend > 0 ? 'above_average' : appointmentTrend < 0 ? 'below_average' : 'average',
       
       pending_invoices: parseInt(pendingInvoices.count),
       
-      monthly_revenue_dzd: currentRevenue,
-      last_month_revenue_dzd: previousRevenue,
-      revenue_growth_percent: parseFloat(revenueGrowth.toFixed(2)),
+      monthly_revenue_dzd: safeNumber(currentRevenue),
+      last_month_revenue_dzd: safeNumber(previousRevenue),
+      revenue_growth_percent: safeNumber(revenueGrowth),
       revenue_trend: revenueGrowth > 0 ? 'up' : revenueGrowth < 0 ? 'down' : 'stable'
     });
   } catch (error) {

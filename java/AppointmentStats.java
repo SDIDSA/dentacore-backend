@@ -1,40 +1,40 @@
 package com.dentalms.dashboard.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import java.math.BigDecimal;
+import com.google.gson.annotations.SerializedName;
 
 /**
  * Appointment statistics with weekly comparison insights
  * Corresponds to /dashboard/appointments endpoint
+ * Optimized for Retrofit with Gson
  */
 public class AppointmentStats {
     
-    @JsonProperty("today")
+    @SerializedName("today")
     private int today;
     
-    @JsonProperty("completed")
+    @SerializedName("completed")
     private int completed;
     
-    @JsonProperty("pending")
+    @SerializedName("pending")
     private int pending;
     
-    @JsonProperty("week_total")
+    @SerializedName("week_total")
     private int weekTotal;
     
-    @JsonProperty("week_average")
-    private BigDecimal weekAverage;
+    @SerializedName("week_average")
+    private double weekAverage;
     
-    @JsonProperty("today_vs_average_percent")
-    private BigDecimal todayVsAveragePercent;
+    @SerializedName("today_vs_average_percent")
+    private double todayVsAveragePercent;
     
-    @JsonProperty("trend")
+    @SerializedName("trend")
     private String trend; // "above_average", "below_average", "average"
     
     // Constructors
     public AppointmentStats() {}
     
     public AppointmentStats(int today, int completed, int pending, int weekTotal,
-                           BigDecimal weekAverage, BigDecimal todayVsAveragePercent, String trend) {
+                           double weekAverage, double todayVsAveragePercent, String trend) {
         this.today = today;
         this.completed = completed;
         this.pending = pending;
@@ -57,16 +57,29 @@ public class AppointmentStats {
     public int getWeekTotal() { return weekTotal; }
     public void setWeekTotal(int weekTotal) { this.weekTotal = weekTotal; }
     
-    public BigDecimal getWeekAverage() { return weekAverage; }
-    public void setWeekAverage(BigDecimal weekAverage) { this.weekAverage = weekAverage; }
+    public double getWeekAverage() { return weekAverage; }
+    public void setWeekAverage(double weekAverage) { this.weekAverage = weekAverage; }
     
-    public BigDecimal getTodayVsAveragePercent() { return todayVsAveragePercent; }
-    public void setTodayVsAveragePercent(BigDecimal todayVsAveragePercent) { 
+    public double getTodayVsAveragePercent() { return todayVsAveragePercent; }
+    public void setTodayVsAveragePercent(double todayVsAveragePercent) { 
         this.todayVsAveragePercent = todayVsAveragePercent; 
     }
     
     public String getTrend() { return trend; }
     public void setTrend(String trend) { this.trend = trend; }
+    
+    // Helper methods
+    public String getFormattedTrendPercent() {
+        return String.format("%.2f%%", todayVsAveragePercent);
+    }
+    
+    public boolean isAboveAverage() {
+        return "above_average".equals(trend);
+    }
+    
+    public boolean isBelowAverage() {
+        return "below_average".equals(trend);
+    }
     
     @Override
     public String toString() {
