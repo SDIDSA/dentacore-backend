@@ -57,7 +57,6 @@ router.get('/patients', async (req, res, next) => {
       monthlyChange = 0;
     }
 
-    console.log(monthlyChange)
     res.json({
       total: parseInt(totalPatients.count),
       active: parseInt(activePatients.count),
@@ -171,43 +170,31 @@ router.get('/appointments/today', async (req, res, next) => {
   }
 });
 
-// Get invoice statistics with comparative insights
-router.get('/invoices', async (req, res, next) => {
+// Get treatment statistics with comparative insights
+router.get('/treatments', async (req, res, next) => {
   try {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-    const [pendingInvoices, thisMonthInvoices, lastMonthInvoices] = await Promise.all([
-      db.selectFrom('invoices')
-        .select([
-          sql`COUNT(*)`.as('count'),
-          sql`COALESCE(SUM(total_dzd - paid_amount_dzd), 0)`.as('total_pending')
-        ])
-        .where('payment_status_key', 'in', ['invoice.status.unpaid', 'invoice.status.partial', 'invoice.status.overdue'])
+    const [totalTreatments, thisMonthTreatments, lastMonthTreatments] = await Promise.all([
+      db.selectFrom('treatment_records')
+        .select(sql`COUNT(*)`.as('count'))
         .executeTakeFirst(),
-      db.selectFrom('invoices')
-        .select([
-          sql`COUNT(*)`.as('count'),
-          sql`COALESCE(SUM(total_dzd), 0)`.as('total_amount')
-        ])
-        .where('issue_date', '>=', startOfMonth.toISOString())
+      db.selectFrom('treatment_records')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('treatment_date', '>=', startOfMonth.toISOString())
         .executeTakeFirst(),
-      db.selectFrom('invoices')
-        .select([
-          sql`COUNT(*)`.as('count'),
-          sql`COALESCE(SUM(total_dzd), 0)`.as('total_amount')
-        ])
-        .where('issue_date', '>=', startOfLastMonth.toISOString())
-        .where('issue_date', '<=', endOfLastMonth.toISOString())
+      db.selectFrom('treatment_records')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('treatment_date', '>=', startOfLastMonth.toISOString())
+        .where('treatment_date', '<=', endOfLastMonth.toISOString())
         .executeTakeFirst()
     ]);
 
-    const thisMonthCount = parseInt(thisMonthInvoices.count);
-    const lastMonthCount = parseInt(lastMonthInvoices.count);
-    const thisMonthAmount = parseFloat(thisMonthInvoices.total_amount);
-    const lastMonthAmount = parseFloat(lastMonthInvoices.total_amount);
+    const thisMonthCount = parseInt(thisMonthTreatments.count);
+    const lastMonthCount = parseInt(lastMonthTreatments.count);
     
     let countChange = 0;
     if (lastMonthCount > 0) {
@@ -216,28 +203,15 @@ router.get('/invoices', async (req, res, next) => {
       countChange = 100;
     }
     
-    let amountChange = 0;
-    if (lastMonthAmount > 0) {
-      amountChange = ((thisMonthAmount - lastMonthAmount) / lastMonthAmount * 100);
-    } else if (thisMonthAmount > 0) {
-      amountChange = 100;
-    }
-    
     // Ensure we don't have NaN or Infinity
     if (!isFinite(countChange)) countChange = 0;
-    if (!isFinite(amountChange)) amountChange = 0;
 
     res.json({
-      pending_count: parseInt(pendingInvoices.count),
-      pending_amount_dzd: safeNumber(parseFloat(pendingInvoices.total_pending)),
+      total_treatments: parseInt(totalTreatments.count),
       this_month_count: thisMonthCount,
       last_month_count: lastMonthCount,
-      this_month_amount_dzd: safeNumber(thisMonthAmount),
-      last_month_amount_dzd: safeNumber(lastMonthAmount),
       count_change_percent: safeNumber(countChange),
-      amount_change_percent: safeNumber(amountChange),
-      count_trend: countChange > 0 ? 'up' : countChange < 0 ? 'down' : 'stable',
-      amount_trend: amountChange > 0 ? 'up' : amountChange < 0 ? 'down' : 'stable'
+      trend: countChange > 0 ? 'up' : countChange < 0 ? 'down' : 'stable'
     });
   } catch (error) {
     next(error);
@@ -358,7 +332,8 @@ router.get('/overview', async (req, res, next) => {
       newPatientsLastMonth,
       todayAppointments,
       last7DaysAppointments,
-      pendingInvoices,
+      thisMonthTreatments,
+      lastMonthTreatments,
       monthlyRevenue,
       lastMonthRevenue
     ] = await Promise.all([
@@ -385,9 +360,14 @@ router.get('/overview', async (req, res, next) => {
         .where('appointment_date', '>=', sevenDaysAgo.toISOString())
         .where('appointment_date', '<=', yesterday.toISOString())
         .executeTakeFirst(),
-      db.selectFrom('invoices')
+      db.selectFrom('treatment_records')
         .select(sql`COUNT(*)`.as('count'))
-        .where('payment_status_key', 'in', ['invoice.status.unpaid', 'invoice.status.partial', 'invoice.status.overdue'])
+        .where('treatment_date', '>=', startOfMonth.toISOString())
+        .executeTakeFirst(),
+      db.selectFrom('treatment_records')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('treatment_date', '>=', startOfLastMonth.toISOString())
+        .where('treatment_date', '<=', endOfLastMonth.toISOString())
         .executeTakeFirst(),
       db.selectFrom('payments')
         .select(sql`COALESCE(SUM(amount_dzd), 0)`.as('total'))
@@ -435,6 +415,17 @@ router.get('/overview', async (req, res, next) => {
     }
     if (!isFinite(revenueGrowth)) revenueGrowth = 0;
 
+    const thisMonthTreatmentsCount = parseInt(thisMonthTreatments.count);
+    const lastMonthTreatmentsCount = parseInt(lastMonthTreatments.count);
+    
+    let treatmentGrowth = 0;
+    if (lastMonthTreatmentsCount > 0) {
+      treatmentGrowth = ((thisMonthTreatmentsCount - lastMonthTreatmentsCount) / lastMonthTreatmentsCount * 100);
+    } else if (thisMonthTreatmentsCount > 0) {
+      treatmentGrowth = 100;
+    }
+    if (!isFinite(treatmentGrowth)) treatmentGrowth = 0;
+
     res.json({
       active_patients: parseInt(activePatients.count),
       new_patients_this_month: newThisMonth,
@@ -446,7 +437,10 @@ router.get('/overview', async (req, res, next) => {
       appointment_trend_percent: safeNumber(appointmentTrend),
       appointment_trend: appointmentTrend > 0 ? 'above_average' : appointmentTrend < 0 ? 'below_average' : 'average',
       
-      pending_invoices: parseInt(pendingInvoices.count),
+      treatments_this_month: thisMonthTreatmentsCount,
+      treatments_last_month: lastMonthTreatmentsCount,
+      treatment_growth_percent: safeNumber(treatmentGrowth),
+      treatment_trend: treatmentGrowth > 0 ? 'up' : treatmentGrowth < 0 ? 'down' : 'stable',
       
       monthly_revenue_dzd: safeNumber(currentRevenue),
       last_month_revenue_dzd: safeNumber(previousRevenue),

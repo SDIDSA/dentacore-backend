@@ -150,7 +150,6 @@ CREATE TABLE appointments (
     CONSTRAINT chk_appt_status CHECK (status_key IN (
         'appt.status.scheduled',
         'appt.status.confirmed',
-        'appt.status.in_progress',
         'appt.status.completed',
         'appt.status.cancelled',
         'appt.status.no_show'

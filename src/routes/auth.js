@@ -78,4 +78,46 @@ router.post('/login',
   }
 );
 
+// Validate token
+router.get('/validate', async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+
+  if (!token) {
+    return error(res, 401, 'auth.error.no_token');
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await db
+      .selectFrom('users')
+      .innerJoin('roles', 'users.role_id', 'roles.id')
+      .select([
+        'users.id',
+        'users.full_name',
+        'users.is_active',
+        'roles.role_key'
+      ])
+      .where('users.id', '=', decoded.id)
+      .executeTakeFirst();
+
+    if (!user) {
+      return error(res, 401, 'auth.error.invalid_token');
+    }
+
+    if (!user.is_active) {
+      return error(res, 403, 'auth.error.account_inactive');
+    }
+
+    return res.json({
+      token,
+      id: user.id,
+      fullName: user.full_name,
+      roleKey: user.role_key,
+    });
+  } catch (e) {
+    return error(res, 401, 'auth.error.invalid_token');
+  }
+});
+
 module.exports = router;
