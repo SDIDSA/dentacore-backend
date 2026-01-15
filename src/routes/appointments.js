@@ -1,5 +1,5 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
@@ -28,6 +28,7 @@ router.get('/', async (req, res, next) => {
         'appointments.notes',
         'appointments.created_at',
         sql`patients.first_name || ' ' || patients.last_name`.as('patient_name'),
+        'patients.phone as patient_phone',
         'users.full_name as dentist_name'
       ]);
 
@@ -56,6 +57,47 @@ router.get('/', async (req, res, next) => {
     next(error);
   }
 });
+
+router.get('/:id',
+  param('id').isUUID(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+      }
+
+      const appointment = await db
+        .selectFrom('appointments')
+        .innerJoin('patients', 'appointments.patient_id', 'patients.id')
+        .innerJoin('users', 'appointments.dentist_id', 'users.id')
+        .select([
+          'appointments.id',
+          'appointments.patient_id',
+          'appointments.dentist_id',
+          'appointments.appointment_date',
+          'appointments.duration_minutes',
+          'appointments.status_key',
+          'appointments.reason',
+          'appointments.notes',
+          'appointments.created_at',
+          sql`patients.first_name || ' ' || patients.last_name`.as('patient_name'),
+          'patients.phone as patient_phone',
+          'users.full_name as dentist_name'
+        ])
+        .where('appointments.id', '=', req.params.id)
+        .executeTakeFirst();
+
+      if (!appointment) {
+        return res.status(404).json({ error: 'appointment.error.not_found' });
+      }
+
+      res.json(appointment);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 // Create appointment
 router.post('/',
