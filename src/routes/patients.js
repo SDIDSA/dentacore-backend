@@ -32,11 +32,11 @@ router.get('/', async (req, res, next) => {
         'patients.medical_history',
         'patients.allergies',
         'patients.blood_type',
-        'patients.is_active',
+        'patients.status_key',
         'patients.created_at',
         'wilayas.name_key as wilaya_name_key'
       ])
-      .where('patients.is_active', '=', true);
+      .where('patients.status_key', '=', 'user.status.active');
 
     if (search) {
       query = query.where((eb) =>
@@ -82,7 +82,7 @@ router.get('/:id', async (req, res, next) => {
         'patients.medical_history',
         'patients.allergies',
         'patients.blood_type',
-        'patients.is_active',
+        'patients.status_key',
         'patients.created_at',
         'wilayas.name_key as wilaya_name_key'
       ])

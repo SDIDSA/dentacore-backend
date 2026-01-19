@@ -15,8 +15,7 @@ router.use(authorize('auth.role.admin'));
 // Get all users
 router.get('/', async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, search, role } = req.query;
-    const offset = (page - 1) * limit;
+    const { search, role } = req.query;
 
     let query = db
       .selectFrom('users')
@@ -28,7 +27,7 @@ router.get('/', async (req, res, next) => {
         'users.full_name',
         'users.phone',
         'users.address',
-        'users.is_active',
+        'users.status_key',
         'users.last_login_at',
         'users.created_at',
         'roles.role_key',
@@ -50,40 +49,9 @@ router.get('/', async (req, res, next) => {
 
     const users = await query
       .orderBy('users.created_at', 'desc')
-      .limit(Number(limit))
-      .offset(Number(offset))
       .execute();
 
-    // Get total count for pagination
-    let countQuery = db
-      .selectFrom('users')
-      .innerJoin('roles', 'users.role_id', 'roles.id')
-      .select(db.fn.count('users.id').as('total'));
-
-    if (search) {
-      countQuery = countQuery.where((eb) =>
-        eb.or([
-          eb('users.full_name', 'ilike', `%${search}%`),
-          eb('users.email', 'ilike', `%${search}%`)
-        ])
-      );
-    }
-
-    if (role) {
-      countQuery = countQuery.where('roles.role_key', '=', role);
-    }
-
-    const { total } = await countQuery.executeTakeFirst();
-
-    res.json({
-      users,
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
-        total: Number(total),
-        pages: Math.ceil(Number(total) / Number(limit))
-      }
-    });
+    res.json(users);
   } catch (err) {
     next(err);
   }
@@ -92,7 +60,7 @@ router.get('/', async (req, res, next) => {
 // Get user by ID
 router.get('/:id', async (req, res, next) => {
   try {
-    const user = await db
+    var user = await db
       .selectFrom('users')
       .innerJoin('roles', 'users.role_id', 'roles.id')
       .leftJoin('wilayas', 'users.wilaya_id', 'wilayas.id')
@@ -103,7 +71,7 @@ router.get('/:id', async (req, res, next) => {
         'users.phone',
         'users.wilaya_id',
         'users.address',
-        'users.is_active',
+        'users.status_key',
         'users.last_login_at',
         'users.created_at',
         'users.updated_at',
@@ -115,7 +83,17 @@ router.get('/:id', async (req, res, next) => {
       .executeTakeFirst();
 
     if (!user) {
-      return res.status(404).json({ error: 'user.error.not_found' });
+      user = (await db
+        .selectFrom('audit_logs')
+        .select('old_values')
+        .where('entity_type', '=', 'users')
+        .where('action', '=', 'DELETE')
+        .where('entity_id', '=', req.params.id)
+        .executeTakeFirst())?.old_values;
+
+      if (!user) {
+        return res.status(404).json({ error: 'user.error.not_found' });
+      }
     }
 
     res.json(user);
@@ -194,6 +172,15 @@ router.post('/',
         .returningAll()
         .executeTakeFirst();
 
+      // Audit log: User Created
+      const { password_hash: _ph, ...safeNewUser } = newUser;
+      await req.audit.log({
+        action: 'CREATE',
+        entityType: 'users',
+        entityId: newUser.id,
+        newValues: safeNewUser
+      });
+
       // Remove password hash from response
       const { password_hash: _, ...userResponse } = newUser;
 
@@ -210,6 +197,7 @@ router.put('/:id',
   body('full_name').optional().trim().notEmpty(),
   body('phone').optional().matches(/^\+213[0-9]{9}$/),
   body('role_id').optional().isInt({ min: 1 }),
+  body('status_key').optional().isIn(['user.status.active', 'user.status.inactive', 'user.status.deleted']),
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
@@ -220,13 +208,13 @@ router.put('/:id',
       const userId = req.params.id;
       const {
         email, full_name, phone, role_id,
-        wilaya_id, address, is_active
+        wilaya_id, address, status_key
       } = req.body;
 
       // Check if user exists
       const existingUser = await db
         .selectFrom('users')
-        .select('id')
+        .selectAll()
         .where('id', '=', userId)
         .executeTakeFirst();
 
@@ -283,7 +271,7 @@ router.put('/:id',
       if (role_id !== undefined) updateData.role_id = role_id;
       if (wilaya_id !== undefined) updateData.wilaya_id = wilaya_id;
       if (address !== undefined) updateData.address = address;
-      if (is_active !== undefined) updateData.is_active = is_active;
+      if (status_key !== undefined) updateData.status_key = status_key;
 
       // Update user
       const updatedUser = await db
@@ -292,6 +280,17 @@ router.put('/:id',
         .where('id', '=', userId)
         .returningAll()
         .executeTakeFirst();
+
+      // Audit log: User Updated
+      const { password_hash: _oldPh, ...safeOldUser } = existingUser;
+      const { password_hash: _newPh, ...safeNewUserUpdate } = updatedUser;
+      await req.audit.log({
+        action: 'UPDATE',
+        entityType: 'users',
+        entityId: userId,
+        oldValues: safeOldUser,
+        newValues: safeNewUserUpdate
+      });
 
       // Remove password hash from response
       const { password_hash: _, ...userResponse } = updatedUser;
@@ -337,6 +336,15 @@ router.patch('/:id/password',
         .where('id', '=', userId)
         .execute();
 
+      // Audit log: Password Changed
+      await req.audit.log({
+        action: 'UPDATE',
+        entityType: 'users',
+        entityId: userId,
+        oldValues: { password_changed: false },
+        newValues: { password_changed: true }
+      });
+
       res.json({ message: 'user.password.updated' });
     } catch (err) {
       next(err);
@@ -344,19 +352,73 @@ router.patch('/:id/password',
   }
 );
 
-// Toggle user active status
-router.patch('/:id/toggle-status', async (req, res, next) => {
+// Update user status
+router.patch('/:id/status',
+  body('status_key').isIn(['user.status.active', 'user.status.inactive', 'user.status.deleted']),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+      }
+
+      const userId = req.params.id;
+      const { status_key } = req.body;
+
+      // Prevent admin from deactivating/deleting themselves
+      if (userId === req.user.id && status_key !== 'user.status.active') {
+        return res.status(400).json({ error: 'user.error.cannot_change_own_status' });
+      }
+
+      const user = await db
+        .selectFrom('users')
+        .select(['id', 'status_key'])
+        .where('id', '=', userId)
+        .executeTakeFirst();
+
+      if (!user) {
+        return res.status(404).json({ error: 'user.error.not_found' });
+      }
+
+      const updatedUser = await db
+        .updateTable('users')
+        .set({ status_key })
+        .where('id', '=', userId)
+        .returningAll()
+        .executeTakeFirst();
+
+      // Audit log: Status Updated
+      await req.audit.log({
+        action: 'UPDATE',
+        entityType: 'users',
+        entityId: userId,
+        oldValues: { status_key: user.status_key },
+        newValues: { status_key: updatedUser.status_key }
+      });
+
+      // Remove password hash from response
+      const { password_hash: _, ...userResponse } = updatedUser;
+
+      res.json(userResponse);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Delete user
+router.delete('/:id', async (req, res, next) => {
   try {
     const userId = req.params.id;
 
-    // Prevent admin from deactivating themselves
+    // Prevent admin from deleting themselves
     if (userId === req.user.id) {
-      return res.status(400).json({ error: 'user.error.cannot_deactivate_self' });
+      return res.status(400).json({ error: 'user.error.cannot_delete_self' });
     }
 
     const user = await db
       .selectFrom('users')
-      .select(['id', 'is_active'])
+      .selectAll()
       .where('id', '=', userId)
       .executeTakeFirst();
 
@@ -364,17 +426,22 @@ router.patch('/:id/toggle-status', async (req, res, next) => {
       return res.status(404).json({ error: 'user.error.not_found' });
     }
 
-    const updatedUser = await db
-      .updateTable('users')
-      .set({ is_active: !user.is_active })
+    await db
+      .deleteFrom('users')
       .where('id', '=', userId)
-      .returningAll()
-      .executeTakeFirst();
+      .execute();
 
-    // Remove password hash from response
-    const { password_hash: _, ...userResponse } = updatedUser;
+    // Audit log: User Deleted
+    const { password_hash: _delPh, ...safeDeletedUser } = user;
+    safeDeletedUser.status_key = 'user.status.deleted';
+    await req.audit.log({
+      action: 'DELETE',
+      entityType: 'users',
+      entityId: userId,
+      oldValues: safeDeletedUser
+    });
 
-    res.json(userResponse);
+    res.json(safeDeletedUser);
   } catch (err) {
     next(err);
   }

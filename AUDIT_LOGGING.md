@@ -64,7 +64,8 @@ The seed file includes sample audit logs so you can see the feature working imme
 Currently implemented in:
 - ✅ Patient creation (`src/routes/patients.js`)
 - ✅ Appointment creation and status updates (`src/routes/appointments.js`)
-- ⏳ Add to other routes as needed (users, treatments, payments, etc.)
+- ✅ User management (create, update, delete, login)
+- ⏳ Add to other routes as needed (treatments, payments, etc.)
 
 ## Adding to More Routes
 

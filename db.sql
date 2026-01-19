@@ -56,12 +56,13 @@ CREATE TABLE users (
     phone VARCHAR(20) UNIQUE NOT NULL,
     wilaya_id SMALLINT REFERENCES wilayas(id) ON DELETE SET NULL,
     address TEXT,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    status_key VARCHAR(50) NOT NULL DEFAULT 'user.status.active',
     last_login_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
-    CONSTRAINT chk_phone_format CHECK (phone ~ '^\+213[0-9]{9}$')
+    CONSTRAINT chk_phone_format CHECK (phone ~ '^\+213[0-9]{9}$'),
+    CONSTRAINT chk_user_status CHECK (status_key IN ('user.status.active', 'user.status.inactive', 'user.status.deleted'))
 );
 
 COMMENT ON TABLE users IS 'System users (Admins, Dentists, Receptionists)';
@@ -69,7 +70,7 @@ COMMENT ON COLUMN users.phone IS 'Algerian format: +213XXXXXXXXX';
 
 CREATE INDEX idx_users_role ON users(role_id);
 CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_active ON users(is_active);
+CREATE INDEX idx_users_status ON users(status_key);
 
 -- ============================================================================
 -- 4. PATIENT MANAGEMENT
@@ -91,13 +92,14 @@ CREATE TABLE patients (
     medical_history TEXT,
     allergies TEXT,
     blood_type VARCHAR(5),
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    status_key VARCHAR(50) NOT NULL DEFAULT 'user.status.active',
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_patient_phone CHECK (phone ~ '^\+213[0-9]{9}$'),
-    CONSTRAINT chk_patient_gender CHECK (gender IN ('patient.gender.male', 'patient.gender.female'))
+    CONSTRAINT chk_patient_gender CHECK (gender IN ('patient.gender.male', 'patient.gender.female')),
+    CONSTRAINT chk_patient_status CHECK (status_key IN ('user.status.active', 'user.status.inactive', 'user.status.deleted'))
 );
 
 COMMENT ON TABLE patients IS 'Patient records with user-generated names and addresses';
@@ -107,7 +109,7 @@ COMMENT ON COLUMN patients.gender IS 'Translation key for gender';
 CREATE INDEX idx_patients_code ON patients(patient_code);
 CREATE INDEX idx_patients_name ON patients(last_name, first_name);
 CREATE INDEX idx_patients_phone ON patients(phone);
-CREATE INDEX idx_patients_active ON patients(is_active);
+CREATE INDEX idx_patients_status ON patients(status_key);
 CREATE INDEX idx_patients_dob ON patients(date_of_birth);
 
 -- ============================================================================

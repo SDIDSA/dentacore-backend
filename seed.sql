@@ -141,7 +141,7 @@ INSERT INTO users (
     full_name, 
     phone, 
     wilaya_id, 
-    is_active
+    status_key
 )
 SELECT 
     r.id,
@@ -150,7 +150,7 @@ SELECT
     'System Administrator',
     '+213555000000',
     16, -- Algiers
-    TRUE
+    'user.status.active'
 FROM roles r
 WHERE r.role_key = 'auth.role.admin';
 
@@ -161,7 +161,7 @@ INSERT INTO users (
     full_name,
     phone,
     wilaya_id,
-    is_active
+    status_key
 )
 SELECT
     r.id,
@@ -170,7 +170,7 @@ SELECT
     'Zinelabidine Teyar',
     '+213549468120',
     25, -- Algiers
-    TRUE
+    'user.status.active'
 FROM roles r
 WHERE r.role_key = 'auth.role.dentist';
 

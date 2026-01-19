@@ -29,7 +29,7 @@ router.get('/patients', async (req, res, next) => {
         .executeTakeFirst(),
       db.selectFrom('patients')
         .select(sql`COUNT(*)`.as('count'))
-        .where('is_active', '=', true)
+        .where('status_key', '=', 'user.status.active')
         .executeTakeFirst(),
       db.selectFrom('patients')
         .select(sql`COUNT(*)`.as('count'))
@@ -44,14 +44,14 @@ router.get('/patients', async (req, res, next) => {
 
     const thisMonth = parseInt(thisMonthPatients.count);
     const lastMonth = parseInt(lastMonthPatients.count);
-    
+
     let monthlyChange = 0;
     if (lastMonth > 0) {
       monthlyChange = ((thisMonth - lastMonth) / lastMonth * 100);
     } else if (thisMonth > 0) {
       monthlyChange = 100; // 100% growth when going from 0 to any positive number
     }
-    
+
     // Ensure we don't have NaN or Infinity
     if (!isFinite(monthlyChange)) {
       monthlyChange = 0;
@@ -110,14 +110,14 @@ router.get('/appointments', async (req, res, next) => {
     const completedCount = parseInt(completedToday.count);
     const last7DaysTotal = parseInt(last7DaysAppointments.count);
     const weekAverage = last7DaysTotal / 7;
-    
+
     let todayVsAverage = 0;
     if (weekAverage > 0) {
       todayVsAverage = ((todayCount - weekAverage) / weekAverage * 100);
     } else if (todayCount > 0) {
       todayVsAverage = 100; // 100% above average when average is 0 but today has appointments
     }
-    
+
     // Ensure we don't have NaN or Infinity
     if (!isFinite(todayVsAverage)) {
       todayVsAverage = 0;
@@ -195,14 +195,14 @@ router.get('/treatments', async (req, res, next) => {
 
     const thisMonthCount = parseInt(thisMonthTreatments.count);
     const lastMonthCount = parseInt(lastMonthTreatments.count);
-    
+
     let countChange = 0;
     if (lastMonthCount > 0) {
       countChange = ((thisMonthCount - lastMonthCount) / lastMonthCount * 100);
     } else if (thisMonthCount > 0) {
       countChange = 100;
     }
-    
+
     // Ensure we don't have NaN or Infinity
     if (!isFinite(countChange)) countChange = 0;
 
@@ -223,9 +223,9 @@ router.get('/revenue', async (req, res, next) => {
   try {
     const period = req.query.period || 'month'; // month, week, year
     const now = new Date();
-    
+
     let currentStart, currentEnd, previousStart, previousEnd, periodName;
-    
+
     switch (period) {
       case 'week':
         // Current week (Monday to Sunday)
@@ -234,11 +234,11 @@ router.get('/revenue', async (req, res, next) => {
         const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         currentStart.setDate(now.getDate() - daysToMonday);
         currentStart.setHours(0, 0, 0, 0);
-        
+
         currentEnd = new Date(currentStart);
         currentEnd.setDate(currentStart.getDate() + 6);
         currentEnd.setHours(23, 59, 59, 999);
-        
+
         // Previous week
         previousStart = new Date(currentStart);
         previousStart.setDate(currentStart.getDate() - 7);
@@ -246,7 +246,7 @@ router.get('/revenue', async (req, res, next) => {
         previousEnd.setDate(currentEnd.getDate() - 7);
         periodName = 'week';
         break;
-        
+
       case 'year':
         currentStart = new Date(now.getFullYear(), 0, 1);
         currentEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
@@ -254,7 +254,7 @@ router.get('/revenue', async (req, res, next) => {
         previousEnd = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
         periodName = 'year';
         break;
-        
+
       default: // month
         currentStart = new Date(now.getFullYear(), now.getMonth(), 1);
         currentEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -278,14 +278,14 @@ router.get('/revenue', async (req, res, next) => {
 
     const currentAmount = parseFloat(currentRevenue.total);
     const previousAmount = parseFloat(previousRevenue.total);
-    
+
     let changePercent = 0;
     if (previousAmount > 0) {
       changePercent = ((currentAmount - previousAmount) / previousAmount * 100);
     } else if (currentAmount > 0) {
       changePercent = 100;
     }
-    
+
     // Ensure we don't have NaN or Infinity
     if (!isFinite(changePercent)) {
       changePercent = 0;
@@ -321,7 +321,7 @@ router.get('/overview', async (req, res, next) => {
     const sevenDaysAgo = new Date(today);
     sevenDaysAgo.setDate(today.getDate() - 7);
     sevenDaysAgo.setHours(0, 0, 0, 0);
-    
+
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
     yesterday.setHours(23, 59, 59, 999);
@@ -339,7 +339,7 @@ router.get('/overview', async (req, res, next) => {
     ] = await Promise.all([
       db.selectFrom('patients')
         .select(sql`COUNT(*)`.as('count'))
-        .where('is_active', '=', true)
+        .where('status_key', '=', 'user.status.active')
         .executeTakeFirst(),
       db.selectFrom('patients')
         .select(sql`COUNT(*)`.as('count'))
@@ -383,7 +383,7 @@ router.get('/overview', async (req, res, next) => {
     // Calculate comparative metrics
     const newThisMonth = parseInt(newPatientsThisMonth.count);
     const newLastMonth = parseInt(newPatientsLastMonth.count);
-    
+
     let patientGrowth = 0;
     if (newLastMonth > 0) {
       patientGrowth = ((newThisMonth - newLastMonth) / newLastMonth * 100);
@@ -395,7 +395,7 @@ router.get('/overview', async (req, res, next) => {
     const todayAppts = parseInt(todayAppointments.count);
     const last7DaysTotal = parseInt(last7DaysAppointments.count);
     const weekAverage = last7DaysTotal / 7;
-    
+
     let appointmentTrend = 0;
     if (weekAverage > 0) {
       appointmentTrend = ((todayAppts - weekAverage) / weekAverage * 100);
@@ -406,7 +406,7 @@ router.get('/overview', async (req, res, next) => {
 
     const currentRevenue = parseFloat(monthlyRevenue.total);
     const previousRevenue = parseFloat(lastMonthRevenue.total);
-    
+
     let revenueGrowth = 0;
     if (previousRevenue > 0) {
       revenueGrowth = ((currentRevenue - previousRevenue) / previousRevenue * 100);
@@ -417,7 +417,7 @@ router.get('/overview', async (req, res, next) => {
 
     const thisMonthTreatmentsCount = parseInt(thisMonthTreatments.count);
     const lastMonthTreatmentsCount = parseInt(lastMonthTreatments.count);
-    
+
     let treatmentGrowth = 0;
     if (lastMonthTreatmentsCount > 0) {
       treatmentGrowth = ((thisMonthTreatmentsCount - lastMonthTreatmentsCount) / lastMonthTreatmentsCount * 100);
@@ -431,17 +431,17 @@ router.get('/overview', async (req, res, next) => {
       new_patients_this_month: newThisMonth,
       patient_growth_percent: safeNumber(patientGrowth),
       patient_trend: patientGrowth > 0 ? 'up' : patientGrowth < 0 ? 'down' : 'stable',
-      
+
       today_appointments: todayAppts,
       week_average_appointments: safeNumber(weekAverage, 1),
       appointment_trend_percent: safeNumber(appointmentTrend),
       appointment_trend: appointmentTrend > 0 ? 'above_average' : appointmentTrend < 0 ? 'below_average' : 'average',
-      
+
       treatments_this_month: thisMonthTreatmentsCount,
       treatments_last_month: lastMonthTreatmentsCount,
       treatment_growth_percent: safeNumber(treatmentGrowth),
       treatment_trend: treatmentGrowth > 0 ? 'up' : treatmentGrowth < 0 ? 'down' : 'stable',
-      
+
       monthly_revenue_dzd: safeNumber(currentRevenue),
       last_month_revenue_dzd: safeNumber(previousRevenue),
       revenue_growth_percent: safeNumber(revenueGrowth),
@@ -457,7 +457,7 @@ router.get('/recent-activity', async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit) || 20;
     const days = parseInt(req.query.days) || 7;
-    
+
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
 

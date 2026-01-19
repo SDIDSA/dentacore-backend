@@ -34,7 +34,8 @@ router.post('/login',
           'users.email',
           'users.password_hash',
           'users.full_name',
-          'users.is_active',
+          'users.status_key',
+          'users.last_login_at',
           'roles.role_key'
         ])
         .where('users.email', '=', email)
@@ -44,7 +45,7 @@ router.post('/login',
         return error(res, 401, 'auth.error.invalid_credentials')
       }
 
-      if (!user.is_active) {
+      if (user.status_key !== 'user.status.active') {
         return error(res, 403, 'auth.error.account_inactive');
       }
 
@@ -59,11 +60,22 @@ router.post('/login',
         { expiresIn: process.env.JWT_EXPIRES_IN }
       );
 
+      const newLoginTime = new Date();
+
       await db
         .updateTable('users')
-        .set({ last_login_at: new Date() })
+        .set({ last_login_at: newLoginTime })
         .where('id', '=', user.id)
         .execute();
+
+      // Audit log: Login (User Update)
+      await req.audit.log({
+        action: 'UPDATE',
+        entityType: 'users',
+        entityId: user.id,
+        oldValues: { last_login_at: user.last_login_at },
+        newValues: { last_login_at: newLoginTime }
+      });
 
       return res.json({
         token,
@@ -95,7 +107,7 @@ router.get('/validate', async (req, res, next) => {
       .select([
         'users.id',
         'users.full_name',
-        'users.is_active',
+        'users.status_key',
         'roles.role_key'
       ])
       .where('users.id', '=', decoded.id)
@@ -105,7 +117,7 @@ router.get('/validate', async (req, res, next) => {
       return error(res, 401, 'auth.error.invalid_token');
     }
 
-    if (!user.is_active) {
+    if (user.status_key !== 'user.status.active') {
       return error(res, 403, 'auth.error.account_inactive');
     }
 
