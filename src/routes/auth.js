@@ -15,7 +15,7 @@ const error = (res, code, error) => {
 
 // Login
 router.post('/login',
-  body('email').isEmail(),
+  body('email').isEmail().normalizeEmail(),
   body('password').notEmpty(),
   async (req, res, next) => {
     try {
@@ -50,6 +50,7 @@ router.post('/login',
       }
 
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
+      
       if (!isValidPassword) {
         return error(res, 401, 'auth.error.invalid_credentials')
       }

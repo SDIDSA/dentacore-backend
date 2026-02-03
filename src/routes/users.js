@@ -201,6 +201,7 @@ router.put('/:id',
   async (req, res, next) => {
     try {
       const errors = validationResult(req);
+
       if (!errors.isEmpty()) {
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
@@ -441,7 +442,7 @@ router.delete('/:id', async (req, res, next) => {
       oldValues: safeDeletedUser
     });
 
-    res.json(safeDeletedUser);
+    res.status(204).json(safeDeletedUser);
   } catch (err) {
     next(err);
   }

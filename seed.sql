@@ -175,28 +175,6 @@ FROM roles r
 WHERE r.role_key = 'auth.role.dentist';
 
 -- ============================================================================
--- 7. SAMPLE AUDIT LOGS (Recent Activity Examples)
--- ============================================================================
-
--- Get the admin user ID for audit logs
-DO $
-DECLARE
-    admin_user_id UUID;
-BEGIN
-    SELECT id INTO admin_user_id FROM users WHERE email = 'admin@dental-clinic.dz';
-    
-    -- Sample audit logs from the past week
-    INSERT INTO audit_logs (user_id, action, entity_type, entity_id, new_values, ip_address, user_agent, created_at) VALUES
-    (admin_user_id, 'LOGIN', 'users', admin_user_id, '{"email": "admin@dental-clinic.dz"}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', NOW() - INTERVAL '2 hours'),
-    (admin_user_id, 'CREATE', 'patients', uuid_generate_v4(), '{"patient_code": "PAT-2024-0001", "first_name": "Ahmed", "last_name": "Benali"}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', NOW() - INTERVAL '1 day'),
-    (admin_user_id, 'UPDATE', 'appointments', uuid_generate_v4(), '{"status_key": "appt.status.completed"}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', NOW() - INTERVAL '3 hours'),
-    (admin_user_id, 'CREATE', 'invoices', uuid_generate_v4(), '{"invoice_number": "INV-202401-0001", "total_dzd": 15000}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', NOW() - INTERVAL '5 hours'),
-    (admin_user_id, 'CREATE', 'payments', uuid_generate_v4(), '{"amount_dzd": 15000, "method": "pay.method.cash"}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', NOW() - INTERVAL '4 hours'),
-    (admin_user_id, 'UPDATE', 'patients', uuid_generate_v4(), '{"phone": "+213555123456"}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', NOW() - INTERVAL '6 hours'),
-    (admin_user_id, 'CREATE', 'treatment_records', uuid_generate_v4(), '{"diagnosis": "Dental caries", "tooth_number": "16"}', '192.168.1.100', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', NOW() - INTERVAL '1 day 2 hours');
-END $;
-
--- ============================================================================
 -- 9. SAMPLE DATA VERIFICATION QUERIES
 -- ============================================================================
 

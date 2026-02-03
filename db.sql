@@ -17,8 +17,8 @@ CREATE TABLE roles (
     id SERIAL PRIMARY KEY,
     role_key VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE roles IS 'System roles using translation keys (e.g., auth.role.admin)';
@@ -34,7 +34,7 @@ CREATE TABLE wilayas (
     id SMALLINT PRIMARY KEY,
     code VARCHAR(2) NOT NULL UNIQUE,
     name_key VARCHAR(100) NOT NULL UNIQUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE wilayas IS '58 Algerian provinces with translation keys';
@@ -57,9 +57,9 @@ CREATE TABLE users (
     wilaya_id SMALLINT REFERENCES wilayas(id) ON DELETE SET NULL,
     address TEXT,
     status_key VARCHAR(50) NOT NULL DEFAULT 'user.status.active',
-    last_login_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_login_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_phone_format CHECK (phone ~ '^\+213[0-9]{9}$'),
     CONSTRAINT chk_user_status CHECK (status_key IN ('user.status.active', 'user.status.inactive', 'user.status.deleted'))
@@ -94,8 +94,8 @@ CREATE TABLE patients (
     blood_type VARCHAR(5),
     status_key VARCHAR(50) NOT NULL DEFAULT 'user.status.active',
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_patient_phone CHECK (phone ~ '^\+213[0-9]{9}$'),
     CONSTRAINT chk_patient_gender CHECK (gender IN ('patient.gender.male', 'patient.gender.female')),
@@ -122,8 +122,8 @@ CREATE TABLE treatment_categories (
     parent_id INTEGER REFERENCES treatment_categories(id) ON DELETE CASCADE,
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE treatment_categories IS 'Treatment classification using translation keys';
@@ -140,14 +140,14 @@ CREATE TABLE appointments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     dentist_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    appointment_date TIMESTAMPTZ NOT NULL,
+    appointment_date TIMESTAMP NOT NULL,
     duration_minutes INTEGER NOT NULL DEFAULT 30,
     status_key VARCHAR(50) NOT NULL,
     reason TEXT,
     notes TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_appt_status CHECK (status_key IN (
         'appt.status.scheduled',
@@ -177,14 +177,14 @@ CREATE TABLE treatment_records (
     appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
     dentist_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     category_id INTEGER REFERENCES treatment_categories(id) ON DELETE SET NULL,
-    treatment_date TIMESTAMPTZ NOT NULL,
+    treatment_date TIMESTAMP NOT NULL,
     tooth_number VARCHAR(10),
     diagnosis TEXT NOT NULL,
     treatment_performed TEXT NOT NULL,
     notes TEXT,
     estimated_cost_dzd DECIMAL(12, 2),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_tooth_number CHECK (
         tooth_number ~ '^[0-9]{1,2}$' OR 
@@ -213,7 +213,7 @@ CREATE TABLE payment_methods (
     method_key VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE payment_methods IS 'Payment methods with translation keys';
@@ -229,8 +229,8 @@ CREATE TABLE invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     invoice_number VARCHAR(30) NOT NULL UNIQUE,
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE RESTRICT,
-    issue_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    due_date TIMESTAMPTZ,
+    issue_date TIMESTAMP NOT NULL DEFAULT NOW(),
+    due_date TIMESTAMP,
     subtotal_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     discount_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     tax_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
@@ -239,8 +239,8 @@ CREATE TABLE invoices (
     payment_status_key VARCHAR(50) NOT NULL,
     notes TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_invoice_payment_status CHECK (payment_status_key IN (
         'invoice.status.unpaid',
@@ -278,7 +278,7 @@ CREATE TABLE invoice_items (
     quantity INTEGER NOT NULL DEFAULT 1,
     unit_price_dzd DECIMAL(12, 2) NOT NULL,
     total_price_dzd DECIMAL(12, 2) NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_item_quantity CHECK (quantity > 0),
     CONSTRAINT chk_item_prices CHECK (
@@ -302,11 +302,11 @@ CREATE TABLE payments (
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     payment_method_id INTEGER NOT NULL REFERENCES payment_methods(id) ON DELETE RESTRICT,
     amount_dzd DECIMAL(12, 2) NOT NULL,
-    payment_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    payment_date TIMESTAMP NOT NULL DEFAULT NOW(),
     transaction_reference VARCHAR(100),
     notes TEXT,
     received_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_payment_amount CHECK (amount_dzd > 0)
 );
@@ -331,7 +331,7 @@ CREATE TABLE audit_logs (
     new_values JSONB,
     ip_address INET,
     user_agent TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE audit_logs IS 'System-wide audit trail';

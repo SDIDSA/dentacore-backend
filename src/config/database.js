@@ -1,6 +1,9 @@
 const { Kysely, PostgresDialect } = require('kysely');
 const { Pool } = require('pg');
 
+const pg = require('pg');
+pg.types.setTypeParser(1114, (str) => str)
+
 const dialect = new PostgresDialect({
   pool: new Pool({
     host: process.env.DB_HOST,
