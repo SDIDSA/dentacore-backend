@@ -1,8 +1,8 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
-const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
+const db = require('../config/database');
 
 const router = express.Router();
 
@@ -36,7 +36,8 @@ router.get('/', async (req, res, next) => {
         sql`patients.first_name || ' ' || patients.last_name`.as('patient_name'),
         'patients.phone as patient_phone',
         'users.full_name as dentist_name'
-      ]);
+      ])
+      .where('appointments.tenant_id', '=', req.tenantId);
 
     if (dentist_id) {
       query = query.where('appointments.dentist_id', '=', dentist_id);
@@ -86,7 +87,8 @@ router.get('/range',
         .selectFrom('appointments')
         .select(['appointments.id'])
         .where('appointments.appointment_date', '>=', start_date)
-        .where('appointments.appointment_date', '<=', end);
+        .where('appointments.appointment_date', '<=', end)
+        .where('appointments.tenant_id', '=', req.tenantId);
 
       if (dentist_id) {
         query = query.where('appointments.dentist_id', '=', dentist_id);
@@ -140,6 +142,7 @@ router.get('/:id',
           'users.full_name as dentist_name'
         ])
         .where('appointments.id', '=', req.params.id)
+        .where('appointments.tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (!appointment) {
@@ -160,12 +163,12 @@ router.post('/',
   body('appointment_date').isISO8601(),
   body('duration_minutes').isInt({ min: 1, max: 480 }),
   async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
+
     try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
-      }
-      
       const { patient_id, dentist_id, appointment_date, duration_minutes, reason, notes } = req.body;
 
       const appointment = await db
@@ -178,7 +181,8 @@ router.post('/',
           status_key: 'appt.status.scheduled',
           reason: reason || null,
           notes: notes || null,
-          created_by: req.user.id
+          created_by: req.user.id,
+          tenant_id: req.tenantId
         })
         .returningAll()
         .executeTakeFirst();
@@ -188,8 +192,9 @@ router.post('/',
         action: 'CREATE',
         entityType: 'appointments',
         entityId: appointment.id,
+        tenantId: req.tenantId,
         newValues: appointment
-      });
+      }, db);
 
       res.status(201).json(appointment);
     } catch (error) {
@@ -212,12 +217,12 @@ router.patch('/:id',
   body('reason').optional().isString(),
   body('notes').optional().isString(),
   async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
-      }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
 
+    try {
       // Get the current appointment for audit logging
       const currentAppointment = await db
         .selectFrom('appointments')
@@ -230,7 +235,7 @@ router.patch('/:id',
       }
 
       const { patient_id, dentist_id, appointment_date, duration_minutes, status_key, reason, notes } = req.body;
-      
+
       // Build update object with only provided fields
       const updateData = {};
       if (patient_id !== undefined) updateData.patient_id = patient_id;
@@ -246,6 +251,7 @@ router.patch('/:id',
         .updateTable('appointments')
         .set(updateData)
         .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
         .returningAll()
         .executeTakeFirst();
 
@@ -254,9 +260,10 @@ router.patch('/:id',
         action: 'UPDATE',
         entityType: 'appointments',
         entityId: appointment.id,
+        tenantId: req.tenantId,
         oldValues: currentAppointment,
         newValues: appointment
-      });
+      }, db);
 
       res.json(appointment);
     } catch (error) {
@@ -272,12 +279,12 @@ router.patch('/:id/status',
     'appt.status.completed', 'appt.status.cancelled', 'appt.status.no_show'
   ]),
   async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
-      }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
 
+    try {
       const { status_key } = req.body;
 
       // Get the current appointment for audit logging
@@ -293,11 +300,12 @@ router.patch('/:id/status',
 
       const appointment = await db
         .updateTable('appointments')
-        .set({ 
+        .set({
           status_key,
           updated_at: new Date()
         })
         .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
         .returningAll()
         .executeTakeFirst();
 
@@ -306,9 +314,10 @@ router.patch('/:id/status',
         action: 'UPDATE',
         entityType: 'appointments',
         entityId: appointment.id,
+        tenantId: req.tenantId,
         oldValues: { status_key: currentAppointment.status_key },
         newValues: { status_key: appointment.status_key }
-      });
+      }, db);
 
       res.json(appointment);
     } catch (error) {

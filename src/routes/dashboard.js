@@ -1,7 +1,7 @@
 const express = require('express');
-const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
+const db = require('../config/database');
 
 const router = express.Router();
 
@@ -17,6 +17,7 @@ function safeNumber(value, decimals = 2) {
 
 // Get patient statistics with comparative insights
 router.get('/patients', async (req, res, next) => {
+
   try {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -25,17 +26,21 @@ router.get('/patients', async (req, res, next) => {
 
     const [totalPatients, activePatients, thisMonthPatients, lastMonthPatients] = await Promise.all([
       db.selectFrom('patients')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .executeTakeFirst(),
       db.selectFrom('patients')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('status_key', '=', 'user.status.active')
         .executeTakeFirst(),
       db.selectFrom('patients')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('created_at', '>=', startOfMonth.toISOString())
         .executeTakeFirst(),
       db.selectFrom('patients')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('created_at', '>=', startOfLastMonth.toISOString())
         .where('created_at', '<=', endOfLastMonth.toISOString())
@@ -68,10 +73,12 @@ router.get('/patients', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+
 });
 
 // Get appointment statistics with comparative insights
 router.get('/appointments', async (req, res, next) => {
+
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -89,17 +96,20 @@ router.get('/appointments', async (req, res, next) => {
 
     const [todayAppointments, completedToday, last7DaysAppointments] = await Promise.all([
       db.selectFrom('appointments')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('appointment_date', '>=', today.toISOString())
         .where('appointment_date', '<', tomorrow.toISOString())
         .executeTakeFirst(),
       db.selectFrom('appointments')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('appointment_date', '>=', today.toISOString())
         .where('appointment_date', '<', tomorrow.toISOString())
         .where('status_key', '=', 'appt.status.completed')
         .executeTakeFirst(),
       db.selectFrom('appointments')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('appointment_date', '>=', sevenDaysAgo.toISOString())
         .where('appointment_date', '<=', yesterday.toISOString())
@@ -135,10 +145,12 @@ router.get('/appointments', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+
 });
 
 // Get today's appointments with details
 router.get('/appointments/today', async (req, res, next) => {
+
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -168,10 +180,12 @@ router.get('/appointments/today', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+
 });
 
 // Get treatment statistics with comparative insights
 router.get('/treatments', async (req, res, next) => {
+
   try {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -180,13 +194,16 @@ router.get('/treatments', async (req, res, next) => {
 
     const [totalTreatments, thisMonthTreatments, lastMonthTreatments] = await Promise.all([
       db.selectFrom('treatment_records')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .executeTakeFirst(),
       db.selectFrom('treatment_records')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('treatment_date', '>=', startOfMonth.toISOString())
         .executeTakeFirst(),
       db.selectFrom('treatment_records')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('treatment_date', '>=', startOfLastMonth.toISOString())
         .where('treatment_date', '<=', endOfLastMonth.toISOString())
@@ -216,10 +233,12 @@ router.get('/treatments', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+
 });
 
 // Get revenue statistics with comparative insights
 router.get('/revenue', async (req, res, next) => {
+
   try {
     const period = req.query.period || 'month'; // month, week, year
     const now = new Date();
@@ -265,11 +284,13 @@ router.get('/revenue', async (req, res, next) => {
 
     const [currentRevenue, previousRevenue] = await Promise.all([
       db.selectFrom('payments')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COALESCE(SUM(amount_dzd), 0)`.as('total'))
         .where('payment_date', '>=', currentStart.toISOString())
         .where('payment_date', '<=', currentEnd.toISOString())
         .executeTakeFirst(),
       db.selectFrom('payments')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COALESCE(SUM(amount_dzd), 0)`.as('total'))
         .where('payment_date', '>=', previousStart.toISOString())
         .where('payment_date', '<=', previousEnd.toISOString())
@@ -303,10 +324,12 @@ router.get('/revenue', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+
 });
 
 // Get overview with comparative insights (lightweight summary)
 router.get('/overview', async (req, res, next) => {
+
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -338,42 +361,51 @@ router.get('/overview', async (req, res, next) => {
       lastMonthRevenue
     ] = await Promise.all([
       db.selectFrom('patients')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('status_key', '=', 'user.status.active')
         .executeTakeFirst(),
       db.selectFrom('patients')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('created_at', '>=', startOfMonth.toISOString())
         .executeTakeFirst(),
       db.selectFrom('patients')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('created_at', '>=', startOfLastMonth.toISOString())
         .where('created_at', '<=', endOfLastMonth.toISOString())
         .executeTakeFirst(),
       db.selectFrom('appointments')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('appointment_date', '>=', today.toISOString())
         .where('appointment_date', '<', tomorrow.toISOString())
         .executeTakeFirst(),
       db.selectFrom('appointments')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('appointment_date', '>=', sevenDaysAgo.toISOString())
         .where('appointment_date', '<=', yesterday.toISOString())
         .executeTakeFirst(),
       db.selectFrom('treatment_records')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('treatment_date', '>=', startOfMonth.toISOString())
         .executeTakeFirst(),
       db.selectFrom('treatment_records')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
         .where('treatment_date', '>=', startOfLastMonth.toISOString())
         .where('treatment_date', '<=', endOfLastMonth.toISOString())
         .executeTakeFirst(),
       db.selectFrom('payments')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COALESCE(SUM(amount_dzd), 0)`.as('total'))
         .where('payment_date', '>=', startOfMonth.toISOString())
         .executeTakeFirst(),
       db.selectFrom('payments')
+        .where('tenant_id', '=', req.tenantId)
         .select(sql`COALESCE(SUM(amount_dzd), 0)`.as('total'))
         .where('payment_date', '>=', startOfLastMonth.toISOString())
         .where('payment_date', '<=', endOfLastMonth.toISOString())
@@ -450,10 +482,12 @@ router.get('/overview', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+
 });
 
 // Get recent activity for dashboard
 router.get('/recent-activity', async (req, res, next) => {
+
   try {
     const limit = parseInt(req.query.limit) || 20;
     const days = parseInt(req.query.days) || 7;
@@ -478,6 +512,7 @@ router.get('/recent-activity', async (req, res, next) => {
         'users.full_name as user_name',
         'users.email as user_email'
       ])
+      .where('audit_logs.tenant_id', '=', req.tenantId)
       .where('audit_logs.created_at', '>=', cutoffDate.toISOString())
       .orderBy('audit_logs.created_at', 'desc')
       .limit(limit)
@@ -487,6 +522,7 @@ router.get('/recent-activity', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+
 });
 
 module.exports = router;

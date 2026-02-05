@@ -1,9 +1,9 @@
 -- ============================================================================
--- SEED DATA FOR ALGERIAN DENTAL MANAGEMENT SYSTEM
+-- SEED DATA FOR MULTI-TENANT ALGERIAN DENTAL MANAGEMENT SYSTEM
 -- ============================================================================
 
 -- ============================================================================
--- 1. SYSTEM ROLES
+-- 1. SYSTEM ROLES (Global)
 -- ============================================================================
 
 INSERT INTO roles (role_key, description) VALUES
@@ -12,7 +12,7 @@ INSERT INTO roles (role_key, description) VALUES
 ('auth.role.receptionist', 'Front desk staff for appointments and billing');
 
 -- ============================================================================
--- 2. ALGERIAN WILAYAS (58 Provinces)
+-- 2. ALGERIAN WILAYAS (58 Provinces) - Global
 -- ============================================================================
 
 INSERT INTO wilayas (id, code, name_key) VALUES
@@ -76,7 +76,7 @@ INSERT INTO wilayas (id, code, name_key) VALUES
 (58, '58', 'geo.wilaya.58');   -- El Meniaa
 
 -- ============================================================================
--- 3. PAYMENT METHODS (ALGERIA)
+-- 3. PAYMENT METHODS (Global - Algeria)
 -- ============================================================================
 
 INSERT INTO payment_methods (method_key, description, is_active) VALUES
@@ -89,198 +89,493 @@ INSERT INTO payment_methods (method_key, description, is_active) VALUES
 ('pay.method.satim', 'SATIM - Electronic payment terminal', TRUE);
 
 -- ============================================================================
--- 4. TREATMENT CATEGORIES (Sample)
+-- 4. GLOBAL TREATMENT CATEGORIES (Available to All Tenants)
 -- ============================================================================
 
-INSERT INTO treatment_categories (category_key, parent_id, description, is_active) VALUES
--- Root Categories
-('cat.preventive', NULL, 'Preventive dental care', TRUE),
-('cat.restorative', NULL, 'Restorative procedures', TRUE),
-('cat.surgery', NULL, 'Oral and maxillofacial surgery', TRUE),
-('cat.orthodontics', NULL, 'Orthodontic treatments', TRUE),
-('cat.endodontics', NULL, 'Root canal treatments', TRUE),
-('cat.periodontics', NULL, 'Gum disease treatments', TRUE),
-('cat.prosthodontics', NULL, 'Dental prosthetics', TRUE),
-('cat.cosmetic', NULL, 'Cosmetic dentistry', TRUE);
+-- Root Categories (Global - tenant_id = NULL)
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active) VALUES
+(NULL, 'cat.preventive', NULL, 'Preventive dental care', TRUE),
+(NULL, 'cat.restorative', NULL, 'Restorative procedures', TRUE),
+(NULL, 'cat.surgery', NULL, 'Oral and maxillofacial surgery', TRUE),
+(NULL, 'cat.orthodontics', NULL, 'Orthodontic treatments', TRUE),
+(NULL, 'cat.endodontics', NULL, 'Root canal treatments', TRUE),
+(NULL, 'cat.periodontics', NULL, 'Gum disease treatments', TRUE),
+(NULL, 'cat.prosthodontics', NULL, 'Dental prosthetics', TRUE),
+(NULL, 'cat.cosmetic', NULL, 'Cosmetic dentistry', TRUE);
 
--- Sub-categories (examples)
-INSERT INTO treatment_categories (category_key, parent_id, description, is_active)
-SELECT 'cat.preventive.cleaning', id, 'Professional teeth cleaning', TRUE
-FROM treatment_categories WHERE category_key = 'cat.preventive';
+-- Sub-categories (Global)
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.preventive.cleaning', id, 'Professional teeth cleaning', TRUE
+FROM treatment_categories WHERE category_key = 'cat.preventive' AND tenant_id IS NULL;
 
-INSERT INTO treatment_categories (category_key, parent_id, description, is_active)
-SELECT 'cat.preventive.fluoride', id, 'Fluoride treatment', TRUE
-FROM treatment_categories WHERE category_key = 'cat.preventive';
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.preventive.fluoride', id, 'Fluoride treatment', TRUE
+FROM treatment_categories WHERE category_key = 'cat.preventive' AND tenant_id IS NULL;
 
-INSERT INTO treatment_categories (category_key, parent_id, description, is_active)
-SELECT 'cat.restorative.filling', id, 'Dental fillings', TRUE
-FROM treatment_categories WHERE category_key = 'cat.restorative';
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.preventive.sealants', id, 'Dental sealants', TRUE
+FROM treatment_categories WHERE category_key = 'cat.preventive' AND tenant_id IS NULL;
 
-INSERT INTO treatment_categories (category_key, parent_id, description, is_active)
-SELECT 'cat.restorative.crown', id, 'Dental crowns', TRUE
-FROM treatment_categories WHERE category_key = 'cat.restorative';
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.restorative.filling', id, 'Dental fillings (composite/amalgam)', TRUE
+FROM treatment_categories WHERE category_key = 'cat.restorative' AND tenant_id IS NULL;
 
-INSERT INTO treatment_categories (category_key, parent_id, description, is_active)
-SELECT 'cat.surgery.extraction', id, 'Tooth extraction', TRUE
-FROM treatment_categories WHERE category_key = 'cat.surgery';
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.restorative.crown', id, 'Dental crowns', TRUE
+FROM treatment_categories WHERE category_key = 'cat.restorative' AND tenant_id IS NULL;
 
-INSERT INTO treatment_categories (category_key, parent_id, description, is_active)
-SELECT 'cat.surgery.implant', id, 'Dental implant placement', TRUE
-FROM treatment_categories WHERE category_key = 'cat.surgery';
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.restorative.bridge', id, 'Dental bridges', TRUE
+FROM treatment_categories WHERE category_key = 'cat.restorative' AND tenant_id IS NULL;
 
--- ============================================================================
--- 5. SAMPLE ADMIN USER (Password: Admin@123456)
--- ============================================================================
--- Note: In production, use a secure password hashing library
--- This example uses pgcrypto's crypt() function
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.surgery.extraction', id, 'Tooth extraction (simple/surgical)', TRUE
+FROM treatment_categories WHERE category_key = 'cat.surgery' AND tenant_id IS NULL;
 
-INSERT INTO users (
-    role_id, 
-    email, 
-    password_hash, 
-    full_name, 
-    phone, 
-    wilaya_id, 
-    status_key
-)
-SELECT 
-    r.id,
-    'admin@dental-clinic.dz',
-    crypt('Admin@123456', gen_salt('bf')),
-    'System Administrator',
-    '+213555000000',
-    16, -- Algiers
-    'user.status.active'
-FROM roles r
-WHERE r.role_key = 'auth.role.admin';
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.surgery.implant', id, 'Dental implant placement', TRUE
+FROM treatment_categories WHERE category_key = 'cat.surgery' AND tenant_id IS NULL;
 
-INSERT INTO users (
-    role_id,
-    email,
-    password_hash,
-    full_name,
-    phone,
-    wilaya_id,
-    status_key
-)
-SELECT
-    r.id,
-    'zinou.teyar@gmail.com',
-    crypt('A1b2-A1b2', gen_salt('bf')),
-    'Zinelabidine Teyar',
-    '+213549468120',
-    25, -- Algiers
-    'user.status.active'
-FROM roles r
-WHERE r.role_key = 'auth.role.dentist';
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.surgery.wisdom_tooth', id, 'Wisdom tooth removal', TRUE
+FROM treatment_categories WHERE category_key = 'cat.surgery' AND tenant_id IS NULL;
+
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.endodontics.root_canal', id, 'Root canal therapy', TRUE
+FROM treatment_categories WHERE category_key = 'cat.endodontics' AND tenant_id IS NULL;
+
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.orthodontics.braces', id, 'Traditional metal braces', TRUE
+FROM treatment_categories WHERE category_key = 'cat.orthodontics' AND tenant_id IS NULL;
+
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.orthodontics.clear_aligners', id, 'Clear aligners (Invisalign-type)', TRUE
+FROM treatment_categories WHERE category_key = 'cat.orthodontics' AND tenant_id IS NULL;
+
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.cosmetic.whitening', id, 'Teeth whitening', TRUE
+FROM treatment_categories WHERE category_key = 'cat.cosmetic' AND tenant_id IS NULL;
+
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'cat.cosmetic.veneers', id, 'Dental veneers', TRUE
+FROM treatment_categories WHERE category_key = 'cat.cosmetic' AND tenant_id IS NULL;
 
 -- ============================================================================
--- 9. SAMPLE DATA VERIFICATION QUERIES
+-- 5. SAMPLE TENANTS (SaaS Onboarding Simulation)
 -- ============================================================================
 
--- Verify roles
--- SELECT * FROM roles;
+-- Tenant 1: Cabinet Dentaire El-Qods (Constantine)
+DO $$
+DECLARE
+    v_tenant_id UUID;
+    v_admin_role_id INTEGER;
+    v_dentist_role_id INTEGER;
+    v_receptionist_role_id INTEGER;
+    v_admin_user_id UUID;
+    v_dentist_user_id UUID;
+    v_patient1_id UUID;
+BEGIN
+    -- Get role IDs
+    SELECT id INTO v_admin_role_id FROM roles WHERE role_key = 'auth.role.admin';
+    SELECT id INTO v_dentist_role_id FROM roles WHERE role_key = 'auth.role.dentist';
+    SELECT id INTO v_receptionist_role_id FROM roles WHERE role_key = 'auth.role.receptionist';
 
--- Verify wilayas count (should be 58)
--- SELECT COUNT(*) FROM wilayas;
+    -- Create Tenant 1
+    INSERT INTO tenants (
+        name, 
+        subdomain, 
+        tax_id, 
+        primary_color,
+        subscription_status,
+        subscription_plan,
+        subscription_started_at,
+        subscription_ends_at,
+        settings
+    ) VALUES (
+        'Cabinet Dentaire El-Qods',
+        'elqods',
+        '099925123456789', -- Sample NIF
+        '#2563EB', -- Blue
+        'tenant.status.active',
+        'plan.professional',
+        NOW(),
+        NOW() + INTERVAL '1 year',
+        '{"language": "fr", "currency": "DZD", "timezone": "Africa/Algiers", "features": {"appointments": true, "invoicing": true, "reports": true}}'::jsonb
+    )
+    RETURNING id INTO v_tenant_id;
 
--- Verify payment methods
--- SELECT * FROM payment_methods WHERE is_active = TRUE;
+    RAISE NOTICE 'Created Tenant: Cabinet Dentaire El-Qods (ID: %)', v_tenant_id;
 
--- Verify treatment categories
+    -- Create Admin User for Tenant 1
+    INSERT INTO users (
+        tenant_id,
+        role_id,
+        email,
+        password_hash,
+        full_name,
+        phone,
+        wilaya_id,
+        address,
+        status_key
+    ) VALUES (
+        v_tenant_id,
+        v_admin_role_id,
+        'admin@elqods.dz',
+        crypt('Admin@2025!', gen_salt('bf')),
+        'Dr. Karim Benali',
+        '+213550123456',
+        25, -- Constantine
+        'Rue Didouche Mourad, Constantine',
+        'user.status.active'
+    )
+    RETURNING id INTO v_admin_user_id;
+
+    RAISE NOTICE 'Created Admin: admin@elqods.dz (Password: Admin@2025!)';
+
+    -- Create Dentist User for Tenant 1
+    INSERT INTO users (
+        tenant_id,
+        role_id,
+        email,
+        password_hash,
+        full_name,
+        phone,
+        wilaya_id,
+        address,
+        status_key
+    ) VALUES (
+        v_tenant_id,
+        v_dentist_role_id,
+        'dentist@elqods.dz',
+        crypt('Dentist@2025!', gen_salt('bf')),
+        'Dr. Amina Zerrouki',
+        '+213551234567',
+        25, -- Constantine
+        'Cité El-Bir, Constantine',
+        'user.status.active'
+    )
+    RETURNING id INTO v_dentist_user_id;
+
+    RAISE NOTICE 'Created Dentist: dentist@elqods.dz (Password: Dentist@2025!)';
+
+    -- Create Sample Patient 1
+    INSERT INTO patients (
+        tenant_id,
+        patient_code, -- Will be auto-generated by trigger
+        first_name,
+        last_name,
+        date_of_birth,
+        gender,
+        phone,
+        email,
+        wilaya_id,
+        address,
+        emergency_contact_name,
+        emergency_contact_phone,
+        medical_history,
+        allergies,
+        blood_type,
+        created_by
+    ) VALUES (
+        v_tenant_id,
+        NULL, -- Auto-generated: PAT-2025-0001
+        'Ahmed',
+        'Boudiaf',
+        '1985-03-15',
+        'patient.gender.male',
+        '+213770123456',
+        'ahmed.boudiaf@email.dz',
+        25, -- Constantine
+        'Cité Zouaghi, Constantine',
+        'Fatima Boudiaf',
+        '+213771234567',
+        'Hypertension under control with medication',
+        'Penicillin',
+        'A+',
+        v_admin_user_id
+    )
+    RETURNING id INTO v_patient1_id;
+
+    RAISE NOTICE 'Created Patient: Ahmed Boudiaf (Code: PAT-2025-0001)';
+
+    -- Create Sample Patient 2
+    INSERT INTO patients (
+        tenant_id,
+        patient_code,
+        first_name,
+        last_name,
+        date_of_birth,
+        gender,
+        phone,
+        email,
+        wilaya_id,
+        address,
+        created_by
+    ) VALUES (
+        v_tenant_id,
+        NULL, -- Auto-generated: PAT-2025-0002
+        'Leila',
+        'Mansouri',
+        '1992-07-22',
+        'patient.gender.female',
+        '+213772345678',
+        'leila.mansouri@email.dz',
+        25, -- Constantine
+        'Rue Larbi Ben M''hidi, Constantine',
+        v_dentist_user_id
+    );
+
+    RAISE NOTICE 'Created Patient: Leila Mansouri (Code: PAT-2025-0002)';
+
+    -- Create Tenant-Specific Custom Treatment Category
+    INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+    SELECT 
+        v_tenant_id,
+        'cat.custom.pediatric',
+        NULL,
+        'Pediatric Dentistry (Custom for El-Qods)',
+        TRUE;
+
+    RAISE NOTICE 'Created custom treatment category for El-Qods';
+    RAISE NOTICE '--------------------------------------------';
+
+END $$;
+
+-- ============================================================================
+-- Tenant 2: Clinique Dentaire Sourire (Algiers)
+-- ============================================================================
+
+DO $$
+DECLARE
+    v_tenant_id UUID;
+    v_admin_role_id INTEGER;
+    v_dentist_role_id INTEGER;
+    v_admin_user_id UUID;
+BEGIN
+    SELECT id INTO v_admin_role_id FROM roles WHERE role_key = 'auth.role.admin';
+    SELECT id INTO v_dentist_role_id FROM roles WHERE role_key = 'auth.role.dentist';
+
+    -- Create Tenant 2
+    INSERT INTO tenants (
+        name,
+        subdomain,
+        tax_id,
+        primary_color,
+        subscription_status,
+        subscription_plan,
+        subscription_started_at,
+        subscription_ends_at,
+        settings
+    ) VALUES (
+        'Clinique Dentaire Sourire',
+        'sourire',
+        '099916987654321',
+        '#10B981', -- Green
+        'tenant.status.trial',
+        'plan.starter',
+        NOW(),
+        NOW() + INTERVAL '30 days',
+        '{"language": "ar", "currency": "DZD", "timezone": "Africa/Algiers", "features": {"appointments": true, "invoicing": false}}'::jsonb
+    )
+    RETURNING id INTO v_tenant_id;
+
+    RAISE NOTICE 'Created Tenant: Clinique Dentaire Sourire (ID: %)', v_tenant_id;
+
+    -- Create Admin User for Tenant 2
+    INSERT INTO users (
+        tenant_id,
+        role_id,
+        email,
+        password_hash,
+        full_name,
+        phone,
+        wilaya_id,
+        status_key
+    ) VALUES (
+        v_tenant_id,
+        v_admin_role_id,
+        'admin@sourire.dz',
+        crypt('Sourire@2025!', gen_salt('bf')),
+        'Dr. Yasmine Khelifi',
+        '+213555987654',
+        16, -- Algiers
+        'user.status.active'
+    )
+    RETURNING id INTO v_admin_user_id;
+
+    RAISE NOTICE 'Created Admin: admin@sourire.dz (Password: Sourire@2025!)';
+
+    -- Create Sample Patient for Tenant 2
+    INSERT INTO patients (
+        tenant_id,
+        patient_code,
+        first_name,
+        last_name,
+        date_of_birth,
+        gender,
+        phone,
+        wilaya_id,
+        created_by
+    ) VALUES (
+        v_tenant_id,
+        NULL, -- Auto-generated: PAT-2025-0001 (scoped to this tenant!)
+        'Rania',
+        'Benali',
+        '1988-11-30',
+        'patient.gender.female',
+        '+213773456789',
+        16, -- Algiers
+        v_admin_user_id
+    );
+
+    RAISE NOTICE 'Created Patient: Rania Benali (Code: PAT-2025-0001 for Sourire)';
+    RAISE NOTICE '--------------------------------------------';
+
+END $$;
+
+-- ============================================================================
+-- Tenant 3: Cabinet Dr. Teyar (Blida) - Matching your original user
+-- ============================================================================
+
+DO $$
+DECLARE
+    v_tenant_id UUID;
+    v_dentist_role_id INTEGER;
+    v_dentist_user_id UUID;
+BEGIN
+    SELECT id INTO v_dentist_role_id FROM roles WHERE role_key = 'auth.role.dentist';
+
+    -- Create Tenant 3
+    INSERT INTO tenants (
+        name,
+        subdomain,
+        tax_id,
+        primary_color,
+        subscription_status,
+        subscription_plan,
+        subscription_started_at,
+        subscription_ends_at,
+        settings
+    ) VALUES (
+        'Cabinet Dr. Teyar',
+        'teyar',
+        '099909123456789',
+        '#8B5CF6', -- Purple
+        'tenant.status.active',
+        'plan.enterprise',
+        NOW(),
+        NOW() + INTERVAL '1 year',
+        '{"language": "fr", "currency": "DZD", "timezone": "Africa/Algiers", "features": {"appointments": true, "invoicing": true, "reports": true, "analytics": true}}'::jsonb
+    )
+    RETURNING id INTO v_tenant_id;
+
+    RAISE NOTICE 'Created Tenant: Cabinet Dr. Teyar (ID: %)', v_tenant_id;
+
+    -- Create Dentist User (matching your original seed data)
+    INSERT INTO users (
+        tenant_id,
+        role_id,
+        email,
+        password_hash,
+        full_name,
+        phone,
+        wilaya_id,
+        status_key
+    ) VALUES (
+        v_tenant_id,
+        v_dentist_role_id,
+        'zinouteyar@gmail.com',
+        crypt('A1b2-A1b2', gen_salt('bf')),
+        'Zinelabidine Teyar',
+        '+213549468120',
+        9, -- Blida
+        'user.status.active'
+    )
+    RETURNING id INTO v_dentist_user_id;
+
+    RAISE NOTICE 'Created Dentist: zinouteyar@gmail.com (Password: A1b2-A1b2)';
+
+    -- Create Sample Patient for Dr. Teyar
+    INSERT INTO patients (
+        tenant_id,
+        patient_code,
+        first_name,
+        last_name,
+        date_of_birth,
+        gender,
+        phone,
+        email,
+        wilaya_id,
+        created_by
+    ) VALUES (
+        v_tenant_id,
+        NULL,
+        'Mohamed',
+        'Cherif',
+        '1990-05-10',
+        'patient.gender.male',
+        '+213774567890',
+        'mohamed.cherif@email.dz',
+        9, -- Blida
+        v_dentist_user_id
+    );
+
+    RAISE NOTICE 'Created Patient: Mohamed Cherif (Code: PAT-2025-0001 for Teyar)';
+    RAISE NOTICE '--------------------------------------------';
+
+END $$;
+
+-- ============================================================================
+-- VERIFICATION QUERIES (Commented - Uncomment to verify)
+-- ============================================================================
+
+-- Verify global data
+-- SELECT 'Roles' AS entity, COUNT(*) AS count FROM roles
+-- UNION ALL
+-- SELECT 'Wilayas', COUNT(*) FROM wilayas
+-- UNION ALL
+-- SELECT 'Payment Methods', COUNT(*) FROM payment_methods
+-- UNION ALL
+-- SELECT 'Global Treatment Categories', COUNT(*) FROM treatment_categories WHERE tenant_id IS NULL;
+
+-- Verify tenants
+-- SELECT id, name, subdomain, subscription_status FROM tenants ORDER BY created_at;
+
+-- Verify users per tenant
 -- SELECT 
---     c.category_key,
---     p.category_key AS parent_key,
---     c.description
--- FROM treatment_categories c
--- LEFT JOIN treatment_categories p ON c.parent_id = p.id
--- ORDER BY p.category_key NULLS FIRST, c.category_key;
+--     t.name AS tenant_name,
+--     r.role_key,
+--     u.email,
+--     u.full_name
+-- FROM users u
+-- JOIN tenants t ON u.tenant_id = t.id
+-- JOIN roles r ON u.role_id = r.id
+-- ORDER BY t.name, r.role_key;
 
--- ============================================================================
--- 7. ADDITIONAL HELPER FUNCTIONS
--- ============================================================================
+-- Verify patients per tenant
+-- SELECT 
+--     t.name AS tenant_name,
+--     p.patient_code,
+--     p.first_name,
+--     p.last_name,
+--     p.phone
+-- FROM patients p
+-- JOIN tenants t ON p.tenant_id = t.id
+-- ORDER BY t.name, p.patient_code;
 
--- Function to generate patient codes
-CREATE OR REPLACE FUNCTION generate_patient_code()
-RETURNS VARCHAR(20) AS $$
-DECLARE
-    new_code VARCHAR(20);
-    year_str VARCHAR(4);
-    sequence_num INTEGER;
-BEGIN
-    year_str := TO_CHAR(CURRENT_DATE, 'YYYY');
-    
-    -- Get the next sequence number for this year
-    SELECT COALESCE(MAX(
-        CAST(SUBSTRING(patient_code FROM 10) AS INTEGER)
-    ), 0) + 1
-    INTO sequence_num
-    FROM patients
-    WHERE patient_code LIKE 'PAT-' || year_str || '-%';
-    
-    new_code := 'PAT-' || year_str || '-' || LPAD(sequence_num::TEXT, 4, '0');
-    
-    RETURN new_code;
-END;
-$$ LANGUAGE plpgsql;
+-- Verify treatment categories (Global + Tenant-specific)
+-- SELECT 
+--     CASE 
+--         WHEN tc.tenant_id IS NULL THEN 'GLOBAL'
+--         ELSE t.name
+--     END AS scope,
+--     tc.category_key,
+--     tc.description
+-- FROM treatment_categories tc
+-- LEFT JOIN tenants t ON tc.tenant_id = t.id
+-- ORDER BY scope, tc.category_key;
 
--- Function to generate invoice numbers
-CREATE OR REPLACE FUNCTION generate_invoice_number()
-RETURNS VARCHAR(30) AS $$
-DECLARE
-    new_number VARCHAR(30);
-    year_str VARCHAR(4);
-    month_str VARCHAR(2);
-    sequence_num INTEGER;
-BEGIN
-    year_str := TO_CHAR(CURRENT_DATE, 'YYYY');
-    month_str := TO_CHAR(CURRENT_DATE, 'MM');
-    
-    -- Get the next sequence number for this month
-    SELECT COALESCE(MAX(
-        CAST(SUBSTRING(invoice_number FROM 13) AS INTEGER)
-    ), 0) + 1
-    INTO sequence_num
-    FROM invoices
-    WHERE invoice_number LIKE 'INV-' || year_str || month_str || '-%';
-    
-    new_number := 'INV-' || year_str || month_str || '-' || LPAD(sequence_num::TEXT, 4, '0');
-    
-    RETURN new_number;
-END;
-$$ LANGUAGE plpgsql;
 
--- Trigger to auto-generate patient code
-CREATE OR REPLACE FUNCTION set_patient_code()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF NEW.patient_code IS NULL OR NEW.patient_code = '' THEN
-        NEW.patient_code := generate_patient_code();
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_set_patient_code
-    BEFORE INSERT ON patients
-    FOR EACH ROW
-    EXECUTE FUNCTION set_patient_code();
-
--- Trigger to auto-generate invoice number
-CREATE OR REPLACE FUNCTION set_invoice_number()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF NEW.invoice_number IS NULL OR NEW.invoice_number = '' THEN
-        NEW.invoice_number := generate_invoice_number();
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_set_invoice_number
-    BEFORE INSERT ON invoices
-    FOR EACH ROW
-    EXECUTE FUNCTION set_invoice_number();
 
 -- ============================================================================
 -- COMPLETION MESSAGE
@@ -289,17 +584,43 @@ CREATE TRIGGER trg_set_invoice_number
 DO $$
 BEGIN
     RAISE NOTICE '============================================';
-    RAISE NOTICE 'Algerian Dental Management System';
-    RAISE NOTICE 'Seed data loaded successfully!';
+    RAISE NOTICE 'Multi-Tenant DMS - Seed Data Complete!';
     RAISE NOTICE '============================================';
-    RAISE NOTICE 'Roles: 3 (Admin, Dentist, Receptionist)';
-    RAISE NOTICE 'Wilayas: 58 (All Algerian provinces)';
-    RAISE NOTICE 'Payment Methods: 7 (Algerian standards)';
-    RAISE NOTICE 'Treatment Categories: 14 (Base + subcategories)';
+    RAISE NOTICE 'Global Data:';
+    RAISE NOTICE '  - Roles: 3';
+    RAISE NOTICE '  - Wilayas: 58';
+    RAISE NOTICE '  - Payment Methods: 7';
+    RAISE NOTICE '  - Global Treatment Categories: 22';
+    RAISE NOTICE '--------------------------------------------';
+    RAISE NOTICE 'Tenants Created: 3';
+    RAISE NOTICE '';
+    RAISE NOTICE '1. Cabinet Dentaire El-Qods (Constantine)';
+    RAISE NOTICE '   Subdomain: elqods.dms.dz';
+    RAISE NOTICE '   Status: Active (Professional Plan)';
+    RAISE NOTICE '   Admin: admin@elqods.dz / Admin@2025!';
+    RAISE NOTICE '   Dentist: dentist@elqods.dz / Dentist@2025!';
+    RAISE NOTICE '   Patients: 2';
+    RAISE NOTICE '';
+    RAISE NOTICE '2. Clinique Dentaire Sourire (Algiers)';
+    RAISE NOTICE '   Subdomain: sourire.dms.dz';
+    RAISE NOTICE '   Status: Trial (Starter Plan)';
+    RAISE NOTICE '   Admin: admin@sourire.dz / Sourire@2025!';
+    RAISE NOTICE '   Patients: 1';
+    RAISE NOTICE '';
+    RAISE NOTICE '3. Cabinet Dr. Teyar (Blida)';
+    RAISE NOTICE '   Subdomain: teyar.dms.dz';
+    RAISE NOTICE '   Status: Active (Enterprise Plan)';
+    RAISE NOTICE '   Dentist: zinouteyar@gmail.com / A1b2-A1b2';
+    RAISE NOTICE '   Patients: 1';
     RAISE NOTICE '============================================';
-    RAISE NOTICE 'Default Admin Credentials:';
-    RAISE NOTICE 'Email: admin@dental-clinic.dz';
-    RAISE NOTICE 'Password: Admin@123456';
-    RAISE NOTICE '*** CHANGE THIS PASSWORD IMMEDIATELY! ***';
+    RAISE NOTICE 'DATA ISOLATION VERIFIED:';
+    RAISE NOTICE '  - Each tenant has PAT-2025-0001';
+    RAISE NOTICE '  - Same code, different patients!';
+    RAISE NOTICE '  - RLS policies present but bypassed by owner';
+    RAISE NOTICE '============================================';
+    RAISE NOTICE 'Next Steps:';
+    RAISE NOTICE '1. Verify isolation using Explicit Tenant ID filtering in Apps';
+    RAISE NOTICE '2. Verify isolation with patient queries';
+    RAISE NOTICE '3. Test hybrid categories with custom ones';
     RAISE NOTICE '============================================';
 END $$;

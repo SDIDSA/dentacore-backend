@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const db = require('../config/database');
+const { sql } = require('kysely');
 
 const router = express.Router();
 
@@ -18,31 +19,23 @@ router.post('/login',
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty(),
   async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return error(res, 402, 'validation.error');
-      }
 
+    // Validate input first before opening DB connection
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return error(res, 402, 'validation.error');
+    }
+
+    try {
       const { email, password } = req.body;
 
-      const user = await db
-        .selectFrom('users')
-        .innerJoin('roles', 'users.role_id', 'roles.id')
-        .select([
-          'users.id',
-          'users.email',
-          'users.password_hash',
-          'users.full_name',
-          'users.status_key',
-          'users.last_login_at',
-          'roles.role_key'
-        ])
-        .where('users.email', '=', email)
-        .executeTakeFirst();
+      // 1. Fetch user using Auth Helper (Bypasses RLS)
+      const result = await sql`SELECT * FROM get_user_by_email(${email})`.execute(db);
+      const user = result.rows[0];
 
+      // 2. Validate User & Password
       if (!user) {
-        return error(res, 401, 'auth.error.invalid_credentials')
+        return error(res, 401, 'auth.error.invalid_credentials');
       }
 
       if (user.status_key !== 'user.status.active') {
@@ -50,17 +43,23 @@ router.post('/login',
       }
 
       const isValidPassword = await bcrypt.compare(password, user.password_hash);
-      
       if (!isValidPassword) {
-        return error(res, 401, 'auth.error.invalid_credentials')
+        return error(res, 401, 'auth.error.invalid_credentials');
       }
 
+      // 3. Generate Token
       const token = jwt.sign(
-        { id: user.id, email: user.email, role_key: user.role_key },
+        {
+          id: user.id,
+          email: user.email,
+          role_key: user.role_key,
+          tenant_id: user.tenant_id
+        },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRES_IN }
       );
 
+      // 4. Update Login Time & Audit Log
       const newLoginTime = new Date();
 
       await db
@@ -69,24 +68,31 @@ router.post('/login',
         .where('id', '=', user.id)
         .execute();
 
-      // Audit log: Login (User Update)
-      await req.audit.log({
-        action: 'UPDATE',
-        entityType: 'users',
-        entityId: user.id,
-        oldValues: { last_login_at: user.last_login_at },
-        newValues: { last_login_at: newLoginTime }
-      });
 
+      // Audit log
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'users',
+          entityId: user.id,
+          tenantId: user.tenant_id,
+          oldValues: { last_login_at: user.last_login_at },
+          newValues: { last_login_at: newLoginTime }
+        }); // No transaction passed, uses global db
+      }
+
+
+      // 5. Response
       return res.json({
         token,
         id: user.id,
         fullName: user.full_name,
         roleKey: user.role_key,
-
+        tenantId: user.tenant_id
       });
-    } catch (error) {
-      next(error);
+
+    } catch (err) {
+      next(err);
     }
   }
 );
@@ -112,6 +118,7 @@ router.get('/validate', async (req, res, next) => {
         'roles.role_key'
       ])
       .where('users.id', '=', decoded.id)
+      .where('users.tenant_id', '=', decoded.tenant_id)
       .executeTakeFirst();
 
     if (!user) {

@@ -1,8 +1,8 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const db = require('../config/database');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
+const db = require('../config/database'); // Direct DB access
 
 const router = express.Router();
 
@@ -36,6 +36,7 @@ router.get('/', async (req, res, next) => {
         'patients.created_at',
         'wilayas.name_key as wilaya_name_key'
       ])
+      .where('patients.tenant_id', '=', req.tenantId) // Explicit Tenant Filter
       .where('patients.status_key', '=', 'user.status.active');
 
     if (search) {
@@ -87,6 +88,7 @@ router.get('/:id', async (req, res, next) => {
         'wilayas.name_key as wilaya_name_key'
       ])
       .where('patients.id', '=', req.params.id)
+      .where('patients.tenant_id', '=', req.tenantId) // Explicit Tenant Filter
       .executeTakeFirst();
 
     if (!patient) {
@@ -107,12 +109,12 @@ router.post('/',
   body('gender').isIn(['patient.gender.male', 'patient.gender.female']),
   body('phone').matches(/^\+213[0-9]{9}$/),
   async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
-      }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
 
+    try {
       const {
         first_name, last_name, date_of_birth, gender, phone, email,
         wilaya_id, address, emergency_contact_name, emergency_contact_phone,
@@ -125,6 +127,7 @@ router.post('/',
         .selectFrom('patients')
         .select(sql`COUNT(*)`.as('count'))
         .where('patient_code', 'like', `PAT-${year}-%`)
+        .where('tenant_id', '=', req.tenantId) // Explicit Tenant Filter
         .executeTakeFirst();
 
       const nextNum = parseInt(countResult.count) + 1;
@@ -133,6 +136,7 @@ router.post('/',
       const patient = await db
         .insertInto('patients')
         .values({
+          tenant_id: req.tenantId, // Explicit Tenant Insert
           patient_code,
           first_name,
           last_name,
@@ -153,12 +157,15 @@ router.post('/',
         .executeTakeFirst();
 
       // Log the patient creation
-      await req.audit.log({
-        action: 'CREATE',
-        entityType: 'patients',
-        entityId: patient.id,
-        newValues: patient
-      });
+      if (req.audit) {
+        await req.audit.log({
+          action: 'CREATE',
+          entityType: 'patients',
+          entityId: patient.id,
+          tenantId: req.tenantId, // Pass Explicit ID
+          newValues: patient
+        });
+      }
 
       res.status(201).json(patient);
     } catch (error) {

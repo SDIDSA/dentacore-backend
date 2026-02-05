@@ -1,8 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
-const db = require('../config/database');
 const { authenticate, authorize } = require('../middleware/auth');
+const db = require('../config/database');
 
 const router = express.Router();
 
@@ -32,7 +32,8 @@ router.get('/', async (req, res, next) => {
         'users.created_at',
         'roles.role_key',
         'wilayas.name_key as wilaya_name_key'
-      ]);
+      ])
+      .where('users.tenant_id', '=', req.tenantId);
 
     if (search) {
       query = query.where((eb) =>
@@ -80,6 +81,7 @@ router.get('/:id', async (req, res, next) => {
         'wilayas.name_key as wilaya_name_key'
       ])
       .where('users.id', '=', req.params.id)
+      .where('users.tenant_id', '=', req.tenantId)
       .executeTakeFirst();
 
     if (!user) {
@@ -89,6 +91,7 @@ router.get('/:id', async (req, res, next) => {
         .where('entity_type', '=', 'users')
         .where('action', '=', 'DELETE')
         .where('entity_id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
         .executeTakeFirst())?.old_values;
 
       if (!user) {
@@ -110,12 +113,12 @@ router.post('/',
   body('phone').matches(/^\+213[0-9]{9}$/),
   body('role_id').isInt({ min: 1 }),
   async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
-      }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
 
+    try {
       const {
         email, password, full_name, phone, role_id,
         wilaya_id, address
@@ -126,6 +129,7 @@ router.post('/',
         .selectFrom('users')
         .select('id')
         .where('email', '=', email)
+        .where('tenant_id', '=', req.tenantId) // Technically email is unique per tenant
         .executeTakeFirst();
 
       if (existingUser) {
@@ -137,6 +141,7 @@ router.post('/',
         .selectFrom('users')
         .select('id')
         .where('phone', '=', phone)
+        .where('tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (existingPhone) {
@@ -167,19 +172,23 @@ router.post('/',
           phone,
           role_id,
           wilaya_id: wilaya_id || null,
-          address: address || null
+          address: address || null,
+          tenant_id: req.tenantId // Explicitly set tenant_id
         })
         .returningAll()
         .executeTakeFirst();
 
       // Audit log: User Created
       const { password_hash: _ph, ...safeNewUser } = newUser;
-      await req.audit.log({
-        action: 'CREATE',
-        entityType: 'users',
-        entityId: newUser.id,
-        newValues: safeNewUser
-      });
+      if (req.audit) {
+        await req.audit.log({
+          action: 'CREATE',
+          entityType: 'users',
+          entityId: newUser.id,
+          tenantId: req.tenantId,
+          newValues: safeNewUser
+        }, db);
+      }
 
       // Remove password hash from response
       const { password_hash: _, ...userResponse } = newUser;
@@ -199,13 +208,13 @@ router.put('/:id',
   body('role_id').optional().isInt({ min: 1 }),
   body('status_key').optional().isIn(['user.status.active', 'user.status.inactive', 'user.status.deleted']),
   async (req, res, next) => {
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
+
     try {
-      const errors = validationResult(req);
-
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
-      }
-
       const userId = req.params.id;
       const {
         email, full_name, phone, role_id,
@@ -217,6 +226,7 @@ router.put('/:id',
         .selectFrom('users')
         .selectAll()
         .where('id', '=', userId)
+        .where('tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (!existingUser) {
@@ -230,6 +240,7 @@ router.put('/:id',
           .select('id')
           .where('email', '=', email)
           .where('id', '!=', userId)
+          .where('tenant_id', '=', req.tenantId)
           .executeTakeFirst();
 
         if (emailConflict) {
@@ -244,6 +255,7 @@ router.put('/:id',
           .select('id')
           .where('phone', '=', phone)
           .where('id', '!=', userId)
+          .where('tenant_id', '=', req.tenantId)
           .executeTakeFirst();
 
         if (phoneConflict) {
@@ -279,19 +291,23 @@ router.put('/:id',
         .updateTable('users')
         .set(updateData)
         .where('id', '=', userId)
+        .where('tenant_id', '=', req.tenantId)
         .returningAll()
         .executeTakeFirst();
 
       // Audit log: User Updated
       const { password_hash: _oldPh, ...safeOldUser } = existingUser;
       const { password_hash: _newPh, ...safeNewUserUpdate } = updatedUser;
-      await req.audit.log({
-        action: 'UPDATE',
-        entityType: 'users',
-        entityId: userId,
-        oldValues: safeOldUser,
-        newValues: safeNewUserUpdate
-      });
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'users',
+          entityId: userId,
+          tenantId: req.tenantId,
+          oldValues: safeOldUser,
+          newValues: safeNewUserUpdate
+        }, db);
+      }
 
       // Remove password hash from response
       const { password_hash: _, ...userResponse } = updatedUser;
@@ -307,12 +323,12 @@ router.put('/:id',
 router.patch('/:id/password',
   body('new_password').isLength({ min: 8 }),
   async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
-      }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
 
+    try {
       const userId = req.params.id;
       const { new_password } = req.body;
 
@@ -321,6 +337,7 @@ router.patch('/:id/password',
         .selectFrom('users')
         .select('id')
         .where('id', '=', userId)
+        .where('tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (!existingUser) {
@@ -335,16 +352,20 @@ router.patch('/:id/password',
         .updateTable('users')
         .set({ password_hash })
         .where('id', '=', userId)
+        .where('tenant_id', '=', req.tenantId)
         .execute();
 
       // Audit log: Password Changed
-      await req.audit.log({
-        action: 'UPDATE',
-        entityType: 'users',
-        entityId: userId,
-        oldValues: { password_changed: false },
-        newValues: { password_changed: true }
-      });
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'users',
+          entityId: userId,
+          tenantId: req.tenantId,
+          oldValues: { password_changed: false },
+          newValues: { password_changed: true }
+        }, db);
+      }
 
       res.json({ message: 'user.password.updated' });
     } catch (err) {
@@ -357,12 +378,12 @@ router.patch('/:id/password',
 router.patch('/:id/status',
   body('status_key').isIn(['user.status.active', 'user.status.inactive', 'user.status.deleted']),
   async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
-      }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
 
+    try {
       const userId = req.params.id;
       const { status_key } = req.body;
 
@@ -375,6 +396,7 @@ router.patch('/:id/status',
         .selectFrom('users')
         .select(['id', 'status_key'])
         .where('id', '=', userId)
+        .where('tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (!user) {
@@ -385,17 +407,21 @@ router.patch('/:id/status',
         .updateTable('users')
         .set({ status_key })
         .where('id', '=', userId)
+        .where('tenant_id', '=', req.tenantId)
         .returningAll()
         .executeTakeFirst();
 
       // Audit log: Status Updated
-      await req.audit.log({
-        action: 'UPDATE',
-        entityType: 'users',
-        entityId: userId,
-        oldValues: { status_key: user.status_key },
-        newValues: { status_key: updatedUser.status_key }
-      });
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'users',
+          entityId: userId,
+          tenantId: req.tenantId,
+          oldValues: { status_key: user.status_key },
+          newValues: { status_key: updatedUser.status_key }
+        }, db);
+      }
 
       // Remove password hash from response
       const { password_hash: _, ...userResponse } = updatedUser;
@@ -421,6 +447,7 @@ router.delete('/:id', async (req, res, next) => {
       .selectFrom('users')
       .selectAll()
       .where('id', '=', userId)
+      .where('tenant_id', '=', req.tenantId)
       .executeTakeFirst();
 
     if (!user) {
@@ -430,17 +457,21 @@ router.delete('/:id', async (req, res, next) => {
     await db
       .deleteFrom('users')
       .where('id', '=', userId)
+      .where('tenant_id', '=', req.tenantId)
       .execute();
 
     // Audit log: User Deleted
     const { password_hash: _delPh, ...safeDeletedUser } = user;
     safeDeletedUser.status_key = 'user.status.deleted';
-    await req.audit.log({
-      action: 'DELETE',
-      entityType: 'users',
-      entityId: userId,
-      oldValues: safeDeletedUser
-    });
+    if (req.audit) {
+      await req.audit.log({
+        action: 'DELETE',
+        entityType: 'users',
+        entityId: userId,
+        tenantId: req.tenantId,
+        oldValues: safeDeletedUser
+      }, db);
+    }
 
     res.status(204).json(safeDeletedUser);
   } catch (err) {

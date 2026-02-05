@@ -18,6 +18,8 @@ app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+
+
 // Audit logging middleware (after auth middleware will be applied in routes)
 app.use(auditLogger.middleware());
 
