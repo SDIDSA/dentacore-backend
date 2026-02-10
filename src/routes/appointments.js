@@ -33,7 +33,7 @@ router.get('/', async (req, res, next) => {
         'appointments.reason',
         'appointments.notes',
         'appointments.created_at',
-        sql`patients.first_name || ' ' || patients.last_name`.as('patient_name'),
+        'patients.full_name as patient_name',
         'patients.phone as patient_phone',
         'users.full_name as dentist_name'
       ])
@@ -137,7 +137,7 @@ router.get('/:id',
           'appointments.reason',
           'appointments.notes',
           'appointments.created_at',
-          sql`patients.first_name || ' ' || patients.last_name`.as('patient_name'),
+          'patients.full_name as patient_name',
           'patients.phone as patient_phone',
           'users.full_name as dentist_name'
         ])

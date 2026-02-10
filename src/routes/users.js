@@ -20,19 +20,7 @@ router.get('/', async (req, res, next) => {
     let query = db
       .selectFrom('users')
       .innerJoin('roles', 'users.role_id', 'roles.id')
-      .leftJoin('wilayas', 'users.wilaya_id', 'wilayas.id')
-      .select([
-        'users.id',
-        'users.email',
-        'users.full_name',
-        'users.phone',
-        'users.address',
-        'users.status_key',
-        'users.last_login_at',
-        'users.created_at',
-        'roles.role_key',
-        'wilayas.name_key as wilaya_name_key'
-      ])
+      .select('users.id')
       .where('users.tenant_id', '=', req.tenantId);
 
     if (search) {
@@ -52,7 +40,7 @@ router.get('/', async (req, res, next) => {
       .orderBy('users.created_at', 'desc')
       .execute();
 
-    res.json(users);
+    res.json(users.map(u => u.id));
   } catch (err) {
     next(err);
   }

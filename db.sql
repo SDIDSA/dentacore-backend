@@ -143,8 +143,7 @@ CREATE TABLE patients (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     patient_code VARCHAR(20) NOT NULL,
-    first_name VARCHAR(100) NOT NULL,
-    last_name VARCHAR(100) NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
     date_of_birth DATE NOT NULL,
     gender VARCHAR(50) NOT NULL,
     phone VARCHAR(20) NOT NULL,
@@ -156,14 +155,20 @@ CREATE TABLE patients (
     medical_history TEXT,
     allergies TEXT,
     blood_type VARCHAR(5),
-    status_key VARCHAR(50) NOT NULL DEFAULT 'user.status.active',
+    status_key VARCHAR(50) NOT NULL DEFAULT 'patient.status.new',
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_patient_phone CHECK (phone ~ '^\+213[0-9]{9}$'),
     CONSTRAINT chk_patient_gender CHECK (gender IN ('patient.gender.male', 'patient.gender.female')),
-    CONSTRAINT chk_patient_status CHECK (status_key IN ('user.status.active', 'user.status.inactive', 'user.status.deleted')),
+    CONSTRAINT chk_patient_status CHECK (status_key IN (
+        'patient.status.active',
+        'patient.status.new',
+        'patient.status.inactive',
+        'patient.status.archived',
+        'patient.status.blocked'
+    )),
     CONSTRAINT uq_patients_tenant_code UNIQUE (tenant_id, patient_code),
     CONSTRAINT uq_patients_tenant_phone UNIQUE (tenant_id, phone)
 );
@@ -174,7 +179,7 @@ COMMENT ON COLUMN patients.patient_code IS 'Auto-generated, tenant-scoped (e.g.,
 
 CREATE INDEX idx_patients_tenant ON patients(tenant_id);
 CREATE INDEX idx_patients_code ON patients(tenant_id, patient_code);
-CREATE INDEX idx_patients_name ON patients(tenant_id, last_name, first_name);
+CREATE INDEX idx_patients_name ON patients(tenant_id, full_name);
 CREATE INDEX idx_patients_phone ON patients(tenant_id, phone);
 CREATE INDEX idx_patients_status ON patients(tenant_id, status_key);
 CREATE INDEX idx_patients_dob ON patients(date_of_birth);
@@ -556,8 +561,7 @@ SELECT
     p.tenant_id,
     p.id,
     p.patient_code,
-    p.first_name,
-    p.last_name,
+    p.full_name,
     p.phone,
     p.email,
     w.name_key AS wilaya_name_key,
@@ -571,7 +575,7 @@ LEFT JOIN wilayas w ON p.wilaya_id = w.id
 LEFT JOIN appointments a ON p.id = a.patient_id AND p.tenant_id = a.tenant_id
 LEFT JOIN treatment_records tr ON p.id = tr.patient_id AND p.tenant_id = tr.tenant_id
 LEFT JOIN invoices i ON p.id = i.patient_id AND p.tenant_id = i.tenant_id
-GROUP BY p.tenant_id, p.id, p.patient_code, p.first_name, p.last_name,  
+GROUP BY p.tenant_id, p.id, p.patient_code, p.full_name,  
          p.phone, p.email, w.name_key;
 
 CREATE OR REPLACE VIEW v_outstanding_invoices AS
@@ -580,7 +584,7 @@ SELECT
     i.id,
     i.invoice_number,
     p.patient_code,
-    p.first_name || ' ' || p.last_name AS patient_name,
+    p.full_name AS patient_name,
     i.total_dzd,
     i.paid_amount_dzd,
     (i.total_dzd - i.paid_amount_dzd) AS balance_dzd,

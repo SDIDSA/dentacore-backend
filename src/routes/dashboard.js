@@ -32,7 +32,7 @@ router.get('/patients', async (req, res, next) => {
       db.selectFrom('patients')
         .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
-        .where('status_key', '=', 'user.status.active')
+        .where('status_key', 'in', ['patient.status.active', 'patient.status.new'])
         .executeTakeFirst(),
       db.selectFrom('patients')
         .where('tenant_id', '=', req.tenantId)
@@ -167,7 +167,7 @@ router.get('/appointments/today', async (req, res, next) => {
         'appointments.duration_minutes',
         'appointments.status_key',
         'appointments.reason',
-        sql`patients.first_name || ' ' || patients.last_name`.as('patient_name'),
+        'patients.full_name as patient_name',
         'patients.phone as patient_phone',
         'users.full_name as dentist_name'
       ])
@@ -363,7 +363,7 @@ router.get('/overview', async (req, res, next) => {
       db.selectFrom('patients')
         .where('tenant_id', '=', req.tenantId)
         .select(sql`COUNT(*)`.as('count'))
-        .where('status_key', '=', 'user.status.active')
+        .where('status_key', 'in', ['patient.status.active', 'patient.status.new'])
         .executeTakeFirst(),
       db.selectFrom('patients')
         .where('tenant_id', '=', req.tenantId)
