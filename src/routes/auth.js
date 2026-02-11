@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const db = require('../config/database');
 const { sql } = require('kysely');
+const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -14,7 +15,6 @@ const error = (res, code, error) => {
   return res.status(code).json({ success: false, error: error })
 }
 
-// Login
 router.post('/login',
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty(),
@@ -29,11 +29,9 @@ router.post('/login',
     try {
       const { email, password } = req.body;
 
-      // 1. Fetch user using Auth Helper (Bypasses RLS)
       const result = await sql`SELECT * FROM get_user_by_email(${email})`.execute(db);
       const user = result.rows[0];
 
-      // 2. Validate User & Password
       if (!user) {
         return error(res, 401, 'auth.error.invalid_credentials');
       }
@@ -47,19 +45,33 @@ router.post('/login',
         return error(res, 401, 'auth.error.invalid_credentials');
       }
 
-      // 3. Generate Token
-      const token = jwt.sign(
-        {
-          id: user.id,
-          email: user.email,
-          role_key: user.role_key,
-          tenant_id: user.tenant_id
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRES_IN }
-      );
+      const generateTokens = (user) => {
+        const accessToken = jwt.sign(
+          {
+            id: user.id,
+            email: user.email,
+            role_key: user.role_key,
+            tenant_id: user.tenant_id
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: process.env.JWT_EXPIRES_IN }
+        );
 
-      // 4. Update Login Time & Audit Log
+        const refreshToken = jwt.sign(
+          {
+            id: user.id,
+            email: user.email,
+            tenant_id: user.tenant_id
+          },
+          process.env.JWT_REFRESH_SECRET,
+          { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN }
+        );
+
+        return { accessToken, refreshToken };
+      };
+
+      const { accessToken, refreshToken } = generateTokens(user);
+
       const newLoginTime = new Date();
 
       await db
@@ -69,7 +81,6 @@ router.post('/login',
         .execute();
 
 
-      // Audit log
       if (req.audit) {
         await req.audit.log({
           action: 'UPDATE',
@@ -78,13 +89,12 @@ router.post('/login',
           tenantId: user.tenant_id,
           oldValues: { last_login_at: user.last_login_at },
           newValues: { last_login_at: newLoginTime }
-        }); // No transaction passed, uses global db
+        });
       }
 
-
-      // 5. Response
       return res.json({
-        token,
+        accessToken,
+        refreshToken,
         id: user.id,
         fullName: user.full_name,
         roleKey: user.role_key,
@@ -98,16 +108,8 @@ router.post('/login',
 );
 
 // Validate token
-router.get('/validate', async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return error(res, 401, 'auth.error.no_token');
-  }
-
+router.get('/validate', authenticate, async (req, res, next) => {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
     const user = await db
       .selectFrom('users')
       .innerJoin('roles', 'users.role_id', 'roles.id')
@@ -115,10 +117,11 @@ router.get('/validate', async (req, res, next) => {
         'users.id',
         'users.full_name',
         'users.status_key',
+        'users.tenant_id',
         'roles.role_key'
       ])
-      .where('users.id', '=', decoded.id)
-      .where('users.tenant_id', '=', decoded.tenant_id)
+      .where('users.id', '=', req.user.id)
+      .where('users.tenant_id', '=', req.user.tenant_id)
       .executeTakeFirst();
 
     if (!user) {
@@ -129,11 +132,17 @@ router.get('/validate', async (req, res, next) => {
       return error(res, 403, 'auth.error.account_inactive');
     }
 
+    // Return the new token if it was refreshed, otherwise the one from the request
+    const accessToken = res.getHeader('x-access-token') || req.headers.authorization?.split(' ')[1];
+    const refreshToken = req.headers['x-refresh-token'];
+
     return res.json({
-      token,
+      accessToken,
+      refreshToken,
       id: user.id,
       fullName: user.full_name,
       roleKey: user.role_key,
+      tenantId: user.tenant_id
     });
   } catch (e) {
     return error(res, 401, 'auth.error.invalid_token');
