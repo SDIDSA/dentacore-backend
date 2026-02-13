@@ -132,16 +132,25 @@ router.post('/',
 
       // Generate patient code
       const year = new Date().getFullYear();
-      const countResult = await db
+      const highestCodeResult = await db
         .selectFrom('patients')
-        .select(sql`COUNT(*)`.as('count'))
+        .select('patient_code')
         .where('patient_code', 'like', `PAT-${year}-%`)
         .where('tenant_id', '=', req.tenantId) // Explicit Tenant Filter
+        .orderBy('patient_code', 'desc')
+        .limit(1)
         .executeTakeFirst();
 
-      const nextNum = parseInt(countResult.count) + 1;
+      let nextNum = 1;
+      if (highestCodeResult) {
+        // Extract the number from the highest code (e.g., "PAT-2024-0005" -> 5)
+        const match = highestCodeResult.patient_code.match(/PAT-\d{4}-(\d{4})$/);
+        if (match) {
+          nextNum = parseInt(match[1]) + 1;
+        }
+      }
+      
       const patient_code = `PAT-${year}-${String(nextNum).padStart(4, '0')}`;
-
       const patient = await db
         .insertInto('patients')
         .values({

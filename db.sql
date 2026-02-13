@@ -400,7 +400,312 @@ CREATE INDEX idx_payment_date ON payments(tenant_id, payment_date);
 
 
 -- ============================================================================
--- 13. AUDIT LOG (Tenant-Scoped)
+-- 13. SUPPLIERS (Tenant-Scoped)
+-- ============================================================================
+
+CREATE TABLE suppliers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    supplier_code VARCHAR(20) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    contact_person VARCHAR(255),
+    email VARCHAR(255),
+    phone VARCHAR(20),
+    wilaya_id SMALLINT REFERENCES wilayas(id) ON DELETE SET NULL,
+    address TEXT,
+    tax_id VARCHAR(50),
+    payment_terms_days INTEGER DEFAULT 30,
+    status_key VARCHAR(50) NOT NULL DEFAULT 'supplier.status.active',
+    notes TEXT,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    CONSTRAINT chk_supplier_phone CHECK (phone ~ '^\+213[0-9]{9}$' OR phone IS NULL),
+    CONSTRAINT chk_supplier_status CHECK (status_key IN (
+        'supplier.status.active',
+        'supplier.status.inactive',
+        'supplier.status.blocked'
+    )),
+    CONSTRAINT chk_payment_terms CHECK (payment_terms_days >= 0),
+    CONSTRAINT uq_suppliers_tenant_code UNIQUE (tenant_id, supplier_code)
+);
+
+COMMENT ON TABLE suppliers IS 'Tenant-scoped supplier/vendor management';
+COMMENT ON COLUMN suppliers.supplier_code IS 'Auto-generated, tenant-scoped (e.g., SUP-2025-0001)';
+
+CREATE INDEX idx_suppliers_tenant ON suppliers(tenant_id);
+CREATE INDEX idx_suppliers_code ON suppliers(tenant_id, supplier_code);
+CREATE INDEX idx_suppliers_name ON suppliers(tenant_id, name);
+CREATE INDEX idx_suppliers_status ON suppliers(tenant_id, status_key);
+
+-- ============================================================================
+-- 14. INVENTORY CATEGORIES (Hybrid: Global + Tenant-Specific)
+-- ============================================================================
+
+CREATE TABLE inventory_categories (
+    id SERIAL PRIMARY KEY,
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    category_key VARCHAR(100) NOT NULL,
+    parent_id INTEGER REFERENCES inventory_categories(id) ON DELETE CASCADE,
+    description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    CONSTRAINT uq_inventory_cat_key UNIQUE (tenant_id, category_key)
+);
+
+COMMENT ON TABLE inventory_categories IS 'Hybrid: NULL tenant_id = Global defaults, SET tenant_id = Custom categories';
+COMMENT ON COLUMN inventory_categories.tenant_id IS 'NULL for system defaults, UUID for tenant-specific';
+
+CREATE INDEX idx_inventory_cat_tenant ON inventory_categories(tenant_id);
+CREATE INDEX idx_inventory_cat_key ON inventory_categories(tenant_id, category_key);
+CREATE INDEX idx_inventory_cat_parent ON inventory_categories(parent_id);
+CREATE INDEX idx_inventory_cat_global ON inventory_categories(tenant_id) WHERE tenant_id IS NULL;
+
+-- ============================================================================
+-- 15. INVENTORY ITEMS (Tenant-Scoped)
+-- ============================================================================
+
+CREATE TABLE inventory_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    item_code VARCHAR(30) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    category_id INTEGER REFERENCES inventory_categories(id) ON DELETE SET NULL,
+    unit_of_measure VARCHAR(20) NOT NULL DEFAULT 'unit',
+    current_stock DECIMAL(10, 3) NOT NULL DEFAULT 0,
+    min_stock_level DECIMAL(10, 3) NOT NULL DEFAULT 0,
+    max_stock_level DECIMAL(10, 3),
+    reorder_point DECIMAL(10, 3),
+    unit_cost_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    selling_price_dzd DECIMAL(12, 2),
+    expiry_tracking BOOLEAN NOT NULL DEFAULT FALSE,
+    status_key VARCHAR(50) NOT NULL DEFAULT 'item.status.active',
+    notes TEXT,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    CONSTRAINT chk_item_status CHECK (status_key IN (
+        'item.status.active',
+        'item.status.inactive',
+        'item.status.discontinued'
+    )),
+    CONSTRAINT chk_stock_levels CHECK (
+        current_stock >= 0 AND
+        min_stock_level >= 0 AND
+        (max_stock_level IS NULL OR max_stock_level >= min_stock_level) AND
+        (reorder_point IS NULL OR reorder_point >= 0)
+    ),
+    CONSTRAINT chk_item_prices CHECK (
+        unit_cost_dzd >= 0 AND
+        (selling_price_dzd IS NULL OR selling_price_dzd >= 0)
+    ),
+    CONSTRAINT uq_inventory_tenant_code UNIQUE (tenant_id, item_code)
+);
+
+COMMENT ON TABLE inventory_items IS 'Tenant-scoped inventory items with stock tracking';
+COMMENT ON COLUMN inventory_items.item_code IS 'Auto-generated, tenant-scoped (e.g., ITM-2025-0001)';
+COMMENT ON COLUMN inventory_items.unit_of_measure IS 'unit, box, bottle, kg, ml, etc.';
+
+CREATE INDEX idx_inventory_tenant ON inventory_items(tenant_id);
+CREATE INDEX idx_inventory_code ON inventory_items(tenant_id, item_code);
+CREATE INDEX idx_inventory_name ON inventory_items(tenant_id, name);
+CREATE INDEX idx_inventory_category ON inventory_items(category_id);
+CREATE INDEX idx_inventory_status ON inventory_items(tenant_id, status_key);
+CREATE INDEX idx_inventory_low_stock ON inventory_items(tenant_id, current_stock, min_stock_level) 
+    WHERE current_stock <= min_stock_level;
+
+-- ============================================================================
+-- 16. PURCHASE ORDERS (Tenant-Scoped)
+-- ============================================================================
+
+CREATE TABLE purchase_orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    po_number VARCHAR(30) NOT NULL,
+    supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
+    order_date TIMESTAMP NOT NULL DEFAULT NOW(),
+    expected_delivery_date TIMESTAMP,
+    actual_delivery_date TIMESTAMP,
+    subtotal_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    tax_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    shipping_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    total_dzd DECIMAL(12, 2) NOT NULL,
+    status_key VARCHAR(50) NOT NULL DEFAULT 'po.status.draft',
+    notes TEXT,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    approved_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    CONSTRAINT chk_po_status CHECK (status_key IN (
+        'po.status.draft',
+        'po.status.pending_approval',
+        'po.status.approved',
+        'po.status.sent',
+        'po.status.partially_received',
+        'po.status.received',
+        'po.status.cancelled'
+    )),
+    CONSTRAINT chk_po_amounts CHECK (
+        subtotal_dzd >= 0 AND
+        tax_dzd >= 0 AND
+        shipping_dzd >= 0 AND
+        total_dzd >= 0
+    ),
+    CONSTRAINT uq_po_tenant_number UNIQUE (tenant_id, po_number)
+);
+
+COMMENT ON TABLE purchase_orders IS 'Tenant-scoped purchase orders for inventory';
+COMMENT ON COLUMN purchase_orders.po_number IS 'Auto-generated, tenant-scoped (e.g., PO-2025-0001)';
+
+CREATE INDEX idx_po_tenant ON purchase_orders(tenant_id);
+CREATE INDEX idx_po_number ON purchase_orders(tenant_id, po_number);
+CREATE INDEX idx_po_supplier ON purchase_orders(tenant_id, supplier_id);
+CREATE INDEX idx_po_status ON purchase_orders(tenant_id, status_key);
+CREATE INDEX idx_po_date ON purchase_orders(tenant_id, order_date);
+
+-- ============================================================================
+-- 17. PURCHASE ORDER ITEMS (Tenant-Scoped)
+-- ============================================================================
+
+CREATE TABLE purchase_order_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    purchase_order_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
+    inventory_item_id UUID NOT NULL REFERENCES inventory_items(id) ON DELETE RESTRICT,
+    quantity_ordered DECIMAL(10, 3) NOT NULL,
+    quantity_received DECIMAL(10, 3) NOT NULL DEFAULT 0,
+    unit_cost_dzd DECIMAL(12, 2) NOT NULL,
+    total_cost_dzd DECIMAL(12, 2) NOT NULL,
+    expiry_date TIMESTAMP,
+    batch_number VARCHAR(50),
+    notes TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    CONSTRAINT chk_po_item_quantities CHECK (
+        quantity_ordered > 0 AND
+        quantity_received >= 0 AND
+        quantity_received <= quantity_ordered
+    ),
+    CONSTRAINT chk_po_item_costs CHECK (
+        unit_cost_dzd >= 0 AND
+        total_cost_dzd >= 0 AND
+        total_cost_dzd = (quantity_ordered * unit_cost_dzd)
+    )
+);
+
+COMMENT ON TABLE purchase_order_items IS 'Tenant-scoped line items for purchase orders';
+
+CREATE INDEX idx_po_items_tenant ON purchase_order_items(tenant_id);
+CREATE INDEX idx_po_items_po ON purchase_order_items(tenant_id, purchase_order_id);
+CREATE INDEX idx_po_items_inventory ON purchase_order_items(inventory_item_id);
+CREATE INDEX idx_po_items_expiry ON purchase_order_items(expiry_date) WHERE expiry_date IS NOT NULL;
+
+-- ============================================================================
+-- 18. STOCK MOVEMENTS (Tenant-Scoped)
+-- ============================================================================
+
+CREATE TABLE stock_movements (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    inventory_item_id UUID NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+    movement_type VARCHAR(50) NOT NULL,
+    quantity DECIMAL(10, 3) NOT NULL,
+    unit_cost_dzd DECIMAL(12, 2),
+    reference_type VARCHAR(50),
+    reference_id UUID,
+    batch_number VARCHAR(50),
+    expiry_date TIMESTAMP,
+    notes TEXT,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    CONSTRAINT chk_movement_type CHECK (movement_type IN (
+        'stock.movement.purchase',
+        'stock.movement.usage',
+        'stock.movement.adjustment',
+        'stock.movement.transfer',
+        'stock.movement.expired',
+        'stock.movement.damaged',
+        'stock.movement.return'
+    )),
+    CONSTRAINT chk_movement_quantity CHECK (quantity != 0),
+    CONSTRAINT chk_movement_cost CHECK (unit_cost_dzd IS NULL OR unit_cost_dzd >= 0)
+);
+
+COMMENT ON TABLE stock_movements IS 'Tenant-scoped inventory movement tracking';
+COMMENT ON COLUMN stock_movements.movement_type IS 'Type of stock movement (in/out/adjustment)';
+COMMENT ON COLUMN stock_movements.reference_type IS 'purchase_order, treatment_record, adjustment, etc.';
+COMMENT ON COLUMN stock_movements.reference_id IS 'ID of the referenced entity';
+
+CREATE INDEX idx_stock_movements_tenant ON stock_movements(tenant_id);
+CREATE INDEX idx_stock_movements_item ON stock_movements(tenant_id, inventory_item_id);
+CREATE INDEX idx_stock_movements_type ON stock_movements(tenant_id, movement_type);
+CREATE INDEX idx_stock_movements_date ON stock_movements(tenant_id, created_at);
+CREATE INDEX idx_stock_movements_reference ON stock_movements(reference_type, reference_id);
+
+-- ============================================================================
+-- 19. EXPENSES (Tenant-Scoped)
+-- ============================================================================
+
+CREATE TABLE expenses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    expense_number VARCHAR(30) NOT NULL,
+    category_key VARCHAR(100) NOT NULL,
+    subcategory_key VARCHAR(100),
+    description TEXT NOT NULL,
+    amount_dzd DECIMAL(12, 2) NOT NULL,
+    expense_date TIMESTAMP NOT NULL DEFAULT NOW(),
+    payment_method_id INTEGER REFERENCES payment_methods(id) ON DELETE SET NULL,
+    supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
+    purchase_order_id UUID REFERENCES purchase_orders(id) ON DELETE SET NULL,
+    receipt_number VARCHAR(100),
+    is_recurring BOOLEAN NOT NULL DEFAULT FALSE,
+    recurring_frequency VARCHAR(20),
+    status_key VARCHAR(50) NOT NULL DEFAULT 'expense.status.pending',
+    approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    approved_at TIMESTAMP,
+    paid_at TIMESTAMP,
+    notes TEXT,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    CONSTRAINT chk_expense_amount CHECK (amount_dzd > 0),
+    CONSTRAINT chk_expense_status CHECK (status_key IN (
+        'expense.status.pending',
+        'expense.status.approved',
+        'expense.status.paid',
+        'expense.status.cancelled'
+    )),
+    CONSTRAINT chk_recurring_frequency CHECK (
+        (is_recurring = FALSE) OR 
+        (is_recurring = TRUE AND recurring_frequency IN ('monthly', 'quarterly', 'yearly'))
+    ),
+    CONSTRAINT uq_expenses_tenant_number UNIQUE (tenant_id, expense_number)
+);
+
+COMMENT ON TABLE expenses IS 'Tenant-scoped expense tracking for financial reporting';
+COMMENT ON COLUMN expenses.category_key IS 'expense.category.inventory, expense.category.utilities, etc.';
+COMMENT ON COLUMN expenses.expense_number IS 'Auto-generated, tenant-scoped (e.g., EXP-2025-0001)';
+
+CREATE INDEX idx_expenses_tenant ON expenses(tenant_id);
+CREATE INDEX idx_expenses_number ON expenses(tenant_id, expense_number);
+CREATE INDEX idx_expenses_category ON expenses(tenant_id, category_key);
+CREATE INDEX idx_expenses_date ON expenses(tenant_id, expense_date);
+CREATE INDEX idx_expenses_status ON expenses(tenant_id, status_key);
+CREATE INDEX idx_expenses_supplier ON expenses(supplier_id);
+CREATE INDEX idx_expenses_po ON expenses(purchase_order_id);
+
+-- ============================================================================
+-- 20. AUDIT LOG (Tenant-Scoped)
 -- ============================================================================
 
 CREATE TABLE audit_logs (
@@ -462,6 +767,21 @@ CREATE TRIGGER trg_treatment_records_updated_at BEFORE UPDATE ON treatment_recor
 CREATE TRIGGER trg_invoices_updated_at BEFORE UPDATE ON invoices
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER trg_suppliers_updated_at BEFORE UPDATE ON suppliers
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_inventory_cat_updated_at BEFORE UPDATE ON inventory_categories
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_inventory_items_updated_at BEFORE UPDATE ON inventory_items
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_purchase_orders_updated_at BEFORE UPDATE ON purchase_orders
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_expenses_updated_at BEFORE UPDATE ON expenses
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================================================
 -- AUTO-GENERATION FUNCTIONS (Tenant-Scoped)
 -- ============================================================================
@@ -518,6 +838,106 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Function to generate supplier codes (tenant-scoped)
+CREATE OR REPLACE FUNCTION generate_supplier_code(p_tenant_id UUID)
+RETURNS VARCHAR(20) AS $$
+DECLARE
+    new_code VARCHAR(20);
+    year_str VARCHAR(4);
+    sequence_num INTEGER;
+BEGIN
+    year_str := TO_CHAR(CURRENT_DATE, 'YYYY');
+    
+    SELECT COALESCE(MAX(
+        CAST(SUBSTRING(supplier_code FROM 10) AS INTEGER)
+    ), 0) + 1
+    INTO sequence_num
+    FROM suppliers
+    WHERE tenant_id = p_tenant_id
+      AND supplier_code LIKE 'SUP-' || year_str || '-%';
+    
+    new_code := 'SUP-' || year_str || '-' || LPAD(sequence_num::TEXT, 4, '0');
+    
+    RETURN new_code;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to generate inventory item codes (tenant-scoped)
+CREATE OR REPLACE FUNCTION generate_item_code(p_tenant_id UUID)
+RETURNS VARCHAR(30) AS $$
+DECLARE
+    new_code VARCHAR(30);
+    year_str VARCHAR(4);
+    sequence_num INTEGER;
+BEGIN
+    year_str := TO_CHAR(CURRENT_DATE, 'YYYY');
+    
+    SELECT COALESCE(MAX(
+        CAST(SUBSTRING(item_code FROM 10) AS INTEGER)
+    ), 0) + 1
+    INTO sequence_num
+    FROM inventory_items
+    WHERE tenant_id = p_tenant_id
+      AND item_code LIKE 'ITM-' || year_str || '-%';
+    
+    new_code := 'ITM-' || year_str || '-' || LPAD(sequence_num::TEXT, 4, '0');
+    
+    RETURN new_code;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to generate purchase order numbers (tenant-scoped)
+CREATE OR REPLACE FUNCTION generate_po_number(p_tenant_id UUID)
+RETURNS VARCHAR(30) AS $$
+DECLARE
+    new_number VARCHAR(30);
+    year_str VARCHAR(4);
+    month_str VARCHAR(2);
+    sequence_num INTEGER;
+BEGIN
+    year_str := TO_CHAR(CURRENT_DATE, 'YYYY');
+    month_str := TO_CHAR(CURRENT_DATE, 'MM');
+    
+    SELECT COALESCE(MAX(
+        CAST(SUBSTRING(po_number FROM 12) AS INTEGER)
+    ), 0) + 1
+    INTO sequence_num
+    FROM purchase_orders
+    WHERE tenant_id = p_tenant_id
+      AND po_number LIKE 'PO-' || year_str || month_str || '-%';
+    
+    new_number := 'PO-' || year_str || month_str || '-' || LPAD(sequence_num::TEXT, 4, '0');
+    
+    RETURN new_number;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to generate expense numbers (tenant-scoped)
+CREATE OR REPLACE FUNCTION generate_expense_number(p_tenant_id UUID)
+RETURNS VARCHAR(30) AS $$
+DECLARE
+    new_number VARCHAR(30);
+    year_str VARCHAR(4);
+    month_str VARCHAR(2);
+    sequence_num INTEGER;
+BEGIN
+    year_str := TO_CHAR(CURRENT_DATE, 'YYYY');
+    month_str := TO_CHAR(CURRENT_DATE, 'MM');
+    
+    SELECT COALESCE(MAX(
+        CAST(SUBSTRING(expense_number FROM 13) AS INTEGER)
+    ), 0) + 1
+    INTO sequence_num
+    FROM expenses
+    WHERE tenant_id = p_tenant_id
+      AND expense_number LIKE 'EXP-' || year_str || month_str || '-%';
+    
+    new_number := 'EXP-' || year_str || month_str || '-' || LPAD(sequence_num::TEXT, 4, '0');
+    
+    RETURN new_number;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Trigger to auto-generate patient code (tenant-aware)
 CREATE OR REPLACE FUNCTION set_patient_code()
 RETURNS TRIGGER AS $$
@@ -549,6 +969,90 @@ CREATE TRIGGER trg_set_invoice_number
     BEFORE INSERT ON invoices
     FOR EACH ROW
     EXECUTE FUNCTION set_invoice_number();
+
+-- Trigger to auto-generate supplier code (tenant-aware)
+CREATE OR REPLACE FUNCTION set_supplier_code()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.supplier_code IS NULL OR NEW.supplier_code = '' THEN
+        NEW.supplier_code := generate_supplier_code(NEW.tenant_id);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_set_supplier_code
+    BEFORE INSERT ON suppliers
+    FOR EACH ROW
+    EXECUTE FUNCTION set_supplier_code();
+
+-- Trigger to auto-generate item code (tenant-aware)
+CREATE OR REPLACE FUNCTION set_item_code()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.item_code IS NULL OR NEW.item_code = '' THEN
+        NEW.item_code := generate_item_code(NEW.tenant_id);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_set_item_code
+    BEFORE INSERT ON inventory_items
+    FOR EACH ROW
+    EXECUTE FUNCTION set_item_code();
+
+-- Trigger to auto-generate PO number (tenant-aware)
+CREATE OR REPLACE FUNCTION set_po_number()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.po_number IS NULL OR NEW.po_number = '' THEN
+        NEW.po_number := generate_po_number(NEW.tenant_id);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_set_po_number
+    BEFORE INSERT ON purchase_orders
+    FOR EACH ROW
+    EXECUTE FUNCTION set_po_number();
+
+-- Trigger to auto-generate expense number (tenant-aware)
+CREATE OR REPLACE FUNCTION set_expense_number()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.expense_number IS NULL OR NEW.expense_number = '' THEN
+        NEW.expense_number := generate_expense_number(NEW.tenant_id);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_set_expense_number
+    BEFORE INSERT ON expenses
+    FOR EACH ROW
+    EXECUTE FUNCTION set_expense_number();
+
+-- Trigger to update stock levels on stock movements
+CREATE OR REPLACE FUNCTION update_stock_levels()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Update current stock based on movement
+    UPDATE inventory_items 
+    SET current_stock = current_stock + NEW.quantity,
+        updated_at = NOW()
+    WHERE id = NEW.inventory_item_id 
+      AND tenant_id = NEW.tenant_id;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_update_stock_levels
+    AFTER INSERT ON stock_movements
+    FOR EACH ROW
+    EXECUTE FUNCTION update_stock_levels();
 
 
 
@@ -596,8 +1100,87 @@ JOIN patients p ON i.patient_id = p.id AND i.tenant_id = p.tenant_id
 WHERE i.payment_status_key IN ('invoice.status.unpaid', 'invoice.status.partial', 'invoice.status.overdue')
 ORDER BY i.due_date ASC NULLS LAST;
 
+-- Inventory Views
+CREATE OR REPLACE VIEW v_low_stock_items AS
+SELECT 
+    ii.tenant_id,
+    ii.id,
+    ii.item_code,
+    ii.name,
+    ii.current_stock,
+    ii.min_stock_level,
+    ii.reorder_point,
+    ic.category_key,
+    ii.unit_of_measure,
+    ii.unit_cost_dzd,
+    (ii.min_stock_level - ii.current_stock) AS shortage_quantity
+FROM inventory_items ii
+LEFT JOIN inventory_categories ic ON ii.category_id = ic.id
+WHERE ii.current_stock <= ii.min_stock_level
+  AND ii.status_key = 'item.status.active'
+ORDER BY (ii.min_stock_level - ii.current_stock) DESC;
+
+CREATE OR REPLACE VIEW v_inventory_valuation AS
+SELECT 
+    ii.tenant_id,
+    ii.id,
+    ii.item_code,
+    ii.name,
+    ii.current_stock,
+    ii.unit_cost_dzd,
+    (ii.current_stock * ii.unit_cost_dzd) AS total_value_dzd,
+    ic.category_key,
+    ii.status_key
+FROM inventory_items ii
+LEFT JOIN inventory_categories ic ON ii.category_id = ic.id
+WHERE ii.current_stock > 0
+ORDER BY total_value_dzd DESC;
+
+CREATE OR REPLACE VIEW v_expense_summary AS
+SELECT 
+    e.tenant_id,
+    e.category_key,
+    DATE_TRUNC('month', e.expense_date) AS expense_month,
+    COUNT(*) AS expense_count,
+    SUM(e.amount_dzd) AS total_amount_dzd,
+    AVG(e.amount_dzd) AS avg_amount_dzd
+FROM expenses e
+WHERE e.status_key IN ('expense.status.approved', 'expense.status.paid')
+GROUP BY e.tenant_id, e.category_key, DATE_TRUNC('month', e.expense_date)
+ORDER BY expense_month DESC, total_amount_dzd DESC;
+
+CREATE OR REPLACE VIEW v_financial_overview AS
+SELECT 
+    t.id AS tenant_id,
+    t.name AS tenant_name,
+    DATE_TRUNC('month', CURRENT_DATE) AS period_month,
+    
+    -- Revenue metrics
+    COALESCE(SUM(i.total_dzd), 0) AS total_revenue_dzd,
+    COALESCE(SUM(i.paid_amount_dzd), 0) AS collected_revenue_dzd,
+    COALESCE(SUM(i.total_dzd - i.paid_amount_dzd), 0) AS outstanding_revenue_dzd,
+    
+    -- Expense metrics
+    COALESCE(SUM(e.amount_dzd), 0) AS total_expenses_dzd,
+    
+    -- Profit calculation
+    (COALESCE(SUM(i.paid_amount_dzd), 0) - COALESCE(SUM(e.amount_dzd), 0)) AS net_profit_dzd,
+    
+    -- Inventory value
+    COALESCE(SUM(ii.current_stock * ii.unit_cost_dzd), 0) AS inventory_value_dzd
+    
+FROM tenants t
+LEFT JOIN invoices i ON t.id = i.tenant_id 
+    AND DATE_TRUNC('month', i.issue_date) = DATE_TRUNC('month', CURRENT_DATE)
+LEFT JOIN expenses e ON t.id = e.tenant_id 
+    AND DATE_TRUNC('month', e.expense_date) = DATE_TRUNC('month', CURRENT_DATE)
+    AND e.status_key IN ('expense.status.approved', 'expense.status.paid')
+LEFT JOIN inventory_items ii ON t.id = ii.tenant_id 
+    AND ii.status_key = 'item.status.active'
+GROUP BY t.id, t.name;
+
 -- ============================================================================
--- HELPER FUNCTION: Get Treatment Categories (Global + Tenant-Specific)
+-- HELPER FUNCTIONS: Get Categories (Global + Tenant-Specific)
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION get_treatment_categories(p_tenant_id UUID)
@@ -620,6 +1203,29 @@ BEGIN
     WHERE tc.tenant_id IS NULL -- Global defaults
        OR tc.tenant_id = p_tenant_id -- Tenant-specific
     ORDER BY tc.category_key;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION get_inventory_categories(p_tenant_id UUID)
+RETURNS TABLE (
+    id INTEGER,
+    category_key VARCHAR(100),
+    parent_id INTEGER,
+    description TEXT,
+    is_global BOOLEAN
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        ic.id,
+        ic.category_key,
+        ic.parent_id,
+        ic.description,
+        (ic.tenant_id IS NULL) AS is_global
+    FROM inventory_categories ic
+    WHERE ic.tenant_id IS NULL -- Global defaults
+       OR ic.tenant_id = p_tenant_id -- Tenant-specific
+    ORDER BY ic.category_key;
 END;
 $$ LANGUAGE plpgsql;
 
