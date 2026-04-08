@@ -10,6 +10,11 @@ const appointmentRoutes = require('./routes/appointments');
 const dashboardRoutes = require('./routes/dashboard');
 const userRoutes = require('./routes/users');
 const inventoryRoutes = require('./routes/inventory');
+const treatmentRoutes = require('./routes/treatments');
+const paymentRoutes = require('./routes/payments');
+const invoiceRoutes = require('./routes/invoices');
+
+const auditLogsRoutes = require('./routes/auditLogs');
 
 const app = express();
 
@@ -35,6 +40,11 @@ app.use('/api/v1/appointments', appointmentRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
+app.use('/api/v1/treatments', treatmentRoutes);
+app.use('/api/v1/payments', paymentRoutes);
+app.use('/api/v1/invoices', invoiceRoutes);
+
+app.use('/api/v1/audit-logs', auditLogsRoutes);
 
 app.use(errorHandler);
 

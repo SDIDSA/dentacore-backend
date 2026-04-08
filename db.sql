@@ -89,7 +89,7 @@ CREATE INDEX idx_wilayas_code ON wilayas(code);
 -- ============================================================================
 
 CREATE TABLE payment_methods (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     method_key VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -191,10 +191,10 @@ CREATE INDEX idx_patients_dob ON patients(date_of_birth);
 -- ============================================================================
 
 CREATE TABLE treatment_categories (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     category_key VARCHAR(100) NOT NULL,
-    parent_id INTEGER REFERENCES treatment_categories(id) ON DELETE CASCADE,
+    parent_id UUID REFERENCES treatment_categories(id) ON DELETE CASCADE,
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -260,7 +260,7 @@ CREATE TABLE treatment_records (
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
     dentist_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    category_id INTEGER REFERENCES treatment_categories(id) ON DELETE SET NULL,
+    category_id UUID REFERENCES treatment_categories(id) ON DELETE SET NULL,
     treatment_date TIMESTAMP NOT NULL,
     tooth_number VARCHAR(10),
     diagnosis TEXT NOT NULL,
@@ -379,7 +379,7 @@ CREATE TABLE payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
-    payment_method_id INTEGER NOT NULL REFERENCES payment_methods(id) ON DELETE RESTRICT,
+    payment_method_id UUID NOT NULL REFERENCES payment_methods(id) ON DELETE RESTRICT,
     amount_dzd DECIMAL(12, 2) NOT NULL,
     payment_date TIMESTAMP NOT NULL DEFAULT NOW(),
     transaction_reference VARCHAR(100),
@@ -444,10 +444,10 @@ CREATE INDEX idx_suppliers_status ON suppliers(tenant_id, status_key);
 -- ============================================================================
 
 CREATE TABLE inventory_categories (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     category_key VARCHAR(100) NOT NULL,
-    parent_id INTEGER REFERENCES inventory_categories(id) ON DELETE CASCADE,
+    parent_id UUID REFERENCES inventory_categories(id) ON DELETE CASCADE,
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -474,7 +474,7 @@ CREATE TABLE inventory_items (
     item_code VARCHAR(30) NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
-    category_id INTEGER REFERENCES inventory_categories(id) ON DELETE SET NULL,
+    category_id UUID REFERENCES inventory_categories(id) ON DELETE SET NULL,
     unit_of_measure VARCHAR(20) NOT NULL DEFAULT 'unit',
     current_stock DECIMAL(10, 3) NOT NULL DEFAULT 0,
     min_stock_level DECIMAL(10, 3) NOT NULL DEFAULT 0,
@@ -663,7 +663,7 @@ CREATE TABLE expenses (
     description TEXT NOT NULL,
     amount_dzd DECIMAL(12, 2) NOT NULL,
     expense_date TIMESTAMP NOT NULL DEFAULT NOW(),
-    payment_method_id INTEGER REFERENCES payment_methods(id) ON DELETE SET NULL,
+    payment_method_id UUID REFERENCES payment_methods(id) ON DELETE SET NULL,
     supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
     purchase_order_id UUID REFERENCES purchase_orders(id) ON DELETE SET NULL,
     receipt_number VARCHAR(100),
@@ -1185,9 +1185,9 @@ GROUP BY t.id, t.name;
 
 CREATE OR REPLACE FUNCTION get_treatment_categories(p_tenant_id UUID)
 RETURNS TABLE (
-    id INTEGER,
+    id UUID,
     category_key VARCHAR(100),
-    parent_id INTEGER,
+    parent_id UUID,
     description TEXT,
     is_global BOOLEAN
 ) AS $$
@@ -1208,9 +1208,9 @@ $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION get_inventory_categories(p_tenant_id UUID)
 RETURNS TABLE (
-    id INTEGER,
+    id UUID,
     category_key VARCHAR(100),
-    parent_id INTEGER,
+    parent_id UUID,
     description TEXT,
     is_global BOOLEAN
 ) AS $$

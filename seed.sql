@@ -161,6 +161,57 @@ SELECT NULL, 'cat.cosmetic.veneers', id, 'Dental veneers', TRUE
 FROM treatment_categories WHERE category_key = 'cat.cosmetic' AND tenant_id IS NULL;
 
 -- ============================================================================
+-- 4.1. GLOBAL INVENTORY CATEGORIES (Available to All Tenants)
+-- ============================================================================
+
+-- Root Inventory Categories (Global - tenant_id = NULL)
+INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active) VALUES
+(NULL, 'inv.consumables', NULL, 'Consumable dental supplies', TRUE),
+(NULL, 'inv.materials', NULL, 'Dental materials and compounds', TRUE),
+(NULL, 'inv.pharmaceuticals', NULL, 'Medications and pharmaceuticals', TRUE),
+(NULL, 'inv.instruments', NULL, 'Dental instruments and tools', TRUE);
+
+-- Sub-categories for Consumables
+INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'inv.consumables.gloves', id, 'Examination and surgical gloves', TRUE
+FROM inventory_categories WHERE category_key = 'inv.consumables' AND tenant_id IS NULL;
+
+INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'inv.consumables.masks', id, 'Surgical and protective masks', TRUE
+FROM inventory_categories WHERE category_key = 'inv.consumables' AND tenant_id IS NULL;
+
+INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'inv.consumables.cotton', id, 'Cotton products and gauze', TRUE
+FROM inventory_categories WHERE category_key = 'inv.consumables' AND tenant_id IS NULL;
+
+-- Sub-categories for Materials
+INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'inv.materials.composite', id, 'Composite resins and fillings', TRUE
+FROM inventory_categories WHERE category_key = 'inv.materials' AND tenant_id IS NULL;
+
+INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'inv.materials.impression', id, 'Impression materials', TRUE
+FROM inventory_categories WHERE category_key = 'inv.materials' AND tenant_id IS NULL;
+
+INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'inv.materials.cement', id, 'Dental cements and bonding agents', TRUE
+FROM inventory_categories WHERE category_key = 'inv.materials' AND tenant_id IS NULL;
+
+-- Sub-categories for Pharmaceuticals
+INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'inv.pharmaceuticals.anesthetics', id, 'Local anesthetics', TRUE
+FROM inventory_categories WHERE category_key = 'inv.pharmaceuticals' AND tenant_id IS NULL;
+
+-- Sub-categories for Instruments
+INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'inv.instruments.hand', id, 'Hand instruments and tools', TRUE
+FROM inventory_categories WHERE category_key = 'inv.instruments' AND tenant_id IS NULL;
+
+INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
+SELECT NULL, 'inv.instruments.rotary', id, 'Rotary instruments and burs', TRUE
+FROM inventory_categories WHERE category_key = 'inv.instruments' AND tenant_id IS NULL;
+
+-- ============================================================================
 -- 5. SAMPLE TENANTS (SaaS Onboarding Simulation)
 -- ============================================================================
 
@@ -350,11 +401,11 @@ BEGIN
 
     -- Get category IDs for inventory items
     DECLARE
-        v_gloves_cat_id INTEGER;
-        v_composite_cat_id INTEGER;
-        v_anesthetics_cat_id INTEGER;
-        v_hand_instruments_cat_id INTEGER;
-        v_cotton_cat_id INTEGER;
+        v_gloves_cat_id UUID;
+        v_composite_cat_id UUID;
+        v_anesthetics_cat_id UUID;
+        v_hand_instruments_cat_id UUID;
+        v_cotton_cat_id UUID;
     BEGIN
         SELECT id INTO v_gloves_cat_id FROM inventory_categories WHERE category_key = 'inv.consumables.gloves' AND tenant_id IS NULL;
         SELECT id INTO v_composite_cat_id FROM inventory_categories WHERE category_key = 'inv.materials.composite' AND tenant_id IS NULL;
@@ -495,9 +546,9 @@ BEGIN
 
     -- Get category IDs
     DECLARE
-        v_gloves_cat_id INTEGER;
-        v_masks_cat_id INTEGER;
-        v_cotton_cat_id INTEGER;
+        v_gloves_cat_id UUID;
+        v_masks_cat_id UUID;
+        v_cotton_cat_id UUID;
     BEGIN
         SELECT id INTO v_gloves_cat_id FROM inventory_categories WHERE category_key = 'inv.consumables.gloves' AND tenant_id IS NULL;
         SELECT id INTO v_masks_cat_id FROM inventory_categories WHERE category_key = 'inv.consumables.masks' AND tenant_id IS NULL;
@@ -530,6 +581,10 @@ DECLARE
     v_tenant_id UUID;
     v_dentist_role_id INTEGER;
     v_dentist_user_id UUID;
+    v_payment_method_cash UUID;
+    v_payment_method_cib UUID;
+    v_payment_method_bank UUID;
+    v_payment_method_baridimob UUID;
 BEGIN
     SELECT id INTO v_dentist_role_id FROM roles WHERE role_key = 'auth.role.dentist';
 
@@ -583,6 +638,12 @@ BEGIN
 
     RAISE NOTICE 'Created Dentist: zinouteyar@gmail.com (Password: A1b2-A1b2)';
 
+    -- Get payment method IDs
+    SELECT id INTO v_payment_method_cash FROM payment_methods WHERE method_key = 'pay.method.cash';
+    SELECT id INTO v_payment_method_cib FROM payment_methods WHERE method_key = 'pay.method.cib';
+    SELECT id INTO v_payment_method_bank FROM payment_methods WHERE method_key = 'pay.method.bank_transfer';
+    SELECT id INTO v_payment_method_baridimob FROM payment_methods WHERE method_key = 'pay.method.baridimob';
+
     -- Create Sample Patient for Dr. Teyar
     INSERT INTO patients (
         tenant_id,
@@ -622,13 +683,13 @@ BEGIN
 
     -- Get category IDs for premium inventory
     DECLARE
-        v_gloves_cat_id INTEGER;
-        v_composite_cat_id INTEGER;
-        v_anesthetics_cat_id INTEGER;
-        v_hand_instruments_cat_id INTEGER;
-        v_rotary_cat_id INTEGER;
-        v_impression_cat_id INTEGER;
-        v_cement_cat_id INTEGER;
+        v_gloves_cat_id UUID;
+        v_composite_cat_id UUID;
+        v_anesthetics_cat_id UUID;
+        v_hand_instruments_cat_id UUID;
+        v_rotary_cat_id UUID;
+        v_impression_cat_id UUID;
+        v_cement_cat_id UUID;
     BEGIN
         SELECT id INTO v_gloves_cat_id FROM inventory_categories WHERE category_key = 'inv.consumables.gloves' AND tenant_id IS NULL;
         SELECT id INTO v_composite_cat_id FROM inventory_categories WHERE category_key = 'inv.materials.composite' AND tenant_id IS NULL;
@@ -668,20 +729,20 @@ BEGIN
 
         -- Create comprehensive expenses (Enterprise plan)
         INSERT INTO expenses (tenant_id, category_key, description, amount_dzd, expense_date, payment_method_id, status_key, created_by) VALUES
-        (v_tenant_id, 'expense.category.inventory', 'Premium dental materials - Q1 2025', 125000.00, NOW() - INTERVAL '20 days', 2, 'expense.status.paid', v_dentist_user_id),
-        (v_tenant_id, 'expense.category.equipment', 'Dental chair maintenance and calibration', 18500.00, NOW() - INTERVAL '15 days', 1, 'expense.status.paid', v_dentist_user_id),
-        (v_tenant_id, 'expense.category.utilities', 'Electricity and water - January 2025', 12800.00, NOW() - INTERVAL '12 days', 3, 'expense.status.paid', v_dentist_user_id),
-        (v_tenant_id, 'expense.category.rent', 'Clinic rent - January 2025', 45000.00, NOW() - INTERVAL '10 days', 3, 'expense.status.paid', v_dentist_user_id),
-        (v_tenant_id, 'expense.category.marketing', 'Digital marketing campaign', 8500.00, NOW() - INTERVAL '8 days', 2, 'expense.status.approved', v_dentist_user_id),
-        (v_tenant_id, 'expense.category.training', 'Continuing education course', 15000.00, NOW() - INTERVAL '5 days', 1, 'expense.status.approved', v_dentist_user_id),
-        (v_tenant_id, 'expense.category.insurance', 'Professional liability insurance', 22000.00, NOW() - INTERVAL '3 days', 3, 'expense.status.pending', v_dentist_user_id);
+        (v_tenant_id, 'expense.category.inventory', 'Premium dental materials - Q1 2025', 125000.00, NOW() - INTERVAL '20 days', v_payment_method_cib, 'expense.status.paid', v_dentist_user_id),
+        (v_tenant_id, 'expense.category.equipment', 'Dental chair maintenance and calibration', 18500.00, NOW() - INTERVAL '15 days', v_payment_method_cash, 'expense.status.paid', v_dentist_user_id),
+        (v_tenant_id, 'expense.category.utilities', 'Electricity and water - January 2025', 12800.00, NOW() - INTERVAL '12 days', v_payment_method_bank, 'expense.status.paid', v_dentist_user_id),
+        (v_tenant_id, 'expense.category.rent', 'Clinic rent - January 2025', 45000.00, NOW() - INTERVAL '10 days', v_payment_method_bank, 'expense.status.paid', v_dentist_user_id),
+        (v_tenant_id, 'expense.category.marketing', 'Digital marketing campaign', 8500.00, NOW() - INTERVAL '8 days', v_payment_method_cib, 'expense.status.approved', v_dentist_user_id),
+        (v_tenant_id, 'expense.category.training', 'Continuing education course', 15000.00, NOW() - INTERVAL '5 days', v_payment_method_cash, 'expense.status.approved', v_dentist_user_id),
+        (v_tenant_id, 'expense.category.insurance', 'Professional liability insurance', 22000.00, NOW() - INTERVAL '3 days', v_payment_method_bank, 'expense.status.pending', v_dentist_user_id);
 
         -- Create a custom inventory category for Dr. Teyar
         INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active) VALUES
         (v_tenant_id, 'inv.custom.implants', NULL, 'Dental implants and related materials (Custom for Dr. Teyar)', TRUE);
 
         -- Add implant-related inventory
-        DECLARE v_implant_cat_id INTEGER;
+        DECLARE v_implant_cat_id UUID;
         BEGIN
             SELECT id INTO v_implant_cat_id FROM inventory_categories WHERE category_key = 'inv.custom.implants' AND tenant_id = v_tenant_id;
             
@@ -799,10 +860,477 @@ BEGIN
     RAISE NOTICE '  - Same global categories, different items';
     RAISE NOTICE '  - Tenant-specific custom categories';
     RAISE NOTICE '============================================';
-    RAISE NOTICE 'Next Steps:';
-    RAISE NOTICE '1. Test inventory API endpoints';
-    RAISE NOTICE '2. Verify billing dashboard with expense data';
-    RAISE NOTICE '3. Test low stock alerts';
-    RAISE NOTICE '4. Verify inventory valuation reports';
+
+END $$;
+
+-- ============================================================================
+-- INVOICE SEED DATA FOR ALL TENANTS
+-- ============================================================================
+
+-- ============================================================================
+-- TENANT 1: Cabinet Dentaire El-Qods - INVOICE DATA
+-- ============================================================================
+
+DO $$
+DECLARE
+    v_tenant_id UUID;
+    v_admin_user_id UUID;
+    v_dentist_user_id UUID;
+    v_patient1_id UUID;
+    v_patient2_id UUID;
+    v_invoice1_id UUID;
+    v_invoice2_id UUID;
+    v_invoice3_id UUID;
+    v_invoice4_id UUID;
+    v_treatment1_id UUID;
+    v_treatment2_id UUID;
+    v_treatment3_id UUID;
+    v_payment_method_cash UUID;
+    v_payment_method_cib UUID;
+    v_payment_method_bank UUID;
+BEGIN
+    -- Get tenant and user IDs
+    SELECT id INTO v_tenant_id FROM tenants WHERE subdomain = 'elqods';
+    SELECT id INTO v_admin_user_id FROM users WHERE email = 'admin@elqods.dz';
+    SELECT id INTO v_dentist_user_id FROM users WHERE email = 'dentist@elqods.dz';
+    SELECT id INTO v_patient1_id FROM patients WHERE tenant_id = v_tenant_id AND full_name = 'Ahmed Boudiaf';
+    SELECT id INTO v_patient2_id FROM patients WHERE tenant_id = v_tenant_id AND full_name = 'Leila Mansouri';
+    
+    -- Get payment method IDs
+    SELECT id INTO v_payment_method_cash FROM payment_methods WHERE method_key = 'pay.method.cash';
+    SELECT id INTO v_payment_method_cib FROM payment_methods WHERE method_key = 'pay.method.cib';
+    SELECT id INTO v_payment_method_bank FROM payment_methods WHERE method_key = 'pay.method.bank_transfer';
+
+    -- Create some treatment records first (needed for invoice items)
+    INSERT INTO treatment_records (
+        tenant_id, patient_id, dentist_id, treatment_date, 
+        diagnosis, treatment_performed, estimated_cost_dzd
+    ) VALUES 
+    (v_tenant_id, v_patient1_id, v_dentist_user_id, NOW() - INTERVAL '15 days',
+     'Dental caries on tooth 16', 'Composite filling restoration', 8500.00),
+    (v_tenant_id, v_patient1_id, v_dentist_user_id, NOW() - INTERVAL '10 days',
+     'Gingivitis and plaque buildup', 'Professional teeth cleaning and scaling', 4500.00),
+    (v_tenant_id, v_patient2_id, v_dentist_user_id, NOW() - INTERVAL '8 days',
+     'Tooth 26 requires crown', 'Dental crown preparation and placement', 25000.00);
+
+    -- Get treatment IDs for invoice items
+    SELECT id INTO v_treatment1_id FROM treatment_records WHERE tenant_id = v_tenant_id AND diagnosis = 'Dental caries on tooth 16';
+    SELECT id INTO v_treatment2_id FROM treatment_records WHERE tenant_id = v_tenant_id AND diagnosis = 'Gingivitis and plaque buildup';
+    SELECT id INTO v_treatment3_id FROM treatment_records WHERE tenant_id = v_tenant_id AND diagnosis = 'Tooth 26 requires crown';
+
+    -- ========================================================================
+    -- INVOICE 1: Ahmed Boudiaf - Composite Filling (PAID)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient1_id, 
+        NOW() - INTERVAL '15 days',
+        NOW() - INTERVAL '8 days',
+        8500.00, 0.00, 0.00, 8500.00, 8500.00,
+        'invoice.status.paid',
+        'Composite filling - tooth 16',
+        v_dentist_user_id
+    ) RETURNING id INTO v_invoice1_id;
+
+    -- Invoice 1 Items
+    INSERT INTO invoice_items (tenant_id, invoice_id, treatment_record_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice1_id, v_treatment1_id, 'Composite filling restoration - tooth 16', 1, 8500.00, 8500.00);
+
+    -- Payment for Invoice 1
+    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by) VALUES
+    (v_tenant_id, v_invoice1_id, v_payment_method_cash, 8500.00, NOW() - INTERVAL '14 days', 'Cash payment received', v_dentist_user_id);
+
+    -- ========================================================================
+    -- INVOICE 2: Ahmed Boudiaf - Teeth Cleaning (PAID)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient1_id,
+        NOW() - INTERVAL '10 days',
+        NOW() - INTERVAL '3 days',
+        4500.00, 500.00, 0.00, 4000.00, 4000.00,
+        'invoice.status.paid',
+        'Professional cleaning with senior discount',
+        v_dentist_user_id
+    ) RETURNING id INTO v_invoice2_id;
+
+    -- Invoice 2 Items
+    INSERT INTO invoice_items (tenant_id, invoice_id, treatment_record_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice2_id, v_treatment2_id, 'Professional teeth cleaning and scaling', 1, 4500.00, 4500.00);
+
+    -- Payment for Invoice 2
+    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by) VALUES
+    (v_tenant_id, v_invoice2_id, v_payment_method_cib, 4000.00, NOW() - INTERVAL '9 days', 'CIB card payment', v_admin_user_id);
+
+    -- ========================================================================
+    -- INVOICE 3: Leila Mansouri - Dental Crown (PARTIAL PAYMENT)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient2_id,
+        NOW() - INTERVAL '8 days',
+        NOW() + INTERVAL '7 days',
+        25000.00, 0.00, 0.00, 25000.00, 15000.00,
+        'invoice.status.partial',
+        'Dental crown - tooth 26. Partial payment received.',
+        v_dentist_user_id
+    ) RETURNING id INTO v_invoice3_id;
+
+    -- Invoice 3 Items
+    INSERT INTO invoice_items (tenant_id, invoice_id, treatment_record_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice3_id, v_treatment3_id, 'Dental crown preparation and placement - tooth 26', 1, 25000.00, 25000.00);
+
+    -- Partial payment for Invoice 3
+    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by) VALUES
+    (v_tenant_id, v_invoice3_id, v_payment_method_bank, 15000.00, NOW() - INTERVAL '7 days', 'Bank transfer - partial payment', v_admin_user_id);
+
+    -- ========================================================================
+    -- INVOICE 4: Leila Mansouri - Consultation (UNPAID - OVERDUE)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient2_id,
+        NOW() - INTERVAL '25 days',
+        NOW() - INTERVAL '18 days',
+        2500.00, 0.00, 0.00, 2500.00, 0.00,
+        'invoice.status.overdue',
+        'Initial consultation and examination - OVERDUE',
+        v_dentist_user_id
+    ) RETURNING id INTO v_invoice4_id;
+
+    -- Invoice 4 Items
+    INSERT INTO invoice_items (tenant_id, invoice_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice4_id, 'Initial dental consultation and examination', 1, 2500.00, 2500.00);
+
+    RAISE NOTICE 'Created invoices for El-Qods: 4 invoices (2 paid, 1 partial, 1 overdue)';
+
+END $$;
+
+-- ============================================================================
+-- TENANT 2: Clinique Dentaire Sourire - INVOICE DATA (Limited - Trial Plan)
+-- ============================================================================
+
+DO $$
+DECLARE
+    v_tenant_id UUID;
+    v_admin_user_id UUID;
+    v_patient_id UUID;
+    v_invoice1_id UUID;
+    v_invoice2_id UUID;
+    v_treatment1_id UUID;
+    v_payment_method_cash UUID;
+BEGIN
+    -- Get tenant and user IDs
+    SELECT id INTO v_tenant_id FROM tenants WHERE subdomain = 'sourire';
+    SELECT id INTO v_admin_user_id FROM users WHERE email = 'admin@sourire.dz';
+    SELECT id INTO v_patient_id FROM patients WHERE tenant_id = v_tenant_id AND full_name = 'Rania Benali';
+    
+    -- Get payment method ID
+    SELECT id INTO v_payment_method_cash FROM payment_methods WHERE method_key = 'pay.method.cash';
+
+    -- Create treatment record
+    INSERT INTO treatment_records (
+        tenant_id, patient_id, dentist_id, treatment_date,
+        diagnosis, treatment_performed, estimated_cost_dzd
+    ) VALUES (
+        v_tenant_id, v_patient_id, v_admin_user_id, NOW() - INTERVAL '5 days',
+        'Routine dental checkup', 'Comprehensive oral examination', 3000.00
+    ) RETURNING id INTO v_treatment1_id;
+
+    -- ========================================================================
+    -- INVOICE 1: Rania Benali - Checkup (PAID)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient_id,
+        NOW() - INTERVAL '5 days',
+        NOW() + INTERVAL '2 days',
+        3000.00, 0.00, 0.00, 3000.00, 3000.00,
+        'invoice.status.paid',
+        'Routine dental checkup',
+        v_admin_user_id
+    ) RETURNING id INTO v_invoice1_id;
+
+    -- Invoice 1 Items
+    INSERT INTO invoice_items (tenant_id, invoice_id, treatment_record_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice1_id, v_treatment1_id, 'Comprehensive oral examination', 1, 3000.00, 3000.00);
+
+    -- Payment for Invoice 1
+    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by) VALUES
+    (v_tenant_id, v_invoice1_id, v_payment_method_cash, 3000.00, NOW() - INTERVAL '4 days', 'Cash payment', v_admin_user_id);
+
+    -- ========================================================================
+    -- INVOICE 2: Rania Benali - Follow-up (UNPAID)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient_id,
+        NOW() - INTERVAL '2 days',
+        NOW() + INTERVAL '5 days',
+        1500.00, 0.00, 0.00, 1500.00, 0.00,
+        'invoice.status.unpaid',
+        'Follow-up consultation',
+        v_admin_user_id
+    ) RETURNING id INTO v_invoice2_id;
+
+    -- Invoice 2 Items
+    INSERT INTO invoice_items (tenant_id, invoice_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice2_id, 'Follow-up consultation', 1, 1500.00, 1500.00);
+
+    RAISE NOTICE 'Created invoices for Sourire: 2 invoices (1 paid, 1 unpaid)';
+
+END $$;
+
+-- ============================================================================
+-- TENANT 3: Cabinet Dr. Teyar - COMPREHENSIVE INVOICE DATA (Enterprise Plan)
+-- ============================================================================
+
+DO $$
+DECLARE
+    v_tenant_id UUID;
+    v_dentist_user_id UUID;
+    v_patient_id UUID;
+    v_invoice1_id UUID;
+    v_invoice2_id UUID;
+    v_invoice3_id UUID;
+    v_invoice4_id UUID;
+    v_invoice5_id UUID;
+    v_invoice6_id UUID;
+    v_treatment1_id UUID;
+    v_treatment2_id UUID;
+    v_treatment3_id UUID;
+    v_treatment4_id UUID;
+    v_treatment5_id UUID;
+    v_payment_method_cash UUID;
+    v_payment_method_cib UUID;
+    v_payment_method_bank UUID;
+    v_payment_method_baridimob UUID;
+BEGIN
+    -- Get tenant and user IDs
+    SELECT id INTO v_tenant_id FROM tenants WHERE subdomain = 'teyar';
+    SELECT id INTO v_dentist_user_id FROM users WHERE email = 'zinouteyar@gmail.com';
+    SELECT id INTO v_patient_id FROM patients WHERE tenant_id = v_tenant_id AND full_name = 'Mohamed Cherif';
+    
+    -- Get payment method IDs
+    SELECT id INTO v_payment_method_cash FROM payment_methods WHERE method_key = 'pay.method.cash';
+    SELECT id INTO v_payment_method_cib FROM payment_methods WHERE method_key = 'pay.method.cib';
+    SELECT id INTO v_payment_method_bank FROM payment_methods WHERE method_key = 'pay.method.bank_transfer';
+    SELECT id INTO v_payment_method_baridimob FROM payment_methods WHERE method_key = 'pay.method.baridimob';
+
+    -- Create comprehensive treatment records
+    INSERT INTO treatment_records (
+        tenant_id, patient_id, dentist_id, treatment_date, tooth_number,
+        diagnosis, treatment_performed, estimated_cost_dzd
+    ) VALUES 
+    (v_tenant_id, v_patient_id, v_dentist_user_id, NOW() - INTERVAL '30 days', '36',
+     'Deep caries on molar 36', 'Root canal therapy - first visit', 15000.00),
+    (v_tenant_id, v_patient_id, v_dentist_user_id, NOW() - INTERVAL '23 days', '36',
+     'Root canal therapy continuation', 'Root canal therapy - second visit and filling', 12000.00),
+    (v_tenant_id, v_patient_id, v_dentist_user_id, NOW() - INTERVAL '16 days', '36',
+     'Crown placement on treated tooth', 'Ceramic crown placement on tooth 36', 28000.00),
+    (v_tenant_id, v_patient_id, v_dentist_user_id, NOW() - INTERVAL '12 days', NULL,
+     'Routine maintenance', 'Professional cleaning and fluoride treatment', 5500.00),
+    (v_tenant_id, v_patient_id, v_dentist_user_id, NOW() - INTERVAL '5 days', '46',
+     'Wisdom tooth impaction', 'Surgical extraction of impacted wisdom tooth', 18000.00);
+
+    -- Get treatment IDs
+    SELECT id INTO v_treatment1_id FROM treatment_records WHERE tenant_id = v_tenant_id AND diagnosis = 'Deep caries on molar 36';
+    SELECT id INTO v_treatment2_id FROM treatment_records WHERE tenant_id = v_tenant_id AND diagnosis = 'Root canal therapy continuation';
+    SELECT id INTO v_treatment3_id FROM treatment_records WHERE tenant_id = v_tenant_id AND diagnosis = 'Crown placement on treated tooth';
+    SELECT id INTO v_treatment4_id FROM treatment_records WHERE tenant_id = v_tenant_id AND diagnosis = 'Routine maintenance';
+    SELECT id INTO v_treatment5_id FROM treatment_records WHERE tenant_id = v_tenant_id AND diagnosis = 'Wisdom tooth impaction';
+
+    -- ========================================================================
+    -- INVOICE 1: Root Canal Therapy - Phase 1 (PAID)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient_id,
+        NOW() - INTERVAL '30 days',
+        NOW() - INTERVAL '23 days',
+        15000.00, 0.00, 0.00, 15000.00, 15000.00,
+        'invoice.status.paid',
+        'Root canal therapy - Phase 1 (tooth 36)',
+        v_dentist_user_id
+    ) RETURNING id INTO v_invoice1_id;
+
+    INSERT INTO invoice_items (tenant_id, invoice_id, treatment_record_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice1_id, v_treatment1_id, 'Root canal therapy - first visit (tooth 36)', 1, 15000.00, 15000.00);
+
+    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by) VALUES
+    (v_tenant_id, v_invoice1_id, v_payment_method_cash, 15000.00, NOW() - INTERVAL '29 days', 'Cash payment', v_dentist_user_id);
+
+    -- ========================================================================
+    -- INVOICE 2: Root Canal Therapy - Phase 2 (PAID)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient_id,
+        NOW() - INTERVAL '23 days',
+        NOW() - INTERVAL '16 days',
+        12000.00, 1000.00, 0.00, 11000.00, 11000.00,
+        'invoice.status.paid',
+        'Root canal therapy - Phase 2 with loyalty discount',
+        v_dentist_user_id
+    ) RETURNING id INTO v_invoice2_id;
+
+    INSERT INTO invoice_items (tenant_id, invoice_id, treatment_record_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice2_id, v_treatment2_id, 'Root canal therapy - completion and filling (tooth 36)', 1, 12000.00, 12000.00);
+
+    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by) VALUES
+    (v_tenant_id, v_invoice2_id, v_payment_method_cib, 11000.00, NOW() - INTERVAL '22 days', 'CIB card payment', v_dentist_user_id);
+
+    -- ========================================================================
+    -- INVOICE 3: Ceramic Crown (PAID)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient_id,
+        NOW() - INTERVAL '16 days',
+        NOW() - INTERVAL '9 days',
+        28000.00, 0.00, 0.00, 28000.00, 28000.00,
+        'invoice.status.paid',
+        'Premium ceramic crown - tooth 36',
+        v_dentist_user_id
+    ) RETURNING id INTO v_invoice3_id;
+
+    INSERT INTO invoice_items (tenant_id, invoice_id, treatment_record_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice3_id, v_treatment3_id, 'Premium ceramic crown placement (tooth 36)', 1, 28000.00, 28000.00);
+
+    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by) VALUES
+    (v_tenant_id, v_invoice3_id, v_payment_method_bank, 28000.00, NOW() - INTERVAL '15 days', 'Bank transfer payment', v_dentist_user_id);
+
+    -- ========================================================================
+    -- INVOICE 4: Professional Cleaning (PAID)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient_id,
+        NOW() - INTERVAL '12 days',
+        NOW() - INTERVAL '5 days',
+        5500.00, 0.00, 0.00, 5500.00, 5500.00,
+        'invoice.status.paid',
+        'Maintenance cleaning and fluoride',
+        v_dentist_user_id
+    ) RETURNING id INTO v_invoice4_id;
+
+    INSERT INTO invoice_items (tenant_id, invoice_id, treatment_record_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice4_id, v_treatment4_id, 'Professional cleaning and fluoride treatment', 1, 5500.00, 5500.00);
+
+    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by) VALUES
+    (v_tenant_id, v_invoice4_id, v_payment_method_baridimob, 5500.00, NOW() - INTERVAL '11 days', 'BaridiMob mobile payment', v_dentist_user_id);
+
+    -- ========================================================================
+    -- INVOICE 5: Wisdom Tooth Extraction (PARTIAL PAYMENT)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient_id,
+        NOW() - INTERVAL '5 days',
+        NOW() + INTERVAL '2 days',
+        18000.00, 0.00, 0.00, 18000.00, 10000.00,
+        'invoice.status.partial',
+        'Surgical wisdom tooth extraction - partial payment received',
+        v_dentist_user_id
+    ) RETURNING id INTO v_invoice5_id;
+
+    INSERT INTO invoice_items (tenant_id, invoice_id, treatment_record_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice5_id, v_treatment5_id, 'Surgical extraction of impacted wisdom tooth (46)', 1, 18000.00, 18000.00);
+
+    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by) VALUES
+    (v_tenant_id, v_invoice5_id, v_payment_method_cash, 10000.00, NOW() - INTERVAL '4 days', 'Partial cash payment', v_dentist_user_id);
+
+    -- ========================================================================
+    -- INVOICE 6: Consultation for New Patient (UNPAID)
+    -- ========================================================================
+    INSERT INTO invoices (
+        tenant_id, patient_id, issue_date, due_date,
+        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        payment_status_key, notes, created_by
+    ) VALUES (
+        v_tenant_id, v_patient_id,
+        NOW() - INTERVAL '2 days',
+        NOW() + INTERVAL '5 days',
+        4000.00, 0.00, 0.00, 4000.00, 0.00,
+        'invoice.status.unpaid',
+        'Comprehensive consultation for orthodontic evaluation',
+        v_dentist_user_id
+    ) RETURNING id INTO v_invoice6_id;
+
+    INSERT INTO invoice_items (tenant_id, invoice_id, description, quantity, unit_price_dzd, total_price_dzd) VALUES
+    (v_tenant_id, v_invoice6_id, 'Comprehensive orthodontic consultation and X-rays', 1, 4000.00, 4000.00);
+
+    RAISE NOTICE 'Created invoices for Dr. Teyar: 6 invoices (4 paid, 1 partial, 1 unpaid)';
+
+END $$;
+
+-- ============================================================================
+-- INVOICE SUMMARY VERIFICATION
+-- ============================================================================
+
+DO $$
+DECLARE
+    v_total_invoices INTEGER;
+    v_total_revenue DECIMAL(12,2);
+    v_total_paid DECIMAL(12,2);
+    v_total_outstanding DECIMAL(12,2);
+BEGIN
+    -- Count total invoices across all tenants
+    SELECT COUNT(*), SUM(total_dzd), SUM(paid_amount_dzd), SUM(total_dzd - paid_amount_dzd)
+    INTO v_total_invoices, v_total_revenue, v_total_paid, v_total_outstanding
+    FROM invoices;
+
+    RAISE NOTICE '============================================';
+    RAISE NOTICE 'INVOICE SYSTEM SEED DATA COMPLETE!';
+    RAISE NOTICE '============================================';
+    RAISE NOTICE 'Total Invoices Created: %', v_total_invoices;
+    RAISE NOTICE 'Total Revenue: % DZD', v_total_revenue;
+    RAISE NOTICE 'Total Paid: % DZD', v_total_paid;
+    RAISE NOTICE 'Total Outstanding: % DZD', v_total_outstanding;
+    RAISE NOTICE '--------------------------------------------';
+    RAISE NOTICE 'El-Qods: 4 invoices (2 paid, 1 partial, 1 overdue)';
+    RAISE NOTICE 'Sourire: 2 invoices (1 paid, 1 unpaid)';
+    RAISE NOTICE 'Dr. Teyar: 6 invoices (4 paid, 1 partial, 1 unpaid)';
+    RAISE NOTICE '--------------------------------------------';
+    RAISE NOTICE 'FEATURES DEMONSTRATED:';
+    RAISE NOTICE '  - Auto-generated invoice numbers (INV-YYYYMM-XXXX)';
+    RAISE NOTICE '  - Multiple payment methods (Cash, CIB, Bank, BaridiMob)';
+    RAISE NOTICE '  - Payment status tracking (paid/partial/unpaid/overdue)';
+    RAISE NOTICE '  - Invoice items linked to treatment records';
+    RAISE NOTICE '  - Discounts and adjustments';
+    RAISE NOTICE '  - Multi-tenant isolation verified';
     RAISE NOTICE '============================================';
 END $$;

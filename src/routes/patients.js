@@ -143,7 +143,6 @@ router.post('/',
 
       let nextNum = 1;
       if (highestCodeResult) {
-        // Extract the number from the highest code (e.g., "PAT-2024-0005" -> 5)
         const match = highestCodeResult.patient_code.match(/PAT-\d{4}-(\d{4})$/);
         if (match) {
           nextNum = parseInt(match[1]) + 1;
