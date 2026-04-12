@@ -456,6 +456,64 @@ router.post('/categories',
   }
 );
 
+// Update inventory category (tenant-specific)
+router.patch('/categories/:id',
+  body('category_key').optional().trim().notEmpty(),
+  body('description').optional().trim(),
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
+
+    try {
+      const { category_key, parent_id, description, is_active } = req.body;
+
+      const currentCategory = await db
+        .selectFrom('inventory_categories')
+        .selectAll()
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (!currentCategory) {
+        return res.status(404).json({ error: 'inventory.error.category_not_found' });
+      }
+
+      const updateData = {};
+      if (category_key !== undefined) updateData.category_key = category_key;
+      // Allow parent_id to be set to null if explicitly provided
+      if (parent_id !== undefined) updateData.parent_id = parent_id;
+      if (description !== undefined) updateData.description = description;
+      if (is_active !== undefined) updateData.is_active = is_active;
+      updateData.updated_at = new Date();
+
+      const category = await db
+        .updateTable('inventory_categories')
+        .set(updateData)
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .returningAll()
+        .executeTakeFirst();
+
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'inventory_categories',
+          entityId: category.id,
+          tenantId: req.tenantId,
+          oldValues: currentCategory,
+          newValues: category
+        });
+      }
+
+      res.json(category);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // ============================================================================
 // SUPPLIERS ROUTES
 // ============================================================================
@@ -570,7 +628,6 @@ router.post('/suppliers',
         .returningAll()
         .executeTakeFirst();
 
-      // Log the creation
       if (req.audit) {
         await req.audit.log({
           action: 'CREATE',
@@ -582,6 +639,69 @@ router.post('/suppliers',
       }
 
       res.status(201).json(supplier);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Update supplier
+router.patch('/suppliers/:id',
+  body('name').optional().trim().notEmpty(),
+  body('phone').optional().matches(/^\+213[0-9]{9}$/),
+  body('email').optional().isEmail(),
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
+
+    try {
+      const { name, contact_person, email, phone, address, tax_id, payment_terms_days, notes, status_key } = req.body;
+
+      const currentSupplier = await db
+        .selectFrom('suppliers')
+        .selectAll()
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (!currentSupplier) {
+        return res.status(404).json({ error: 'inventory.error.supplier_not_found' });
+      }
+
+      const updateData = {};
+      if (name !== undefined) updateData.name = name;
+      if (contact_person !== undefined) updateData.contact_person = contact_person;
+      if (email !== undefined) updateData.email = email;
+      if (phone !== undefined) updateData.phone = phone;
+      if (address !== undefined) updateData.address = address;
+      if (tax_id !== undefined) updateData.tax_id = tax_id;
+      if (payment_terms_days !== undefined) updateData.payment_terms_days = payment_terms_days;
+      if (notes !== undefined) updateData.notes = notes;
+      if (status_key !== undefined) updateData.status_key = status_key;
+      updateData.updated_at = new Date();
+
+      const supplier = await db
+        .updateTable('suppliers')
+        .set(updateData)
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .returningAll()
+        .executeTakeFirst();
+
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'suppliers',
+          entityId: supplier.id,
+          tenantId: req.tenantId,
+          oldValues: currentSupplier,
+          newValues: supplier
+        });
+      }
+
+      res.json(supplier);
     } catch (error) {
       next(error);
     }
