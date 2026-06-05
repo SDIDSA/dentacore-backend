@@ -330,12 +330,21 @@ router.patch('/:id/status',
 router.delete('/:id',
   param('id').isUUID(),
   async (req, res, next) => {
+<<<<<<< HEAD
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
+=======
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
+
+    try {
+>>>>>>> dc02dd3 (update inventory and appointments routes)
       const appointment = await db
         .selectFrom('appointments')
         .selectAll()
@@ -347,22 +356,34 @@ router.delete('/:id',
         return res.status(404).json({ error: 'appointment.error.not_found' });
       }
 
+      // Check for invoices before deleting
+      const hasInvoices = await db
+        .selectFrom('invoices')
+        .select('id')
+        .where('appointment_id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (hasInvoices) {
+        return res.status(400).json({ error: 'appointment.error.has_invoices' });
+      }
+
       await db
         .deleteFrom('appointments')
         .where('id', '=', req.params.id)
         .where('tenant_id', '=', req.tenantId)
         .execute();
 
-      // Log the deletion
       await req.audit.log({
         action: 'DELETE',
         entityType: 'appointments',
-        entityId: req.params.id,
+        entityId: appointment.id,
         tenantId: req.tenantId,
-        oldValues: appointment
+        oldValues: appointment,
+        newValues: null
       }, db);
 
-      res.status(204).end();
+      res.json({ message: 'appointment.deleted' });
     } catch (error) {
       next(error);
     }
