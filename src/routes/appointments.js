@@ -330,21 +330,12 @@ router.patch('/:id/status',
 router.delete('/:id',
   param('id').isUUID(),
   async (req, res, next) => {
-<<<<<<< HEAD
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
-      }
-
-=======
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ error: 'validation.error', details: errors.array() });
     }
 
     try {
->>>>>>> dc02dd3 (update inventory and appointments routes)
       const appointment = await db
         .selectFrom('appointments')
         .selectAll()
