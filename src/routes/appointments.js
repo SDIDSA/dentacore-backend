@@ -326,4 +326,47 @@ router.patch('/:id/status',
   }
 );
 
+// Delete appointment
+router.delete('/:id',
+  param('id').isUUID(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+      }
+
+      const appointment = await db
+        .selectFrom('appointments')
+        .selectAll()
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (!appointment) {
+        return res.status(404).json({ error: 'appointment.error.not_found' });
+      }
+
+      await db
+        .deleteFrom('appointments')
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .execute();
+
+      // Log the deletion
+      await req.audit.log({
+        action: 'DELETE',
+        entityType: 'appointments',
+        entityId: req.params.id,
+        tenantId: req.tenantId,
+        oldValues: appointment
+      }, db);
+
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 module.exports = router;

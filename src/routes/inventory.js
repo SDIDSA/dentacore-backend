@@ -1,5 +1,5 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
 const db = require('../config/database');
@@ -414,6 +414,39 @@ router.get('/categories', async (req, res, next) => {
   }
 });
 
+// Get inventory category by ID
+router.get('/categories/:id', async (req, res, next) => {
+  try {
+    const category = await db
+      .selectFrom('inventory_categories')
+      .leftJoin('inventory_categories as parent', 'inventory_categories.parent_id', 'parent.id')
+      .select([
+        'inventory_categories.id',
+        'inventory_categories.category_key',
+        'inventory_categories.parent_id',
+        'inventory_categories.description',
+        'inventory_categories.is_active',
+        'inventory_categories.created_at',
+        'parent.category_key as parent_category_key',
+        sql`CASE WHEN inventory_categories.tenant_id IS NULL THEN true ELSE false END`.as('is_global')
+      ])
+      .where('inventory_categories.id', '=', req.params.id)
+      .where((eb) => eb.or([
+        eb('inventory_categories.tenant_id', 'is', null),
+        eb('inventory_categories.tenant_id', '=', req.tenantId)
+      ]))
+      .executeTakeFirst();
+
+    if (!category) {
+      return res.status(404).json({ error: 'not_found' });
+    }
+
+    res.json(category);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Create inventory category (tenant-specific)
 router.post('/categories',
   body('category_key').trim().notEmpty(),
@@ -508,6 +541,75 @@ router.patch('/categories/:id',
       }
 
       res.json(category);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Delete inventory category (tenant-specific only)
+router.delete('/categories/:id',
+  param('id').isUUID(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+      }
+
+      const category = await db
+        .selectFrom('inventory_categories')
+        .selectAll()
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId) // Only allow deleting tenant-specific categories
+        .executeTakeFirst();
+
+      if (!category) {
+        return res.status(404).json({ error: 'inventory.error.category_not_found' });
+      }
+
+      // Check if category is being used by any items
+      const hasItems = await db
+        .selectFrom('inventory_items')
+        .select('id')
+        .where('category_id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (hasItems) {
+        return res.status(400).json({ error: 'inventory.error.category_has_items' });
+      }
+
+      // Check if category has sub-categories
+      const hasSubCategories = await db
+        .selectFrom('inventory_categories')
+        .select('id')
+        .where('parent_id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (hasSubCategories) {
+        return res.status(400).json({ error: 'inventory.error.category_has_subcategories' });
+      }
+
+      await db
+        .deleteFrom('inventory_categories')
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .execute();
+
+      // Log the deletion
+      if (req.audit) {
+        await req.audit.log({
+          action: 'DELETE',
+          entityType: 'inventory_categories',
+          entityId: req.params.id,
+          tenantId: req.tenantId,
+          oldValues: category
+        });
+      }
+
+      res.status(204).end();
     } catch (error) {
       next(error);
     }
