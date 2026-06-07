@@ -66,7 +66,7 @@ router.get('/:id',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
-      const treatment = await db
+      let treatment = await db
         .selectFrom('treatment_records')
         .innerJoin('patients', 'treatment_records.patient_id', 'patients.id')
         .innerJoin('users', 'treatment_records.dentist_id', 'users.id')
@@ -93,7 +93,41 @@ router.get('/:id',
         .executeTakeFirst();
 
       if (!treatment) {
-        return res.status(404).json({ error: 'treatment.error.not_found' });
+        treatment = (await db
+          .selectFrom('audit_logs')
+          .select('old_values')
+          .where('entity_type', '=', 'treatment_records')
+          .where('action', '=', 'DELETE')
+          .where('entity_id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .executeTakeFirst())?.old_values;
+
+        if (!treatment) {
+          return res.status(404).json({ error: 'treatment.error.not_found' });
+        }
+
+        if (treatment.patient_id) {
+          const patient = await db
+            .selectFrom('patients')
+            .select(['full_name', 'patient_code'])
+            .where('id', '=', treatment.patient_id)
+            .executeTakeFirst();
+          if (patient) {
+            treatment.patient_name = patient.full_name;
+            treatment.patient_code = patient.patient_code;
+          }
+        }
+
+        if (treatment.dentist_id) {
+          const dentist = await db
+            .selectFrom('users')
+            .select('full_name')
+            .where('id', '=', treatment.dentist_id)
+            .executeTakeFirst();
+          if (dentist) {
+            treatment.dentist_name = dentist.full_name;
+          }
+        }
       }
 
       res.json(treatment);

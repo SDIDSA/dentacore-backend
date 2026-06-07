@@ -72,7 +72,7 @@ router.get('/:id',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
-      const payment = await db
+      let payment = await db
         .selectFrom('payments')
         .leftJoin('payment_methods', 'payments.payment_method_id', 'payment_methods.id')
         .leftJoin('invoices', 'payments.invoice_id', 'invoices.id')
@@ -91,7 +91,18 @@ router.get('/:id',
         .executeTakeFirst();
 
       if (!payment) {
-        return res.status(404).json({ error: 'payment.error.not_found' });
+        payment = (await db
+          .selectFrom('audit_logs')
+          .select('old_values')
+          .where('entity_type', '=', 'payments')
+          .where('action', '=', 'DELETE')
+          .where('entity_id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .executeTakeFirst())?.old_values;
+
+        if (!payment) {
+          return res.status(404).json({ error: 'payment.error.not_found' });
+        }
       }
 
       res.json(payment);

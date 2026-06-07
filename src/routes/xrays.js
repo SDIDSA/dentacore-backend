@@ -124,7 +124,7 @@ router.get('/:id',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
-      const xray = await db
+      let xray = await db
         .selectFrom('xrays')
         .innerJoin('media', 'xrays.media_id', 'media.id')
         .innerJoin('patients', 'xrays.patient_id', 'patients.id')
@@ -150,7 +150,18 @@ router.get('/:id',
         .executeTakeFirst();
 
       if (!xray) {
-        return res.status(404).json({ error: 'xray.error.not_found' });
+        xray = (await db
+          .selectFrom('audit_logs')
+          .select('old_values')
+          .where('entity_type', '=', 'xrays')
+          .where('action', '=', 'DELETE')
+          .where('entity_id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .executeTakeFirst())?.old_values;
+
+        if (!xray) {
+          return res.status(404).json({ error: 'xray.error.not_found' });
+        }
       }
 
       res.json(xray);
@@ -178,7 +189,7 @@ router.post('/upload',
         return res.status(400).json({ error: 'xray.error.no_file' });
       }
 
-      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'];
       if (!allowedMimeTypes.includes(req.file.mimetype)) {
         return res.status(400).json({ error: 'xray.error.invalid_mime_type' });
       }

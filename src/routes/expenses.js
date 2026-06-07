@@ -72,7 +72,7 @@ router.get('/:id',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
-      const expense = await db
+      let expense = await db
         .selectFrom('expenses')
         .leftJoin('payment_methods', 'expenses.payment_method_id', 'payment_methods.id')
         .leftJoin('suppliers', 'expenses.supplier_id', 'suppliers.id')
@@ -105,7 +105,18 @@ router.get('/:id',
         .executeTakeFirst();
 
       if (!expense) {
-        return res.status(404).json({ error: 'expense.error.not_found' });
+        expense = (await db
+          .selectFrom('audit_logs')
+          .select('old_values')
+          .where('entity_type', '=', 'expenses')
+          .where('action', '=', 'DELETE')
+          .where('entity_id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .executeTakeFirst())?.old_values;
+
+        if (!expense) {
+          return res.status(404).json({ error: 'expense.error.not_found' });
+        }
       }
 
       res.json(expense);

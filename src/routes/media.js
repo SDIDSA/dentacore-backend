@@ -77,7 +77,7 @@ router.get('/:id',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
-      const media = await db
+      let media = await db
         .selectFrom('media')
         .selectAll()
         .where('id', '=', req.params.id)
@@ -85,7 +85,18 @@ router.get('/:id',
         .executeTakeFirst();
 
       if (!media) {
-        return res.status(404).json({ error: 'media.error.not_found' });
+        media = (await db
+          .selectFrom('audit_logs')
+          .select('old_values')
+          .where('entity_type', '=', 'media')
+          .where('action', '=', 'DELETE')
+          .where('entity_id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .executeTakeFirst())?.old_values;
+
+        if (!media) {
+          return res.status(404).json({ error: 'media.error.not_found' });
+        }
       }
 
       res.json(media);

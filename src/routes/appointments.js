@@ -123,7 +123,7 @@ router.get('/:id',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
-      const appointment = await db
+      let appointment = await db
         .selectFrom('appointments')
         .innerJoin('patients', 'appointments.patient_id', 'patients.id')
         .innerJoin('users', 'appointments.dentist_id', 'users.id')
@@ -146,7 +146,18 @@ router.get('/:id',
         .executeTakeFirst();
 
       if (!appointment) {
-        return res.status(404).json({ error: 'appointment.error.not_found' });
+        appointment = (await db
+          .selectFrom('audit_logs')
+          .select('old_values')
+          .where('entity_type', '=', 'appointments')
+          .where('action', '=', 'DELETE')
+          .where('entity_id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .executeTakeFirst())?.old_values;
+
+        if (!appointment) {
+          return res.status(404).json({ error: 'appointment.error.not_found' });
+        }
       }
 
       res.json(appointment);

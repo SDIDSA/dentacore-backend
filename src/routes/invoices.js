@@ -55,7 +55,7 @@ router.get('/:id',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
-      const invoice = await db
+      let invoice = await db
         .selectFrom('invoices')
         .innerJoin('patients', 'invoices.patient_id', 'patients.id')
         .select([
@@ -84,7 +84,18 @@ router.get('/:id',
         .executeTakeFirst();
 
       if (!invoice) {
-        return res.status(404).json({ error: 'invoice.error.not_found' });
+        invoice = (await db
+          .selectFrom('audit_logs')
+          .select('old_values')
+          .where('entity_type', '=', 'invoices')
+          .where('action', '=', 'DELETE')
+          .where('entity_id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .executeTakeFirst())?.old_values;
+
+        if (!invoice) {
+          return res.status(404).json({ error: 'invoice.error.not_found' });
+        }
       }
 
       // Get invoice line items

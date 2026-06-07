@@ -620,6 +620,42 @@ describe('POST /api/v1/inventory/suppliers', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────
+// X-Rays
+// ────────────────────────────────────────────────────────────────────
+
+describe('DELETE /api/v1/xrays/:id', () => {
+  it('should upload and then delete an xray', async () => {
+    const patRes = await request(app)
+      .get('/api/v1/patients')
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(patRes.statusCode).toBe(200);
+    expect(patRes.body.length).toBeGreaterThan(0);
+    const patientId = patRes.body[0];
+
+    const fakeImage = Buffer.from(
+      '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AKwA=', 'base64'
+    );
+
+    const upload = await request(app)
+      .post('/api/v1/xrays/upload')
+      .set('Authorization', `Bearer ${authToken}`)
+      .attach('file', fakeImage, 'test.jpg')
+      .field('patient_id', patientId)
+      .field('description', 'Test xray for delete');
+
+    expect(upload.statusCode).toBe(201);
+    expect(upload.body.id).toBeDefined();
+    const xrayId = upload.body.id;
+
+    const del = await request(app)
+      .delete(`/api/v1/xrays/${xrayId}`)
+      .set('Authorization', `Bearer ${authToken}`);
+
+    expect(del.statusCode).toBe(204);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
 // Protected Endpoints (no auth)
 // ────────────────────────────────────────────────────────────────────
 

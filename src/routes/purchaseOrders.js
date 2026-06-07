@@ -61,7 +61,7 @@ router.get('/:id',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
-      const order = await db
+      let order = await db
         .selectFrom('purchase_orders')
         .leftJoin('suppliers', 'purchase_orders.supplier_id', 'suppliers.id')
         .leftJoin('users as creator', 'purchase_orders.created_by', 'creator.id')
@@ -93,7 +93,18 @@ router.get('/:id',
         .executeTakeFirst();
 
       if (!order) {
-        return res.status(404).json({ error: 'po.error.not_found' });
+        order = (await db
+          .selectFrom('audit_logs')
+          .select('old_values')
+          .where('entity_type', '=', 'purchase_orders')
+          .where('action', '=', 'DELETE')
+          .where('entity_id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .executeTakeFirst())?.old_values;
+
+        if (!order) {
+          return res.status(404).json({ error: 'po.error.not_found' });
+        }
       }
 
       const items = await db

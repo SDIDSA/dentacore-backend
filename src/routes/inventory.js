@@ -59,7 +59,7 @@ router.get('/items', async (req, res, next) => {
 // Get inventory item by ID
 router.get('/items/:id', async (req, res, next) => {
   try {
-    const item = await db
+    let item = await db
       .selectFrom('inventory_items')
       .leftJoin('inventory_categories', 'inventory_items.category_id', 'inventory_categories.id')
       .leftJoin('users as created_user', 'inventory_items.created_by', 'created_user.id')
@@ -90,7 +90,18 @@ router.get('/items/:id', async (req, res, next) => {
       .executeTakeFirst();
 
     if (!item) {
-      return res.status(404).json({ error: 'inventory.error.item_not_found' });
+      item = (await db
+        .selectFrom('audit_logs')
+        .select('old_values')
+        .where('entity_type', '=', 'inventory_items')
+        .where('action', '=', 'DELETE')
+        .where('entity_id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst())?.old_values;
+
+      if (!item) {
+        return res.status(404).json({ error: 'inventory.error.item_not_found' });
+      }
     }
 
     res.json(item);
@@ -450,7 +461,7 @@ router.get('/categories', async (req, res, next) => {
 // Get inventory category by ID
 router.get('/categories/:id', async (req, res, next) => {
   try {
-    const category = await db
+    let category = await db
       .selectFrom('inventory_categories')
       .leftJoin('inventory_categories as parent', 'inventory_categories.parent_id', 'parent.id')
       .select([
@@ -471,7 +482,18 @@ router.get('/categories/:id', async (req, res, next) => {
       .executeTakeFirst();
 
     if (!category) {
-      return res.status(404).json({ error: 'not_found' });
+      category = (await db
+        .selectFrom('audit_logs')
+        .select('old_values')
+        .where('entity_type', '=', 'inventory_categories')
+        .where('action', '=', 'DELETE')
+        .where('entity_id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst())?.old_values;
+
+      if (!category) {
+        return res.status(404).json({ error: 'not_found' });
+      }
     }
 
     res.json(category);
@@ -692,7 +714,7 @@ router.get('/suppliers', async (req, res, next) => {
 // Get supplier by ID
 router.get('/suppliers/:id', async (req, res, next) => {
   try {
-    const supplier = await db
+    let supplier = await db
       .selectFrom('suppliers')
       .leftJoin('wilayas', 'suppliers.wilaya_id', 'wilayas.id')
       .leftJoin('users as created_user', 'suppliers.created_by', 'created_user.id')
@@ -719,7 +741,18 @@ router.get('/suppliers/:id', async (req, res, next) => {
       .executeTakeFirst();
 
     if (!supplier) {
-      return res.status(404).json({ error: 'inventory.error.supplier_not_found' });
+      supplier = (await db
+        .selectFrom('audit_logs')
+        .select('old_values')
+        .where('entity_type', '=', 'suppliers')
+        .where('action', '=', 'DELETE')
+        .where('entity_id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst())?.old_values;
+
+      if (!supplier) {
+        return res.status(404).json({ error: 'inventory.error.supplier_not_found' });
+      }
     }
 
     res.json(supplier);
