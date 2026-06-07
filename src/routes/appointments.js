@@ -1,5 +1,5 @@
 const express = require('express');
-const { body, param, validationResult } = require('express-validator');
+const { body, param, query, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
 const db = require('../config/database');
@@ -67,8 +67,8 @@ router.get('/', async (req, res, next) => {
 
 // Get appointments between start and end dates (inclusive)
 router.get('/range',
-  param('start_date').isISO8601(),
-  param('end_date').isISO8601(),
+  query('start_date').isISO8601(),
+  query('end_date').isISO8601(),
   async (req, res, next) => {
     try {
       const { start_date, end_date, dentist_id, patient_id, status_key } = req.query;
@@ -188,13 +188,15 @@ router.post('/',
         .executeTakeFirst();
 
       // Log the appointment creation
-      await req.audit.log({
-        action: 'CREATE',
-        entityType: 'appointments',
-        entityId: appointment.id,
-        tenantId: req.tenantId,
-        newValues: appointment
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'CREATE',
+          entityType: 'appointments',
+          entityId: appointment.id,
+          tenantId: req.tenantId,
+          newValues: appointment
+        }, db);
+      }
 
       res.status(201).json(appointment);
     } catch (error) {
@@ -256,14 +258,16 @@ router.patch('/:id',
         .executeTakeFirst();
 
       // Log the appointment update
-      await req.audit.log({
-        action: 'UPDATE',
-        entityType: 'appointments',
-        entityId: appointment.id,
-        tenantId: req.tenantId,
-        oldValues: currentAppointment,
-        newValues: appointment
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'appointments',
+          entityId: appointment.id,
+          tenantId: req.tenantId,
+          oldValues: currentAppointment,
+          newValues: appointment
+        }, db);
+      }
 
       res.json(appointment);
     } catch (error) {
@@ -310,14 +314,16 @@ router.patch('/:id/status',
         .executeTakeFirst();
 
       // Log the status update
-      await req.audit.log({
-        action: 'UPDATE',
-        entityType: 'appointments',
-        entityId: appointment.id,
-        tenantId: req.tenantId,
-        oldValues: { status_key: currentAppointment.status_key },
-        newValues: { status_key: appointment.status_key }
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'appointments',
+          entityId: appointment.id,
+          tenantId: req.tenantId,
+          oldValues: { status_key: currentAppointment.status_key },
+          newValues: { status_key: appointment.status_key }
       }, db);
+      }
 
       res.json(appointment);
     } catch (error) {
@@ -347,12 +353,14 @@ router.delete('/:id',
         return res.status(404).json({ error: 'appointment.error.not_found' });
       }
 
-      // Check for invoices before deleting
+      // Check for invoices before deleting (via treatment_records → invoice_items)
       const hasInvoices = await db
-        .selectFrom('invoices')
-        .select('id')
-        .where('appointment_id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
+        .selectFrom('treatment_records')
+        .innerJoin('invoice_items', 'invoice_items.treatment_record_id', 'treatment_records.id')
+        .innerJoin('invoices', 'invoices.id', 'invoice_items.invoice_id')
+        .select('invoices.id')
+        .where('treatment_records.appointment_id', '=', req.params.id)
+        .where('invoices.tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (hasInvoices) {
@@ -365,14 +373,16 @@ router.delete('/:id',
         .where('tenant_id', '=', req.tenantId)
         .execute();
 
-      await req.audit.log({
-        action: 'DELETE',
-        entityType: 'appointments',
-        entityId: appointment.id,
-        tenantId: req.tenantId,
-        oldValues: appointment,
-        newValues: null
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'DELETE',
+          entityType: 'appointments',
+          entityId: appointment.id,
+          tenantId: req.tenantId,
+          oldValues: appointment,
+          newValues: null
+        }, db);
+      }
 
       res.json({ message: 'appointment.deleted' });
     } catch (error) {

@@ -48,7 +48,7 @@ async function verifyJWTFlow() {
             is_active: true
         }).returning('id').executeTakeFirst()).id;
 
-        await db.connection().execute(async (trx) => {
+        await db.transaction().execute(async (trx) => {
             await sql`SELECT set_config('app.current_tenant', ${tenant_id}::text, true)`.execute(trx);
             const user = await trx.insertInto('users').values({
                 tenant_id: tenant_id,

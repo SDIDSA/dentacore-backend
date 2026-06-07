@@ -13,6 +13,10 @@ const inventoryRoutes = require('./routes/inventory');
 const treatmentRoutes = require('./routes/treatments');
 const paymentRoutes = require('./routes/payments');
 const invoiceRoutes = require('./routes/invoices');
+const expenseRoutes = require('./routes/expenses');
+const purchaseOrderRoutes = require('./routes/purchaseOrders');
+const mediaRoutes = require('./routes/media');
+const xrayRoutes = require('./routes/xrays');
 
 const auditLogsRoutes = require('./routes/auditLogs');
 
@@ -43,6 +47,10 @@ app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/treatments', treatmentRoutes);
 app.use('/api/v1/payments', paymentRoutes);
 app.use('/api/v1/invoices', invoiceRoutes);
+app.use('/api/v1/expenses', expenseRoutes);
+app.use('/api/v1/purchase-orders', purchaseOrderRoutes);
+app.use('/api/v1/media', mediaRoutes);
+app.use('/api/v1/xrays', xrayRoutes);
 
 app.use('/api/v1/audit-logs', auditLogsRoutes);
 

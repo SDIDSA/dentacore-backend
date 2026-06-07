@@ -8,6 +8,13 @@ const router = express.Router();
 
 router.use(authenticate);
 
+const VALID_TOOTH_NUMBERS = [
+  '11', '12', '13', '14', '15', '16', '17', '18',
+  '21', '22', '23', '24', '25', '26', '27', '28',
+  '31', '32', '33', '34', '35', '36', '37', '38',
+  '41', '42', '43', '44', '45', '46', '47', '48'
+];
+
 // Get treatment IDs with optional filters
 router.get('/', async (req, res, next) => {
   try {
@@ -98,15 +105,15 @@ router.get('/:id',
 
 // Create treatment record
 router.post('/',
-  body('patient_id').isUUID(),
-  body('dentist_id').isUUID(),
-  body('treatment_date').isISO8601(),
+  body('patient_id').optional().isUUID(),
+  body('dentist_id').optional().isUUID(),
+  body('treatment_date').optional().isISO8601(),
   body('diagnosis').notEmpty(),
   body('treatment_performed').notEmpty(),
   body('estimated_cost_dzd').isFloat({ min: 0 }),
   body('appointment_id').optional().isUUID(),
   body('category_id').optional().isUUID(),
-  body('tooth_number').optional().matches(/^[0-9]{1,2}$|^[1-4][1-8]$/),
+  body('tooth_number').optional().isIn(VALID_TOOTH_NUMBERS),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -135,13 +142,15 @@ router.post('/',
         .executeTakeFirst();
 
       // Log the treatment creation
-      await req.audit.log({
-        action: 'CREATE',
-        entityType: 'treatment_records',
-        entityId: treatment.id,
-        tenantId: req.tenantId,
-        newValues: treatment
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'CREATE',
+          entityType: 'treatment_records',
+          entityId: treatment.id,
+          tenantId: req.tenantId,
+          newValues: treatment
+        }, db);
+      }
 
       res.status(201).json(treatment);
     } catch (error) {
@@ -158,7 +167,7 @@ router.patch('/:id',
   body('treatment_date').optional().isISO8601(),
   body('appointment_id').optional().isUUID(),
   body('category_id').optional().isUUID(),
-  body('tooth_number').optional().matches(/^[0-9]{1,2}$|^[1-4][1-8]$/),
+  body('tooth_number').optional().isIn(VALID_TOOTH_NUMBERS),
   body('diagnosis').optional().notEmpty(),
   body('treatment_performed').optional().notEmpty(),
   body('estimated_cost_dzd').optional().isFloat({ min: 0 }),
@@ -206,14 +215,16 @@ router.patch('/:id',
         .executeTakeFirst();
 
       // Log the treatment update
-      await req.audit.log({
-        action: 'UPDATE',
-        entityType: 'treatment_records',
-        entityId: treatment.id,
-        tenantId: req.tenantId,
-        oldValues: currentTreatment,
-        newValues: treatment
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'treatment_records',
+          entityId: treatment.id,
+          tenantId: req.tenantId,
+          oldValues: currentTreatment,
+          newValues: treatment
+        }, db);
+      }
 
       res.json(treatment);
     } catch (error) {
@@ -250,13 +261,15 @@ router.delete('/:id',
         .execute();
 
       // Log the deletion
-      await req.audit.log({
-        action: 'DELETE',
-        entityType: 'treatment_records',
-        entityId: req.params.id,
-        tenantId: req.tenantId,
-        oldValues: treatment
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'DELETE',
+          entityType: 'treatment_records',
+          entityId: req.params.id,
+          tenantId: req.tenantId,
+          oldValues: treatment
+        }, db);
+      }
 
       res.status(204).end();
     } catch (error) {

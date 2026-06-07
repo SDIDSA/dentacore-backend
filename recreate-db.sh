@@ -23,7 +23,7 @@ echo
 
 echo "[1/6] Creating dentacore user (if not exists)..."
 export PGPASSWORD="$POSTGRES_PASSWORD"
-if $PSQL_PATH -U postgres -c "CREATE USER dentacore WITH PASSWORD '$DENTACORE_PASSWORD';" 2>/dev/null; then
+if $PSQL_PATH -U postgres -h localhost -c "CREATE USER dentacore WITH PASSWORD '$DENTACORE_PASSWORD';" 2>/dev/null; then
     echo "User 'dentacore' created successfully"
 else
     echo "User 'dentacore' already exists or creation failed - continuing..."
@@ -34,7 +34,6 @@ echo "[2/6] Dropping existing database..."
 export PGPASSWORD="$POSTGRES_PASSWORD"
 if ! $PSQL_PATH -U postgres -h localhost -c "DROP DATABASE IF EXISTS dentacore;"; then
     echo "ERROR: Failed to drop database"
-    echo "Try running: sudo -u postgres ./recreate-db.sh"
     exit 1
 fi
 
@@ -57,7 +56,7 @@ fi
 echo
 echo "[5/6] Executing database schema..."
 export PGPASSWORD="$DENTACORE_PASSWORD"
-if ! $PSQL_PATH -h localhost -U dentacore -d dentacore -f db.sql; then
+if ! $PSQL_PATH -U dentacore -h localhost -d dentacore -f db.sql; then
     echo "ERROR: Failed to execute database schema"
     echo "Check if db.sql file exists and is readable"
     exit 1
@@ -66,7 +65,7 @@ fi
 echo
 echo "[6/6] Executing seed data..."
 export PGPASSWORD="$DENTACORE_PASSWORD"
-if ! $PSQL_PATH -h localhost -U dentacore -d dentacore -f seed.sql; then
+if ! $PSQL_PATH -U dentacore -h localhost -d dentacore -f seed.sql; then
     echo "ERROR: Failed to execute seed data"
     echo "Check if seed.sql file exists and is readable"
     exit 1

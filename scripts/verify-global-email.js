@@ -36,7 +36,7 @@ async function verifyGlobalEmail() {
         const password_hash = '$2a$12$K./z.z.z.z.z.z.z.z.z.z.z.z.z.z.z.z.z.z.z'; // Fake hash
 
         // We need to bypass RLS to insert users or use set_tenant_context
-        await db.connection().execute(async (trx) => {
+            await db.transaction().execute(async (trx) => {
             await sql`SELECT set_config('app.current_tenant', ${tenantA_id}::text, true)`.execute(trx);
 
             await trx.insertInto('users').values({
@@ -61,7 +61,7 @@ async function verifyGlobalEmail() {
         // 4. Test Global Uniqueness (Try creating same email in Tenant B)
         console.log('Testing Global Uniqueness (Expect Failure)...');
         try {
-            await db.connection().execute(async (trx) => {
+        await db.transaction().execute(async (trx) => {
                 await sql`SELECT set_config('app.current_tenant', ${tenantB_id}::text, true)`.execute(trx);
 
                 await trx.insertInto('users').values({

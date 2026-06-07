@@ -1,26 +1,36 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
-const { sql } = require('kysely');
 const db = require('../config/database');
 
 const router = express.Router();
 
 router.use(authenticate);
 
+const VALID_METHOD_KEYS = [
+  'pay.method.cash', 'pay.method.cib', 'pay.method.baridimob',
+  'pay.method.edahabia', 'pay.method.bank_transfer', 'pay.method.check',
+  'pay.method.satim'
+];
+
+async function resolvePaymentMethodId(key) {
+  const row = await db
+    .selectFrom('payment_methods')
+    .select('id')
+    .where('method_key', '=', key)
+    .executeTakeFirst();
+  return row ? row.id : null;
+}
+
 // Get payment IDs with optional filters
 router.get('/', async (req, res, next) => {
   try {
-    const { patient_id, invoice_id, start_date, end_date, payment_method } = req.query;
+    const { invoice_id, start_date, end_date, payment_method_key } = req.query;
 
     let query = db
       .selectFrom('payments')
       .select(['payments.id'])
       .where('payments.tenant_id', '=', req.tenantId);
-
-    if (patient_id) {
-      query = query.where('payments.patient_id', '=', patient_id);
-    }
 
     if (invoice_id) {
       query = query.where('payments.invoice_id', '=', invoice_id);
@@ -34,8 +44,11 @@ router.get('/', async (req, res, next) => {
       query = query.where('payments.payment_date', '<=', end_date + ' 23:59:59');
     }
 
-    if (payment_method) {
-      query = query.where('payments.payment_method', '=', payment_method);
+    if (payment_method_key) {
+      const methodId = await resolvePaymentMethodId(payment_method_key);
+      if (methodId) {
+        query = query.where('payments.payment_method_id', '=', methodId);
+      }
     }
 
     const payments = await query
@@ -61,20 +74,16 @@ router.get('/:id',
 
       const payment = await db
         .selectFrom('payments')
-        .leftJoin('patients', 'payments.patient_id', 'patients.id')
+        .leftJoin('payment_methods', 'payments.payment_method_id', 'payment_methods.id')
         .leftJoin('invoices', 'payments.invoice_id', 'invoices.id')
         .select([
           'payments.id',
-          'payments.patient_id',
           'payments.invoice_id',
           'payments.amount_dzd',
-          'payments.payment_method',
+          'payment_methods.method_key as payment_method_key',
           'payments.payment_date',
           'payments.notes',
           'payments.created_at',
-          'payments.updated_at',
-          'patients.full_name as patient_name',
-          'patients.patient_code',
           'invoices.invoice_number'
         ])
         .where('payments.id', '=', req.params.id)
@@ -95,10 +104,9 @@ router.get('/:id',
 // Create payment
 router.post('/',
   body('amount_dzd').isFloat({ min: 0.01 }),
-  body('payment_method').isIn(['cash', 'card', 'bank_transfer', 'check']),
+  body('payment_method_key').isIn(VALID_METHOD_KEYS),
   body('payment_date').isISO8601(),
-  body('patient_id').optional().isUUID(),
-  body('invoice_id').optional().isUUID(),
+  body('notes').optional().isString(),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -106,41 +114,55 @@ router.post('/',
     }
 
     try {
-      const { patient_id, invoice_id, amount_dzd, payment_method, payment_date, notes } = req.body;
+      const { invoice_id, amount_dzd, payment_method_key, payment_date, notes } = req.body;
 
-      // Validate that either patient_id or invoice_id is provided
-      if (!patient_id && !invoice_id) {
-        return res.status(400).json({ 
-          error: 'validation.error', 
-          details: 'Either patient_id or invoice_id must be provided' 
+      if (!invoice_id) {
+        return res.status(400).json({
+          error: 'validation.error',
+          details: 'invoice_id is required'
+        });
+      }
+
+      const paymentMethodId = await resolvePaymentMethodId(payment_method_key);
+      if (!paymentMethodId) {
+        return res.status(400).json({
+          error: 'validation.error',
+          details: 'Invalid payment method key'
         });
       }
 
       const payment = await db
         .insertInto('payments')
         .values({
-          patient_id: patient_id || null,
-          invoice_id: invoice_id || null,
+          invoice_id,
+          payment_method_id: paymentMethodId,
           amount_dzd,
-          payment_method,
           payment_date,
           notes: notes || null,
-          created_by: req.user.id,
+          received_by: req.user.id,
           tenant_id: req.tenantId
         })
         .returningAll()
         .executeTakeFirst();
 
-      // Log the payment creation
-      await req.audit.log({
-        action: 'CREATE',
-        entityType: 'payments',
-        entityId: payment.id,
-        tenantId: req.tenantId,
-        newValues: payment
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'CREATE',
+          entityType: 'payments',
+          entityId: payment.id,
+          tenantId: req.tenantId,
+          newValues: payment
+        }, db);
+      }
 
-      res.status(201).json(payment);
+      // Return with the key instead of UUID
+      const result = {
+        ...payment,
+        payment_method_key
+      };
+      delete result.payment_method_id;
+
+      res.status(201).json(result);
     } catch (error) {
       next(error);
     }
@@ -151,10 +173,9 @@ router.post('/',
 router.patch('/:id',
   param('id').isUUID(),
   body('amount_dzd').optional().isFloat({ min: 0.01 }),
-  body('payment_method').optional().isIn(['cash', 'card', 'bank_transfer', 'check']),
+  body('payment_method_key').optional().isIn(VALID_METHOD_KEYS),
   body('payment_date').optional().isISO8601(),
-  body('patient_id').optional().isUUID(),
-  body('invoice_id').optional().isUUID(),
+  body('notes').optional().isString(),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -162,7 +183,6 @@ router.patch('/:id',
     }
 
     try {
-      // Get current payment for audit logging
       const currentPayment = await db
         .selectFrom('payments')
         .selectAll()
@@ -174,17 +194,19 @@ router.patch('/:id',
         return res.status(404).json({ error: 'payment.error.not_found' });
       }
 
-      const { patient_id, invoice_id, amount_dzd, payment_method, payment_date, notes } = req.body;
+      const { amount_dzd, payment_method_key, payment_date, notes } = req.body;
 
-      // Build update object with only provided fields
       const updateData = {};
-      if (patient_id !== undefined) updateData.patient_id = patient_id;
-      if (invoice_id !== undefined) updateData.invoice_id = invoice_id;
       if (amount_dzd !== undefined) updateData.amount_dzd = amount_dzd;
-      if (payment_method !== undefined) updateData.payment_method = payment_method;
+      if (payment_method_key !== undefined) {
+        const methodId = await resolvePaymentMethodId(payment_method_key);
+        if (!methodId) {
+          return res.status(400).json({ error: 'validation.error', details: 'Invalid payment method key' });
+        }
+        updateData.payment_method_id = methodId;
+      }
       if (payment_date !== undefined) updateData.payment_date = payment_date;
       if (notes !== undefined) updateData.notes = notes;
-      updateData.updated_at = new Date();
 
       const payment = await db
         .updateTable('payments')
@@ -194,17 +216,24 @@ router.patch('/:id',
         .returningAll()
         .executeTakeFirst();
 
-      // Log the payment update
-      await req.audit.log({
-        action: 'UPDATE',
-        entityType: 'payments',
-        entityId: payment.id,
-        tenantId: req.tenantId,
-        oldValues: currentPayment,
-        newValues: payment
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'payments',
+          entityId: payment.id,
+          tenantId: req.tenantId,
+          oldValues: currentPayment,
+          newValues: payment
+        }, db);
+      }
 
-      res.json(payment);
+      const result = {
+        ...payment,
+        payment_method_key: payment_method_key || currentPayment.payment_method_key
+      };
+      delete result.payment_method_id;
+
+      res.json(result);
     } catch (error) {
       next(error);
     }
@@ -238,14 +267,15 @@ router.delete('/:id',
         .where('tenant_id', '=', req.tenantId)
         .execute();
 
-      // Log the deletion
-      await req.audit.log({
-        action: 'DELETE',
-        entityType: 'payments',
-        entityId: req.params.id,
-        tenantId: req.tenantId,
-        oldValues: payment
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'DELETE',
+          entityType: 'payments',
+          entityId: req.params.id,
+          tenantId: req.tenantId,
+          oldValues: payment
+        }, db);
+      }
 
       res.status(204).end();
     } catch (error) {

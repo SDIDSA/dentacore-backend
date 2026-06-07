@@ -107,6 +107,7 @@ router.post('/items',
   body('min_stock_level').isFloat({ min: 0 }),
   body('current_stock').optional().isFloat({ min: 0 }),
   body('selling_price_dzd').optional().isFloat({ min: 0 }),
+  body('category_id').optional().isUUID(),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -121,7 +122,7 @@ router.post('/items',
         expiry_tracking = false, notes
       } = req.body;
 
-      const item = await db
+      const result = await db
         .insertInto('inventory_items')
         .values({
           tenant_id: req.tenantId,
@@ -129,7 +130,7 @@ router.post('/items',
           description: description || null,
           category_id: category_id || null,
           unit_of_measure,
-          current_stock,
+          current_stock: 0,
           min_stock_level,
           max_stock_level: max_stock_level || null,
           reorder_point: reorder_point || null,
@@ -139,16 +140,17 @@ router.post('/items',
           notes: notes || null,
           created_by: req.user.id
         })
-        .returningAll()
+        .returning('id')
         .executeTakeFirst();
 
       // Create initial stock movement if current_stock > 0
+      // (trigger adds the quantity to current_stock, so we start at 0)
       if (current_stock > 0) {
         await db
           .insertInto('stock_movements')
           .values({
             tenant_id: req.tenantId,
-            inventory_item_id: item.id,
+            inventory_item_id: result.id,
             movement_type: 'stock.movement.adjustment',
             quantity: current_stock,
             unit_cost_dzd,
@@ -158,6 +160,37 @@ router.post('/items',
           })
           .execute();
       }
+
+      // Re-fetch to get the real stock level (after trigger has run)
+      const item = await db
+        .selectFrom('inventory_items')
+        .leftJoin('inventory_categories', 'inventory_items.category_id', 'inventory_categories.id')
+        .leftJoin('users as created_user', 'inventory_items.created_by', 'created_user.id')
+        .select([
+          'inventory_items.id',
+          'inventory_items.item_code',
+          'inventory_items.name',
+          'inventory_items.description',
+          'inventory_items.category_id',
+          'inventory_items.unit_of_measure',
+          'inventory_items.current_stock',
+          'inventory_items.min_stock_level',
+          'inventory_items.max_stock_level',
+          'inventory_items.reorder_point',
+          'inventory_items.unit_cost_dzd',
+          'inventory_items.selling_price_dzd',
+          'inventory_items.expiry_tracking',
+          'inventory_items.status_key',
+          'inventory_items.notes',
+          'inventory_items.created_at',
+          'inventory_items.updated_at',
+          'inventory_categories.category_key',
+          'created_user.full_name as created_by_name',
+          sql`(inventory_items.current_stock * inventory_items.unit_cost_dzd)`.as('total_value_dzd')
+        ])
+        .where('inventory_items.id', '=', result.id)
+        .where('inventory_items.tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
 
       // Log the creation
       if (req.audit) {
@@ -253,7 +286,7 @@ router.patch('/items/:id',
 
 // Adjust stock levels
 router.post('/items/:id/adjust-stock',
-  body('quantity').isFloat(),
+  body('quantity').isFloat({ min: -999999 }),
   body('reason').trim().notEmpty(),
   body('unit_cost_dzd').optional().isFloat({ min: 0 }),
   async (req, res, next) => {
@@ -872,68 +905,5 @@ router.get('/stats', async (req, res, next) => {
     next(error);
   }
 });
-
-// Delete inventory category
-router.delete('/categories/:id',
-  async (req, res, next) => {
-    try {
-      const category = await db
-        .selectFrom('inventory_categories')
-        .selectAll()
-        .where('id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
-        .executeTakeFirst();
-
-      if (!category) {
-        return res.status(404).json({ error: 'inventory.error.category_not_found' });
-      }
-
-      // Check for child categories
-      const hasChildren = await db
-        .selectFrom('inventory_categories')
-        .select('id')
-        .where('parent_id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
-        .executeTakeFirst();
-
-      if (hasChildren) {
-        return res.status(400).json({ error: 'inventory.error.category_has_children' });
-      }
-
-      // Check for items in this category
-      const hasItems = await db
-        .selectFrom('inventory_items')
-        .select('id')
-        .where('category_id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
-        .executeTakeFirst();
-
-      if (hasItems) {
-        return res.status(400).json({ error: 'inventory.error.category_has_items' });
-      }
-
-      await db
-        .deleteFrom('inventory_categories')
-        .where('id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
-        .execute();
-
-      if (req.audit) {
-        await req.audit.log({
-          action: 'DELETE',
-          entityType: 'inventory_categories',
-          entityId: category.id,
-          tenantId: req.tenantId,
-          oldValues: category,
-          newValues: null
-        });
-      }
-
-      res.json({ message: 'inventory.category_deleted' });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
 
 module.exports = router;

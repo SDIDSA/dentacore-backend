@@ -27,7 +27,7 @@ router.get('/', async (req, res, next) => {
     }
 
     if (end_date) {
-      query = query.where('invoices.issue_date', '<=', end_date);
+      query = query.where('invoices.issue_date', '<=', end_date + ' 23:59:59');
     }
 
     if (status) {
@@ -196,13 +196,15 @@ router.post('/',
         .execute();
 
       // Log the invoice creation
-      await req.audit.log({
-        action: 'CREATE',
-        entityType: 'invoices',
-        entityId: invoice.id,
-        tenantId: req.tenantId,
-        newValues: { ...invoice, line_items: lineItemsWithInvoiceId }
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'CREATE',
+          entityType: 'invoices',
+          entityId: invoice.id,
+          tenantId: req.tenantId,
+          newValues: { ...invoice, line_items: lineItemsWithInvoiceId }
+        }, db);
+      }
 
       res.status(201).json(invoice);
     } catch (error) {
@@ -248,14 +250,16 @@ router.patch('/:id/status',
         .executeTakeFirst();
 
       // Log the status update
-      await req.audit.log({
-        action: 'UPDATE',
-        entityType: 'invoices',
-        entityId: invoice.id,
-        tenantId: req.tenantId,
-        oldValues: { payment_status_key: currentInvoice.payment_status_key },
-        newValues: { payment_status_key: invoice.payment_status_key }
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'invoices',
+          entityId: invoice.id,
+          tenantId: req.tenantId,
+          oldValues: { payment_status_key: currentInvoice.payment_status_key },
+          newValues: { payment_status_key: invoice.payment_status_key }
+        }, db);
+      }
 
       res.json(invoice);
     } catch (error) {
@@ -312,20 +316,22 @@ router.patch('/:id/payment',
         .executeTakeFirst();
 
       // Log the payment update
-      await req.audit.log({
-        action: 'UPDATE',
-        entityType: 'invoices',
-        entityId: invoice.id,
-        tenantId: req.tenantId,
-        oldValues: { 
-          paid_amount_dzd: currentInvoice.paid_amount_dzd,
-          payment_status_key: currentInvoice.payment_status_key 
-        },
-        newValues: { 
-          paid_amount_dzd: invoice.paid_amount_dzd,
-          payment_status_key: invoice.payment_status_key 
-        }
-      }, db);
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'invoices',
+          entityId: invoice.id,
+          tenantId: req.tenantId,
+          oldValues: { 
+            paid_amount_dzd: currentInvoice.paid_amount_dzd,
+            payment_status_key: currentInvoice.payment_status_key 
+          },
+          newValues: { 
+            paid_amount_dzd: invoice.paid_amount_dzd,
+            payment_status_key: invoice.payment_status_key 
+          }
+        }, db);
+      }
 
       res.json(invoice);
     } catch (error) {

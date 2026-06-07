@@ -35,7 +35,7 @@ async function testMultitenancy() {
 
         // 2. Create data in Tenant A
         console.log('\nCreating patient in Tenant A...');
-        await db.connection().execute(async (trx) => {
+        await db.transaction().execute(async (trx) => {
             await sql`SELECT set_config('app.current_tenant', ${tenantA_id}::text, true)`.execute(trx);
 
             await trx.insertInto('patients').values({
@@ -45,14 +45,14 @@ async function testMultitenancy() {
                 date_of_birth: '1990-01-01',
                 gender: 'patient.gender.male',
                 phone: '+213555000001',
-                status_key: 'user.status.active'
+                status_key: 'patient.status.active'
             }).execute();
         });
         console.log('✅ Patient A created.');
 
         // 3. Create data in Tenant B
         console.log('\nCreating patient in Tenant B...');
-        await db.connection().execute(async (trx) => {
+        await db.transaction().execute(async (trx) => {
             await sql`SELECT set_config('app.current_tenant', ${tenantB_id}::text, true)`.execute(trx);
 
             await trx.insertInto('patients').values({
@@ -62,7 +62,7 @@ async function testMultitenancy() {
                 date_of_birth: '1990-01-01',
                 gender: 'patient.gender.female',
                 phone: '+213555000002',
-                status_key: 'user.status.active'
+                status_key: 'patient.status.active'
             }).execute();
         });
         console.log('✅ Patient B created.');
@@ -70,7 +70,7 @@ async function testMultitenancy() {
 
         // 4. Verify Isolation: Tenant A context should only see Patient A
         console.log('\nVerifying isolation for Tenant A...');
-        await db.connection().execute(async (trx) => {
+        await db.transaction().execute(async (trx) => {
             await sql`SELECT set_config('app.current_tenant', ${tenantA_id}::text, true)`.execute(trx);
 
             const patients = await trx.selectFrom('patients').selectAll().execute();
@@ -85,7 +85,7 @@ async function testMultitenancy() {
 
         // 5. Verify Isolation: Tenant B context should only see Patient B
         console.log('\nVerifying isolation for Tenant B...');
-        await db.connection().execute(async (trx) => {
+        await db.transaction().execute(async (trx) => {
             await sql`SELECT set_config('app.current_tenant', ${tenantB_id}::text, true)`.execute(trx);
 
             const patients = await trx.selectFrom('patients').selectAll().execute();

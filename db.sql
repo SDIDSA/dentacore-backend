@@ -732,6 +732,57 @@ CREATE INDEX idx_audit_date ON audit_logs(tenant_id, created_at);
 
 
 -- ============================================================================
+-- 21. MEDIA (Tenant-Scoped, Cloudinary-backed)
+-- ============================================================================
+
+CREATE TABLE media (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    cloudinary_public_id TEXT NOT NULL,
+    cloudinary_url TEXT NOT NULL,
+    original_filename TEXT,
+    mime_type TEXT,
+    file_size BIGINT,
+    uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE media IS 'Tenant-scoped media files stored on Cloudinary';
+COMMENT ON COLUMN media.cloudinary_public_id IS 'Cloudinary public ID for deletion/management';
+COMMENT ON COLUMN media.cloudinary_url IS 'Full Cloudinary URL with transformations';
+
+CREATE INDEX idx_media_tenant ON media(tenant_id);
+CREATE INDEX idx_media_uploaded_by ON media(uploaded_by);
+
+-- ============================================================================
+-- 22. X-RAYS (Tenant-Scoped, extends media)
+-- ============================================================================
+
+CREATE TABLE xrays (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    media_id UUID NOT NULL UNIQUE REFERENCES media(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    treatment_record_id UUID REFERENCES treatment_records(id) ON DELETE SET NULL,
+    tooth_number VARCHAR(10),
+    description TEXT,
+    captured_date DATE DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE xrays IS 'Tenant-scoped X-ray images linked to media and patients';
+COMMENT ON COLUMN xrays.media_id IS 'FK to media table holding the Cloudinary file reference';
+COMMENT ON COLUMN xrays.treatment_record_id IS 'Optional link to a specific treatment record';
+
+CREATE INDEX idx_xrays_tenant ON xrays(tenant_id);
+CREATE INDEX idx_xrays_media ON xrays(media_id);
+CREATE INDEX idx_xrays_patient ON xrays(patient_id);
+CREATE INDEX idx_xrays_treatment ON xrays(treatment_record_id);
+CREATE INDEX idx_xrays_date ON xrays(tenant_id, captured_date);
+
+-- ============================================================================
 -- TRIGGERS FOR UPDATED_AT
 -- ============================================================================
 
@@ -780,6 +831,12 @@ CREATE TRIGGER trg_purchase_orders_updated_at BEFORE UPDATE ON purchase_orders
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER trg_expenses_updated_at BEFORE UPDATE ON expenses
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_media_updated_at BEFORE UPDATE ON media
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trg_xrays_updated_at BEFORE UPDATE ON xrays
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================

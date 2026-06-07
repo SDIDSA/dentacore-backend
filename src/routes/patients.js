@@ -117,6 +117,7 @@ router.post('/',
   body('date_of_birth').isDate(),
   body('gender').isIn(['patient.gender.male', 'patient.gender.female']),
   body('phone').matches(/^\+213[0-9]{9}$/),
+  body('blood_type').optional().isString(),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

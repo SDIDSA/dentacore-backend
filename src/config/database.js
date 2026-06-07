@@ -21,14 +21,16 @@ const db = new Kysely({
   dialect,
 });
 
-// Test connection
-(async () => {
-  try {
-    await db.selectFrom('roles').select('id').limit(1).execute();
-    console.log('✅ Database connected');
-  } catch (error) {
-    console.error('❌ Database connection failed:', error.message);
-  }
-})();
+// Test connection (skip in test environment)
+if (process.env.NODE_ENV !== 'test') {
+  (async () => {
+    try {
+      await db.selectFrom('roles').select('id').limit(1).execute();
+      console.log('✅ Database connected');
+    } catch (error) {
+      console.error('❌ Database connection failed:', error.message);
+    }
+  })();
+}
 
 module.exports = db;
