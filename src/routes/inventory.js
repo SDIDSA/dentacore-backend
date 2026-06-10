@@ -69,6 +69,55 @@ router.get('/items', async (req, res, next) => {
   }
 });
 
+// Get inventory items by IDs (batch)
+router.get('/items/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const items = await db
+      .selectFrom('inventory_items')
+      .leftJoin('inventory_categories', 'inventory_items.category_id', 'inventory_categories.id')
+      .leftJoin('users as created_user', 'inventory_items.created_by', 'created_user.id')
+      .select([
+        'inventory_items.id',
+        'inventory_items.item_code',
+        'inventory_items.name',
+        'inventory_items.description',
+        'inventory_items.category_id',
+        'inventory_items.unit_of_measure',
+        'inventory_items.current_stock',
+        'inventory_items.min_stock_level',
+        'inventory_items.max_stock_level',
+        'inventory_items.reorder_point',
+        'inventory_items.unit_cost_dzd',
+        'inventory_items.selling_price_dzd',
+        'inventory_items.expiry_tracking',
+        'inventory_items.status_key',
+        'inventory_items.notes',
+        'inventory_items.created_at',
+        'inventory_items.updated_at',
+        'inventory_categories.category_key',
+        'created_user.full_name as created_by_name',
+        sql`(inventory_items.current_stock * inventory_items.unit_cost_dzd)`.as('total_value_dzd')
+      ])
+      .where('inventory_items.id', 'in', idArray)
+      .where('inventory_items.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(items);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get inventory item by ID
 router.get('/items/:id', async (req, res, next) => {
   try {
@@ -477,6 +526,45 @@ router.get('/categories', async (req, res, next) => {
   }
 });
 
+// Get inventory categories by IDs (batch)
+router.get('/categories/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const categories = await db
+      .selectFrom('inventory_categories')
+      .leftJoin('inventory_categories as parent', 'inventory_categories.parent_id', 'parent.id')
+      .select([
+        'inventory_categories.id',
+        'inventory_categories.category_key',
+        'inventory_categories.parent_id',
+        'inventory_categories.description',
+        'inventory_categories.is_active',
+        'inventory_categories.created_at',
+        'parent.category_key as parent_category_key',
+        sql`CASE WHEN inventory_categories.tenant_id IS NULL THEN true ELSE false END`.as('is_global')
+      ])
+      .where('inventory_categories.id', 'in', idArray)
+      .where((eb) => eb.or([
+        eb('inventory_categories.tenant_id', 'is', null),
+        eb('inventory_categories.tenant_id', '=', req.tenantId)
+      ]))
+      .execute();
+
+    res.json(categories);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get inventory category by ID
 router.get('/categories/:id', async (req, res, next) => {
   try {
@@ -737,6 +825,51 @@ router.get('/suppliers', async (req, res, next) => {
     } else {
       res.json(supplierIds);
     }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get suppliers by IDs (batch)
+router.get('/suppliers/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const suppliers = await db
+      .selectFrom('suppliers')
+      .leftJoin('wilayas', 'suppliers.wilaya_id', 'wilayas.id')
+      .leftJoin('users as created_user', 'suppliers.created_by', 'created_user.id')
+      .select([
+        'suppliers.id',
+        'suppliers.supplier_code',
+        'suppliers.name',
+        'suppliers.contact_person',
+        'suppliers.email',
+        'suppliers.phone',
+        'suppliers.wilaya_id',
+        'suppliers.address',
+        'suppliers.tax_id',
+        'suppliers.payment_terms_days',
+        'suppliers.status_key',
+        'suppliers.notes',
+        'suppliers.created_at',
+        'suppliers.updated_at',
+        'wilayas.name_key as wilaya_name_key',
+        'created_user.full_name as created_by_name'
+      ])
+      .where('suppliers.id', 'in', idArray)
+      .where('suppliers.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(suppliers);
   } catch (error) {
     next(error);
   }

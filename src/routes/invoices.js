@@ -58,6 +58,53 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Get invoices by IDs (batch)
+router.get('/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const invoices = await db
+      .selectFrom('invoices')
+      .innerJoin('patients', 'invoices.patient_id', 'patients.id')
+      .select([
+        'invoices.id',
+        'invoices.invoice_number',
+        'invoices.patient_id',
+        'invoices.issue_date',
+        'invoices.due_date',
+        'invoices.subtotal_dzd',
+        'invoices.discount_dzd',
+        'invoices.tax_dzd',
+        'invoices.total_dzd',
+        'invoices.paid_amount_dzd',
+        'invoices.payment_status_key',
+        'invoices.notes',
+        'invoices.created_at',
+        'invoices.updated_at',
+        'patients.full_name as patient_name',
+        'patients.patient_code',
+        'patients.phone as patient_phone',
+        'patients.email as patient_email',
+        sql`invoices.total_dzd - invoices.paid_amount_dzd`.as('balance_dzd')
+      ])
+      .where('invoices.id', 'in', idArray)
+      .where('invoices.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(invoices);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get invoice by ID with line items
 router.get('/:id',
   param('id').isUUID(),

@@ -77,6 +77,48 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Get users by IDs (batch)
+router.get('/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const users = await db
+      .selectFrom('users')
+      .innerJoin('roles', 'users.role_id', 'roles.id')
+      .leftJoin('wilayas', 'users.wilaya_id', 'wilayas.id')
+      .select([
+        'users.id',
+        'users.email',
+        'users.full_name',
+        'users.phone',
+        'users.wilaya_id',
+        'users.address',
+        'users.status_key',
+        'users.last_login_at',
+        'users.created_at',
+        'users.updated_at',
+        'roles.id as role_id',
+        'roles.role_key',
+        'wilayas.name_key as wilaya_name_key'
+      ])
+      .where('users.id', 'in', idArray)
+      .where('users.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(users);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get user by ID
 router.get('/:id', async (req, res, next) => {
   try {

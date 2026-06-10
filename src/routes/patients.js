@@ -53,6 +53,71 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Get patients by IDs (batch)
+router.get('/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const patients = await db
+      .selectFrom('patients')
+      .leftJoin('wilayas', 'patients.wilaya_id', 'wilayas.id')
+      .select([
+        'patients.id',
+        'patients.patient_code',
+        'patients.full_name',
+        'patients.date_of_birth',
+        'patients.gender',
+        'patients.phone',
+        'patients.email',
+        'patients.wilaya_id',
+        'patients.address',
+        'patients.emergency_contact_name',
+        'patients.emergency_contact_phone',
+        'patients.medical_history',
+        'patients.allergies',
+        'patients.blood_type',
+        'patients.status_key',
+        'patients.created_at',
+        'wilayas.name_key as wilaya_name_key',
+        (eb) => eb
+          .selectFrom('appointments')
+          .select('appointments.appointment_date')
+          .whereRef('appointments.patient_id', '=', 'patients.id')
+          .whereRef('appointments.tenant_id', '=', 'patients.tenant_id')
+          .where('appointments.appointment_date', '<', sql`NOW()`)
+          .where('appointments.status_key', '=', 'appt.status.completed')
+          .orderBy('appointments.appointment_date', 'desc')
+          .limit(1)
+          .as('last_visit_date'),
+        (eb) => eb
+          .selectFrom('appointments')
+          .select('appointments.appointment_date')
+          .whereRef('appointments.patient_id', '=', 'patients.id')
+          .whereRef('appointments.tenant_id', '=', 'patients.tenant_id')
+          .where('appointments.status_key', 'in', ['appt.status.scheduled', 'appt.status.confirmed'])
+          .where('appointments.appointment_date', '>', sql`NOW()`)
+          .orderBy('appointments.appointment_date', 'asc')
+          .limit(1)
+          .as('next_appointment_date')
+      ])
+      .where('patients.id', 'in', idArray)
+      .where('patients.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(patients);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get patient by ID
 router.get('/:id', async (req, res, next) => {
   try {

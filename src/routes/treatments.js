@@ -73,6 +73,51 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Get treatments by IDs (batch)
+router.get('/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const treatments = await db
+      .selectFrom('treatment_records')
+      .innerJoin('patients', 'treatment_records.patient_id', 'patients.id')
+      .innerJoin('users', 'treatment_records.dentist_id', 'users.id')
+      .select([
+        'treatment_records.id',
+        'treatment_records.patient_id',
+        'treatment_records.appointment_id',
+        'treatment_records.dentist_id',
+        'treatment_records.category_id',
+        'treatment_records.treatment_date',
+        'treatment_records.tooth_number',
+        'treatment_records.diagnosis',
+        'treatment_records.treatment_performed',
+        'treatment_records.notes',
+        'treatment_records.estimated_cost_dzd',
+        'treatment_records.created_at',
+        'treatment_records.updated_at',
+        'patients.full_name as patient_name',
+        'patients.patient_code',
+        'users.full_name as dentist_name'
+      ])
+      .where('treatment_records.id', 'in', idArray)
+      .where('treatment_records.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(treatments);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get treatment by ID
 router.get('/:id',
   param('id').isUUID(),

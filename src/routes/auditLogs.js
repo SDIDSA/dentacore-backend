@@ -73,6 +73,44 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Get audit logs by IDs (batch)
+router.get('/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const auditLogs = await db
+      .selectFrom('audit_logs')
+      .leftJoin('users', 'audit_logs.user_id', 'users.id')
+      .select([
+        'audit_logs.id',
+        'audit_logs.entity_type',
+        'audit_logs.entity_id',
+        'audit_logs.action',
+        'audit_logs.user_id',
+        'audit_logs.old_values',
+        'audit_logs.new_values',
+        'audit_logs.created_at',
+        'users.full_name as user_name',
+        'users.email as user_email'
+      ])
+      .where('audit_logs.id', 'in', idArray)
+      .where('audit_logs.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(auditLogs);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get audit log by ID with full details
 router.get('/:id',
   param('id').isUUID(),

@@ -116,6 +116,47 @@ router.get('/range',
   }
 );
 
+// Get appointments by IDs (batch)
+router.get('/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const appointments = await db
+      .selectFrom('appointments')
+      .innerJoin('patients', 'appointments.patient_id', 'patients.id')
+      .innerJoin('users', 'appointments.dentist_id', 'users.id')
+      .select([
+        'appointments.id',
+        'appointments.patient_id',
+        'appointments.dentist_id',
+        'appointments.appointment_date',
+        'appointments.duration_minutes',
+        'appointments.status_key',
+        'appointments.reason',
+        'appointments.notes',
+        'appointments.created_at',
+        'patients.full_name as patient_name',
+        'patients.phone as patient_phone',
+        'users.full_name as dentist_name'
+      ])
+      .where('appointments.id', 'in', idArray)
+      .where('appointments.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(appointments);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/:id',
   param('id').isUUID(),
   async (req, res, next) => {
