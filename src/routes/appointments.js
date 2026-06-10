@@ -296,28 +296,33 @@ router.patch('/:id',
       const targetDate = appointment_date || currentAppointment.appointment_date;
       const targetDuration = duration_minutes || currentAppointment.duration_minutes;
 
-      const hasOverlap = await db
-        .selectFrom('appointments')
-        .select('appointments.id')
-        .where('dentist_id', '=', targetDentistId)
-        .where('tenant_id', '=', req.tenantId)
-        .where('id', '!=', req.params.id)
-        .where('appointment_date', '<', sql`${targetDate}::timestamp + (${targetDuration} || ' minutes')::interval`)
-        .where(sql`${targetDate}`, '<', sql`appointment_date + (duration_minutes || ' minutes')::interval`)
-        .where('status_key', 'not in', ['appt.status.cancelled', 'appt.status.no_show'])
-        .executeTakeFirst();
+      const appointment = await db.transaction().execute(async (trx) => {
+        const hasOverlap = await trx
+          .selectFrom('appointments')
+          .select('appointments.id')
+          .where('dentist_id', '=', targetDentistId)
+          .where('tenant_id', '=', req.tenantId)
+          .where('id', '!=', req.params.id)
+          .where('appointment_date', '<', sql`${targetDate}::timestamp + (${targetDuration} || ' minutes')::interval`)
+          .where(sql`${targetDate}`, '<', sql`appointment_date + (duration_minutes || ' minutes')::interval`)
+          .where('status_key', 'not in', ['appt.status.cancelled', 'appt.status.no_show'])
+          .forUpdate()
+          .executeTakeFirst();
 
-      if (hasOverlap) {
-        return res.status(409).json({ error: 'appointment.error.overlap' });
-      }
+        if (hasOverlap) {
+          const err = new Error('APPOINTMENT_OVERLAP');
+          err.statusCode = 409;
+          throw err;
+        }
 
-      const appointment = await db
-        .updateTable('appointments')
-        .set(updateData)
-        .where('id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
-        .returningAll()
-        .executeTakeFirst();
+        return await trx
+          .updateTable('appointments')
+          .set(updateData)
+          .where('id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .returningAll()
+          .executeTakeFirst();
+      });
 
       // Log the appointment update
       if (req.audit) {
@@ -339,6 +344,9 @@ router.patch('/:id',
 
       res.json(appointment);
     } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: 'appointment.error.overlap' });
+      }
       next(error);
     }
   }

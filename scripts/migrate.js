@@ -32,7 +32,8 @@ async function runMigrations() {
     console.log(`  APPLY ${file}...`);
 
     try {
-      await db.execute.raw(sql);
+      const { sql: kyselySql } = require('kysely');
+      await kyselySql.raw(sql).execute(db);
 
       await recordMigration(file, checksum);
       count++;

@@ -26,7 +26,8 @@ const db = new Kysely({
 if (process.env.NODE_ENV !== 'test') {
   (async () => {
     try {
-      await db.selectFrom('roles').select('id').limit(1).execute();
+      const { sql } = require('kysely');
+      await sql`SELECT 1`.execute(db);
       console.log('✅ Database connected');
     } catch (error) {
       console.error('❌ Database connection failed:', error.message);

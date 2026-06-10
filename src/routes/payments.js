@@ -165,38 +165,45 @@ router.post('/',
         });
       }
 
-      const invoice = await db
-        .selectFrom('invoices')
-        .select(['total_dzd', 'paid_amount_dzd'])
-        .where('id', '=', invoice_id)
-        .where('tenant_id', '=', req.tenantId)
-        .executeTakeFirst();
+      const payment = await db.transaction().execute(async (trx) => {
+        const invoice = await trx
+          .selectFrom('invoices')
+          .select(['total_dzd', 'paid_amount_dzd'])
+          .where('id', '=', invoice_id)
+          .where('tenant_id', '=', req.tenantId)
+          .forUpdate()
+          .executeTakeFirst();
 
-      if (!invoice) {
-        return res.status(404).json({ error: 'payment.error.invoice_not_found' });
-      }
+        if (!invoice) {
+          const err = new Error('INVOICE_NOT_FOUND');
+          err.statusCode = 404;
+          err.errorKey = 'payment.error.invoice_not_found';
+          throw err;
+        }
 
-      const balanceDue = Number(invoice.total_dzd) - Number(invoice.paid_amount_dzd);
-      if (amount_dzd > balanceDue) {
-        return res.status(400).json({
-          error: 'validation.error',
-          details: `Payment amount (${amount_dzd}) exceeds remaining balance (${balanceDue})`
-        });
-      }
+        const balanceDue = Number(invoice.total_dzd) - Number(invoice.paid_amount_dzd);
+        if (amount_dzd > balanceDue) {
+          const err = new Error('OVERPAYMENT');
+          err.statusCode = 400;
+          err.errorKey = 'validation.error';
+          err.details = `Payment amount (${amount_dzd}) exceeds remaining balance (${balanceDue})`;
+          throw err;
+        }
 
-      const payment = await db
-        .insertInto('payments')
-        .values({
-          invoice_id,
-          payment_method_id: paymentMethodId,
-          amount_dzd,
-          payment_date,
-          notes: notes || null,
-          received_by: req.user.id,
-          tenant_id: req.tenantId
-        })
-        .returningAll()
-        .executeTakeFirst();
+        return await trx
+          .insertInto('payments')
+          .values({
+            invoice_id,
+            payment_method_id: paymentMethodId,
+            amount_dzd,
+            payment_date,
+            notes: notes || null,
+            received_by: req.user.id,
+            tenant_id: req.tenantId
+          })
+          .returningAll()
+          .executeTakeFirst();
+      });
 
       if (req.audit) {
         await req.audit.log({
@@ -218,6 +225,12 @@ router.post('/',
 
       res.status(201).json(result);
     } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          error: error.errorKey || 'validation.error',
+          details: error.details || error.message
+        });
+      }
       next(error);
     }
   }

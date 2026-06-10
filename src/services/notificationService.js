@@ -77,7 +77,13 @@ async function sendEmailNotification(recipient, subject, message) {
     return { delivered: false, reason: 'SMTP not configured' };
   }
   try {
-    const nodemailer = require('nodemailer');
+    let nodemailer;
+    try {
+      nodemailer = require('nodemailer');
+    } catch {
+      logger.warn('nodemailer not installed — email sending unavailable');
+      return { delivered: false, reason: 'nodemailer not installed' };
+    }
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: parseInt(process.env.SMTP_PORT) || 587,

@@ -15,10 +15,12 @@ const errorMessages = {
   'patient.error.not_found': 'Patient not found',
   'patient.error.duplicate_phone': 'A patient with this phone number already exists',
   'patient.error.duplicate_email': 'A patient with this email already exists',
+  'patient.error.has_invoices': 'Cannot delete patient with existing invoices',
 
   'appointment.error.not_found': 'Appointment not found',
   'appointment.error.overlap': 'Appointment time conflicts with an existing appointment',
   'appointment.error.invalid_status': 'Invalid appointment status transition',
+  'appointment.error.has_invoices': 'Cannot delete appointment with associated invoices',
 
   'treatment.error.not_found': 'Treatment record not found',
 
@@ -30,6 +32,7 @@ const errorMessages = {
 
   'payment.error.not_found': 'Payment not found',
   'payment.error.overpayment': 'Payment amount exceeds invoice balance',
+  'payment.error.invoice_not_found': 'Invoice not found for payment',
 
   'inventory.error.not_found': 'Inventory item not found',
   'inventory.error.insufficient_stock': 'Insufficient stock quantity',
@@ -42,6 +45,19 @@ const errorMessages = {
 
   'expense.error.not_found': 'Expense not found',
 
+  'po.error.not_found': 'Purchase order not found',
+  'po.error.item_not_found': 'Purchase order item not found',
+  'po.error.quantity_exceeds': 'Quantity exceeds available stock',
+  'po.error.invalid_status': 'Invalid purchase order status',
+  'po.error.cannot_delete': 'Cannot delete purchase order with received items',
+
+  'inventory.error.movement_not_found': 'Inventory movement not found',
+  'inventory.error.category_not_found': 'Inventory category not found',
+  'inventory.error.category_has_items': 'Category has associated items',
+  'inventory.error.category_has_subcategories': 'Category has subcategories',
+  'inventory.error.supplier_not_found': 'Supplier not found',
+  'inventory.error.item_not_found': 'Inventory item not found',
+
   'media.error.not_found': 'Media not found',
   'media.error.no_file': 'No file uploaded',
   'media.error.invalid_mime_type': 'Invalid file type, only images are allowed',
@@ -52,6 +68,11 @@ const errorMessages = {
 
   'user.error.not_found': 'User not found',
   'user.error.duplicate_email': 'A user with this email already exists',
+  'user.error.email_exists': 'A user with this email already exists',
+  'user.error.phone_exists': 'A user with this phone number already exists',
+  'user.error.invalid_role': 'Invalid role specified',
+  'user.error.cannot_change_own_status': 'Cannot change your own account status',
+  'user.error.cannot_delete_self': 'Cannot delete your own account',
 
   'error.duplicate_entry': 'Duplicate entry detected',
   'error.foreign_key_violation': 'Referenced record not found',

@@ -12,7 +12,7 @@ function safeNumber(value, decimals = 2) {
   return parseFloat(Number(value).toFixed(decimals));
 }
 
-function applyDateFilter(query, tableAndCol, req, _ignored) {
+function applyDateFilter(query, tableAndCol, req) {
   const { start_date, end_date, months } = req.query;
   const [table, dateColumn] = tableAndCol.split('.');
   const allowedTables = { payments: 1, invoices: 1, treatment_records: 1 };
@@ -31,7 +31,7 @@ function applyDateFilter(query, tableAndCol, req, _ignored) {
   }
   if (months && !start_date && !end_date) {
     const validMonths = Math.max(1, Math.min(parseInt(months) || 12, 60));
-    query = query.where(`${table}.${dateColumn}`, '>=', db.sql`NOW() - INTERVAL ${sql.literal(`${validMonths} months`)}`);
+    query = query.where(`${table}.${dateColumn}`, '>=', sql`NOW() - INTERVAL ${sql.literal(`${validMonths} months`)}`);
   }
   return query;
 }

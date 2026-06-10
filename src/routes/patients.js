@@ -145,47 +145,51 @@ router.post('/',
         medical_history, allergies, blood_type
       } = req.body;
 
-      // Generate patient code
-      const year = new Date().getFullYear();
-      const highestCodeResult = await db
-        .selectFrom('patients')
-        .select('patient_code')
-        .where('patient_code', 'like', `PAT-${year}-%`)
-        .where('tenant_id', '=', req.tenantId) // Explicit Tenant Filter
-        .orderBy('patient_code', 'desc')
-        .limit(1)
-        .executeTakeFirst();
+      // Generate patient code in a transaction to prevent duplicates
+      const patient = await db.transaction().execute(async (trx) => {
+        await sql`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`.execute(trx);
 
-      let nextNum = 1;
-      if (highestCodeResult) {
-        const match = highestCodeResult.patient_code.match(/PAT-\d{4}-(\d{4})$/);
-        if (match) {
-          nextNum = parseInt(match[1]) + 1;
+        const year = new Date().getFullYear();
+        const highestCodeResult = await trx
+          .selectFrom('patients')
+          .select('patient_code')
+          .where('patient_code', 'like', `PAT-${year}-%`)
+          .where('tenant_id', '=', req.tenantId)
+          .orderBy('patient_code', 'desc')
+          .limit(1)
+          .executeTakeFirst();
+
+        let nextNum = 1;
+        if (highestCodeResult) {
+          const match = highestCodeResult.patient_code.match(/PAT-\d{4}-(\d{4})$/);
+          if (match) {
+            nextNum = parseInt(match[1]) + 1;
+          }
         }
-      }
-      
-      const patient_code = `PAT-${year}-${String(nextNum).padStart(4, '0')}`;
-      const patient = await db
-        .insertInto('patients')
-        .values({
-          tenant_id: req.tenantId, // Explicit Tenant Insert
-          patient_code,
-          full_name,
-          date_of_birth,
-          gender,
-          phone,
-          email: email || null,
-          wilaya_id: wilaya_id || null,
-          address: address || null,
-          emergency_contact_name: emergency_contact_name || null,
-          emergency_contact_phone: emergency_contact_phone || null,
-          medical_history: medical_history || null,
-          allergies: allergies || null,
-          blood_type: blood_type || null,
-          created_by: req.user.id
-        })
-        .returningAll()
-        .executeTakeFirst();
+
+        const patient_code = `PAT-${year}-${String(nextNum).padStart(4, '0')}`;
+        return await trx
+          .insertInto('patients')
+          .values({
+            tenant_id: req.tenantId,
+            patient_code,
+            full_name,
+            date_of_birth,
+            gender,
+            phone,
+            email: email || null,
+            wilaya_id: wilaya_id || null,
+            address: address || null,
+            emergency_contact_name: emergency_contact_name || null,
+            emergency_contact_phone: emergency_contact_phone || null,
+            medical_history: medical_history || null,
+            allergies: allergies || null,
+            blood_type: blood_type || null,
+            created_by: req.user.id
+          })
+          .returningAll()
+          .executeTakeFirst();
+      });
 
       // Log the patient creation
       if (req.audit) {
@@ -193,7 +197,7 @@ router.post('/',
           action: 'CREATE',
           entityType: 'patients',
           entityId: patient.id,
-          tenantId: req.tenantId, // Pass Explicit ID
+          tenantId: req.tenantId,
           newValues: patient
         });
       }

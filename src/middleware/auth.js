@@ -132,4 +132,21 @@ const authorize = (...roles) => {
   };
 };
 
+// Periodic cleanup of expired blacklisted tokens (runs every hour)
+async function cleanupExpiredTokens() {
+  try {
+    const result = await db
+      .deleteFrom('token_blacklist')
+      .where('expires_at', '<', new Date())
+      .execute();
+    if (result.numDeletedRows > 0n) {
+      console.log(`Cleaned up ${result.numDeletedRows} expired blacklisted tokens`);
+    }
+  } catch (err) {
+    console.error('Token cleanup failed:', err.message);
+  }
+}
+// Run cleanup every hour
+setInterval(cleanupExpiredTokens, 60 * 60 * 1000).unref();
+
 module.exports = { authenticate, authorize };

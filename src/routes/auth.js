@@ -33,7 +33,7 @@ router.post('/login', loginLimiter,
     // Validate input first before opening DB connection
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return error(res, 400, 'validation.error');
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
     }
 
     try {
@@ -83,6 +83,28 @@ router.post('/login', loginLimiter,
       };
 
       const { accessToken, refreshToken } = generateTokens(user);
+
+      // Blacklist old refresh token on login for rotation security
+      const oldRefreshToken = req.headers['x-refresh-token'];
+      if (oldRefreshToken) {
+        try {
+          const oldDecoded = jwt.decode(oldRefreshToken);
+          if (oldDecoded && oldDecoded.jti && oldDecoded.exp) {
+            const existing = await db
+              .selectFrom('token_blacklist')
+              .select('id')
+              .where('jti', '=', oldDecoded.jti)
+              .executeTakeFirst();
+            if (!existing) {
+              await db.insertInto('token_blacklist').values({
+                jti: oldDecoded.jti, token_type: 'refresh',
+                user_id: user.id, tenant_id: user.tenant_id,
+                expires_at: new Date(oldDecoded.exp * 1000)
+              }).execute();
+            }
+          }
+        } catch { /* ignore invalid old tokens */ }
+      }
 
       const newLoginTime = new Date();
 

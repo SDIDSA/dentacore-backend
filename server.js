@@ -15,6 +15,12 @@ function gracefulShutdown(signal) {
   server.close(async () => {
     console.log('HTTP server closed.');
     try {
+      const { getIO } = require('./src/socket');
+      const io = getIO();
+      io.close();
+      console.log('Socket.IO closed.');
+    } catch { /* socket may not be initialized */ }
+    try {
       await db.destroy();
       console.log('Database pool drained.');
     } catch (err) {
