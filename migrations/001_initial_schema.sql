@@ -1,0 +1,4 @@
+-- Initial schema reference
+-- This file documents the baseline schema.
+-- Actual tables are created by db.sql and seed.sql.
+-- Future migrations should be prefixed with sequential numbers.

@@ -2,7 +2,9 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
+const { sql } = require('kysely');
 const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
@@ -16,6 +18,7 @@ router.use(authorize('auth.role.admin'));
 router.get('/', async (req, res, next) => {
   try {
     const { search, role } = req.query;
+    const pag = parsePagination(req);
 
     let query = db
       .selectFrom('users')
@@ -23,13 +26,19 @@ router.get('/', async (req, res, next) => {
       .select('users.id')
       .where('users.tenant_id', '=', req.tenantId);
 
+    let countQuery = db
+      .selectFrom('users')
+      .select(sql`COUNT(*)`.as('count'))
+      .where('users.tenant_id', '=', req.tenantId);
+
     if (search) {
-      query = query.where((eb) =>
+      const searchFilter = (eb) =>
         eb.or([
           eb('users.full_name', 'ilike', `%${search}%`),
           eb('users.email', 'ilike', `%${search}%`)
-        ])
-      );
+        ]);
+      query = query.where(searchFilter);
+      countQuery = countQuery.where(searchFilter);
     }
 
     if (role) {
@@ -38,9 +47,16 @@ router.get('/', async (req, res, next) => {
 
     const users = await query
       .orderBy('users.created_at', 'desc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
-    res.json(users.map(u => u.id));
+    if (pag.paginate) {
+      const countResult = await countQuery.executeTakeFirst();
+      res.json(wrapPaginatedResponse(users.map(u => u.id), parseInt(countResult.count), pag.limit, pag.offset));
+    } else {
+      res.json(users.map(u => u.id));
+    }
   } catch (err) {
     next(err);
   }
@@ -49,7 +65,7 @@ router.get('/', async (req, res, next) => {
 // Get user by ID
 router.get('/:id', async (req, res, next) => {
   try {
-    var user = await db
+    const user = await db
       .selectFrom('users')
       .innerJoin('roles', 'users.role_id', 'roles.id')
       .leftJoin('wilayas', 'users.wilaya_id', 'wilayas.id')
@@ -461,7 +477,7 @@ router.delete('/:id', async (req, res, next) => {
       }, db);
     }
 
-    res.status(204).json(safeDeletedUser);
+    res.status(200).json(safeDeletedUser);
   } catch (err) {
     next(err);
   }

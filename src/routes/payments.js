@@ -1,7 +1,9 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const { sql } = require('kysely');
 const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
@@ -22,9 +24,47 @@ async function resolvePaymentMethodId(key) {
   return row ? row.id : null;
 }
 
+async function syncInvoicePaidAmount(invoiceId, tenantId, trx) {
+  const result = await (trx || db)
+    .selectFrom('payments')
+    .where('invoice_id', '=', invoiceId)
+    .where('tenant_id', '=', tenantId)
+    .select(sql`COALESCE(SUM(amount_dzd), 0)::float8`.as('paid'))
+    .executeTakeFirst();
+
+  const paid = result ? parseFloat(result.paid) : 0;
+
+  const invoice = await (trx || db)
+    .selectFrom('invoices')
+    .select(['total_dzd'])
+    .where('id', '=', invoiceId)
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+
+  if (!invoice) return;
+
+  const total = parseFloat(invoice.total_dzd);
+  let statusKey;
+  if (paid <= 0) {
+    statusKey = 'invoice.status.unpaid';
+  } else if (paid >= total) {
+    statusKey = 'invoice.status.paid';
+  } else {
+    statusKey = 'invoice.status.partial';
+  }
+
+  await (trx || db)
+    .updateTable('invoices')
+    .set({ paid_amount_dzd: paid, payment_status_key: statusKey, updated_at: new Date() })
+    .where('id', '=', invoiceId)
+    .where('tenant_id', '=', tenantId)
+    .execute();
+}
+
 // Get payment IDs with optional filters
 router.get('/', async (req, res, next) => {
   try {
+    const pag = parsePagination(req);
     const { invoice_id, start_date, end_date, payment_method_key } = req.query;
 
     let query = db
@@ -51,12 +91,23 @@ router.get('/', async (req, res, next) => {
       }
     }
 
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
     const payments = await query
       .orderBy('payments.payment_date', 'desc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
     const paymentIds = payments.map(p => p.id);
-    res.json(paymentIds);
+    if (pag.paginate) {
+      const count = payments.length > 0 ? Number(payments[0].count) : 0;
+      res.json(wrapPaginatedResponse(paymentIds, count, pag.limit, pag.offset));
+    } else {
+      res.json(paymentIds);
+    }
   } catch (error) {
     next(error);
   }
@@ -142,6 +193,25 @@ router.post('/',
         });
       }
 
+      const invoice = await db
+        .selectFrom('invoices')
+        .select(['total_dzd', 'paid_amount_dzd'])
+        .where('id', '=', invoice_id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (!invoice) {
+        return res.status(404).json({ error: 'payment.error.invoice_not_found' });
+      }
+
+      const balanceDue = Number(invoice.total_dzd) - Number(invoice.paid_amount_dzd);
+      if (amount_dzd > balanceDue) {
+        return res.status(400).json({
+          error: 'validation.error',
+          details: `Payment amount (${amount_dzd}) exceeds remaining balance (${balanceDue})`
+        });
+      }
+
       const payment = await db
         .insertInto('payments')
         .values({
@@ -172,6 +242,8 @@ router.post('/',
         payment_method_key
       };
       delete result.payment_method_id;
+
+      await syncInvoicePaidAmount(invoice_id, req.tenantId);
 
       res.status(201).json(result);
     } catch (error) {
@@ -244,6 +316,8 @@ router.patch('/:id',
       };
       delete result.payment_method_id;
 
+      await syncInvoicePaidAmount(currentPayment.invoice_id, req.tenantId);
+
       res.json(result);
     } catch (error) {
       next(error);
@@ -287,6 +361,8 @@ router.delete('/:id',
           oldValues: payment
         }, db);
       }
+
+      await syncInvoicePaidAmount(payment.invoice_id, req.tenantId);
 
       res.status(204).end();
     } catch (error) {

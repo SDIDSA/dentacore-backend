@@ -3,6 +3,8 @@ const { body, param, query, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
 const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
+const { emitToTenant } = require('../socket');
 
 const router = express.Router();
 
@@ -17,26 +19,14 @@ router.use(authenticate);
 // Get appointments
 router.get('/', async (req, res, next) => {
   try {
+    const pag = parsePagination(req);
     const { dentist_id, patient_id, date, status_key } = req.query;
 
     let query = db
       .selectFrom('appointments')
       .innerJoin('patients', 'appointments.patient_id', 'patients.id')
       .innerJoin('users', 'appointments.dentist_id', 'users.id')
-      .select([
-        'appointments.id',
-        'appointments.patient_id',
-        'appointments.dentist_id',
-        'appointments.appointment_date',
-        'appointments.duration_minutes',
-        'appointments.status_key',
-        'appointments.reason',
-        'appointments.notes',
-        'appointments.created_at',
-        'patients.full_name as patient_name',
-        'patients.phone as patient_phone',
-        'users.full_name as dentist_name'
-      ])
+      .select(['appointments.id'])
       .where('appointments.tenant_id', '=', req.tenantId);
 
     if (dentist_id) {
@@ -55,11 +45,23 @@ router.get('/', async (req, res, next) => {
       query = query.where('appointments.status_key', '=', status_key);
     }
 
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
     const appointments = await query
       .orderBy('appointments.appointment_date', 'asc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
-    res.json({ appointments });
+    const ids = appointments.map(a => a.id);
+    if (pag.paginate) {
+      const count = appointments.length > 0 ? Number(appointments[0].count) : 0;
+      res.json(wrapPaginatedResponse(ids, count, pag.limit, pag.offset));
+    } else {
+      res.json(ids);
+    }
   } catch (error) {
     next(error);
   }
@@ -182,6 +184,20 @@ router.post('/',
     try {
       const { patient_id, dentist_id, appointment_date, duration_minutes, reason, notes } = req.body;
 
+      const hasOverlap = await db
+        .selectFrom('appointments')
+        .select('appointments.id')
+        .where('dentist_id', '=', dentist_id)
+        .where('tenant_id', '=', req.tenantId)
+        .where('appointment_date', '<', sql`${appointment_date}::timestamp + (${duration_minutes} || ' minutes')::interval`)
+        .where(sql`${appointment_date}`, '<', sql`appointment_date + (duration_minutes || ' minutes')::interval`)
+        .where('status_key', 'not in', ['appt.status.cancelled', 'appt.status.no_show'])
+        .executeTakeFirst();
+
+      if (hasOverlap) {
+        return res.status(409).json({ error: 'appointment.error.overlap' });
+      }
+
       const appointment = await db
         .insertInto('appointments')
         .values({
@@ -208,6 +224,12 @@ router.post('/',
           newValues: appointment
         }, db);
       }
+
+      emitToTenant(req.tenantId, 'appointment:created', {
+        id: appointment.id,
+        patient_id: appointment.patient_id,
+        appointment_date: appointment.appointment_date,
+      });
 
       res.status(201).json(appointment);
     } catch (error) {
@@ -260,6 +282,25 @@ router.patch('/:id',
       if (notes !== undefined) updateData.notes = notes;
       updateData.updated_at = new Date();
 
+      const targetDentistId = dentist_id || currentAppointment.dentist_id;
+      const targetDate = appointment_date || currentAppointment.appointment_date;
+      const targetDuration = duration_minutes || currentAppointment.duration_minutes;
+
+      const hasOverlap = await db
+        .selectFrom('appointments')
+        .select('appointments.id')
+        .where('dentist_id', '=', targetDentistId)
+        .where('tenant_id', '=', req.tenantId)
+        .where('id', '!=', req.params.id)
+        .where('appointment_date', '<', sql`${targetDate}::timestamp + (${targetDuration} || ' minutes')::interval`)
+        .where(sql`${targetDate}`, '<', sql`appointment_date + (duration_minutes || ' minutes')::interval`)
+        .where('status_key', 'not in', ['appt.status.cancelled', 'appt.status.no_show'])
+        .executeTakeFirst();
+
+      if (hasOverlap) {
+        return res.status(409).json({ error: 'appointment.error.overlap' });
+      }
+
       const appointment = await db
         .updateTable('appointments')
         .set(updateData)
@@ -279,6 +320,12 @@ router.patch('/:id',
           newValues: appointment
         }, db);
       }
+
+      emitToTenant(req.tenantId, 'appointment:updated', {
+        id: appointment.id,
+        patient_id: appointment.patient_id,
+        status_key: appointment.status_key,
+      });
 
       res.json(appointment);
     } catch (error) {
@@ -302,11 +349,11 @@ router.patch('/:id/status',
     try {
       const { status_key } = req.body;
 
-      // Get the current appointment for audit logging
       const currentAppointment = await db
         .selectFrom('appointments')
         .selectAll()
         .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (!currentAppointment) {
@@ -394,6 +441,8 @@ router.delete('/:id',
           newValues: null
         }, db);
       }
+
+      emitToTenant(req.tenantId, 'appointment:deleted', { id: appointment.id });
 
       res.json({ message: 'appointment.deleted' });
     } catch (error) {

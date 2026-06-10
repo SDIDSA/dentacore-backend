@@ -112,7 +112,7 @@ CREATE TABLE users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
-    phone VARCHAR(20) UNIQUE NOT NULL,
+    phone VARCHAR(20) NOT NULL,
     wilaya_id SMALLINT REFERENCES wilayas(id) ON DELETE SET NULL,
     address TEXT,
     status_key VARCHAR(50) NOT NULL DEFAULT 'user.status.active',
@@ -121,7 +121,8 @@ CREATE TABLE users (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_phone_format CHECK (phone ~ '^\+213[0-9]{9}$'),
-    CONSTRAINT chk_user_status CHECK (status_key IN ('user.status.active', 'user.status.inactive', 'user.status.deleted'))
+    CONSTRAINT chk_user_status CHECK (status_key IN ('user.status.active', 'user.status.inactive', 'user.status.deleted')),
+    CONSTRAINT uq_users_tenant_phone UNIQUE (tenant_id, phone)
 );
 
 COMMENT ON TABLE users IS 'Tenant-scoped users (Admins, Dentists, Receptionists)';
@@ -232,6 +233,7 @@ CREATE TABLE appointments (
     CONSTRAINT chk_appt_status CHECK (status_key IN (
         'appt.status.scheduled',
         'appt.status.confirmed',
+        'appt.status.in_progress',
         'appt.status.completed',
         'appt.status.cancelled',
         'appt.status.no_show'
@@ -1318,6 +1320,171 @@ BEGIN
     WHERE u.email = p_email;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================================
+-- P1.1: Trigger to sync invoices.paid_amount_dzd when payments change
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION sync_invoice_paid_amount()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+        UPDATE invoices
+        SET paid_amount_dzd = (
+            SELECT COALESCE(SUM(amount_dzd), 0)
+            FROM payments
+            WHERE invoice_id = COALESCE(NEW.invoice_id, OLD.invoice_id)
+              AND tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id)
+        ),
+        payment_status_key = CASE
+            WHEN (SELECT COALESCE(SUM(amount_dzd), 0) FROM payments WHERE invoice_id = COALESCE(NEW.invoice_id, OLD.invoice_id) AND tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id)) >=
+                 (SELECT total_dzd FROM invoices WHERE id = COALESCE(NEW.invoice_id, OLD.invoice_id))
+            THEN 'invoice.status.paid'
+            WHEN (SELECT COALESCE(SUM(amount_dzd), 0) FROM payments WHERE invoice_id = COALESCE(NEW.invoice_id, OLD.invoice_id) AND tenant_id = COALESCE(NEW.tenant_id, OLD.tenant_id)) > 0
+            THEN 'invoice.status.partial'
+            ELSE 'invoice.status.unpaid'
+        END,
+        updated_at = NOW()
+        WHERE id = COALESCE(NEW.invoice_id, OLD.invoice_id);
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        UPDATE invoices
+        SET paid_amount_dzd = (
+            SELECT COALESCE(SUM(amount_dzd), 0)
+            FROM payments
+            WHERE invoice_id = OLD.invoice_id
+              AND tenant_id = OLD.tenant_id
+        ),
+        payment_status_key = CASE
+            WHEN (SELECT COALESCE(SUM(amount_dzd), 0) FROM payments WHERE invoice_id = OLD.invoice_id AND tenant_id = OLD.tenant_id) >=
+                 (SELECT total_dzd FROM invoices WHERE id = OLD.invoice_id)
+            THEN 'invoice.status.paid'
+            WHEN (SELECT COALESCE(SUM(amount_dzd), 0) FROM payments WHERE invoice_id = OLD.invoice_id AND tenant_id = OLD.tenant_id) > 0
+            THEN 'invoice.status.partial'
+            ELSE 'invoice.status.unpaid'
+        END,
+        updated_at = NOW()
+        WHERE id = OLD.invoice_id;
+        RETURN OLD;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_sync_invoice_paid_amount
+    AFTER INSERT OR UPDATE OR DELETE ON payments
+    FOR EACH ROW
+    EXECUTE FUNCTION sync_invoice_paid_amount();
+
+-- ============================================================================
+-- P1.7: Full-text search index on patient names
+-- ============================================================================
+
+CREATE INDEX idx_patients_name_fts ON patients
+    USING GIN (to_tsvector('simple', full_name));
+
+-- ============================================================================
+-- P1.10: Token blacklist for logout / revocation
+-- ============================================================================
+
+CREATE TABLE token_blacklist (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    jti VARCHAR(255) NOT NULL,
+    token_type VARCHAR(20) NOT NULL CHECK (token_type IN ('access', 'refresh')),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_token_blacklist_jti ON token_blacklist(jti);
+CREATE INDEX idx_token_blacklist_expires ON token_blacklist(expires_at);
+
+-- ============================================================================
+-- TREATMENT PLANS TABLE (v3.0 - Treatment Planning)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS treatment_plans (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    plan_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    status_key VARCHAR(50) NOT NULL DEFAULT 'plan.status.draft',
+    estimated_total_dzd DECIMAL(12, 2) DEFAULT 0,
+    notes TEXT,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_plan_status CHECK (status_key IN (
+        'plan.status.draft', 'plan.status.active', 'plan.status.completed', 'plan.status.cancelled'
+    ))
+);
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'treatment_records' AND column_name = 'plan_id'
+    ) THEN
+        ALTER TABLE treatment_records ADD COLUMN plan_id UUID REFERENCES treatment_plans(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- Index for faster plan lookups
+CREATE INDEX IF NOT EXISTS idx_treatment_plans_patient ON treatment_plans(tenant_id, patient_id);
+CREATE INDEX IF NOT EXISTS idx_treatment_records_plan ON treatment_records(tenant_id, plan_id);
+
+-- ============================================================================
+-- REPORTS SUPPORT VIEWS (v3.0 - Reports & Analytics)
+-- ============================================================================
+
+-- Monthly revenue breakdown
+CREATE OR REPLACE VIEW v_monthly_revenue AS
+SELECT
+    tenant_id,
+    DATE_TRUNC('month', payment_date) AS month,
+    COUNT(*) AS transaction_count,
+    SUM(amount_dzd) AS total_revenue_dzd
+FROM payments
+WHERE payment_date IS NOT NULL
+GROUP BY tenant_id, DATE_TRUNC('month', payment_date)
+ORDER BY month DESC;
+
+-- Procedure frequency by category
+CREATE OR REPLACE VIEW v_procedure_frequency AS
+SELECT
+    tr.tenant_id,
+    tr.category_id,
+    tc.category_key,
+    COUNT(*) AS procedure_count,
+    COALESCE(SUM(tr.estimated_cost_dzd), 0) AS total_estimated_dzd
+FROM treatment_records tr
+LEFT JOIN treatment_categories tc ON tr.category_id = tc.id
+WHERE tr.category_id IS NOT NULL
+GROUP BY tr.tenant_id, tr.category_id, tc.category_key
+ORDER BY procedure_count DESC;
+
+-- New patient registrations by month
+CREATE OR REPLACE VIEW v_new_patients_monthly AS
+SELECT
+    tenant_id,
+    DATE_TRUNC('month', created_at) AS month,
+    COUNT(*) AS new_patients
+FROM patients
+GROUP BY tenant_id, DATE_TRUNC('month', created_at)
+ORDER BY month DESC;
+
+-- Appointment status summary
+CREATE OR REPLACE VIEW v_appointment_summary AS
+SELECT
+    tenant_id,
+    DATE_TRUNC('month', appointment_date) AS month,
+    status_key,
+    COUNT(*) AS appointment_count
+FROM appointments
+GROUP BY tenant_id, DATE_TRUNC('month', appointment_date), status_key
+ORDER BY month DESC;
 
 -- ============================================================================
 -- COMPLETION MESSAGE

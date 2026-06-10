@@ -1,8 +1,10 @@
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const errorHandler = require('./middleware/errorHandler');
 const auditLogger = require('./middleware/auditLogger');
+const logger = require('./config/logger');
 
 const authRoutes = require('./routes/auth');
 const patientRoutes = require('./routes/patients');
@@ -19,15 +21,60 @@ const mediaRoutes = require('./routes/media');
 const xrayRoutes = require('./routes/xrays');
 
 const auditLogsRoutes = require('./routes/auditLogs');
+const treatmentPlanRoutes = require('./routes/treatmentPlans');
+const reportRoutes = require('./routes/reports');
+const notificationRoutes = require('./routes/notifications');
+const odontogramRoutes = require('./routes/odontogram');
+
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./config/swagger');
 
 const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
+  : (process.env.NODE_ENV === 'production' ? [] : ['http://localhost:3000', 'http://localhost:5173']);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+  req.requestId = crypto.randomUUID().slice(0, 8);
+  res.setHeader('x-request-id', req.requestId);
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.info(`${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`, {
+      requestId: req.requestId,
+      method: req.method,
+      url: req.originalUrl,
+      statusCode: res.statusCode,
+      duration,
+    });
+  });
+  next();
+});
+
 app.use(auditLogger.middleware());
+
+const { getIO } = require('./socket');
+app.use((req, res, next) => {
+  try { req.io = getIO(); } catch { req.io = null; }
+  next();
+});
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -53,6 +100,29 @@ app.use('/api/v1/media', mediaRoutes);
 app.use('/api/v1/xrays', xrayRoutes);
 
 app.use('/api/v1/audit-logs', auditLogsRoutes);
+app.use('/api/v1/treatment-plans', treatmentPlanRoutes);
+app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/odontogram', odontogramRoutes);
+
+app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+const path = require('path');
+const fs = require('fs');
+const updatesDir = path.join(__dirname, '..', 'updates');
+app.use('/api/v1/updates', (req, res, next) => {
+  if (req.path === '/version') {
+    const ver = JSON.parse(fs.readFileSync(path.join(updatesDir, 'version.json'), 'utf8'));
+    res.json(ver);
+  } else if (req.path.startsWith('/download/')) {
+    const filename = req.path.slice('/download/'.length);
+    res.download(path.join(updatesDir, filename), filename);
+  } else {
+    next();
+  }
+});
+
+app.use(express.static('public'));
 
 app.use(errorHandler);
 

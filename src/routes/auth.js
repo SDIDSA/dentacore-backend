@@ -1,4 +1,6 @@
+const crypto = require('crypto');
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
@@ -8,14 +10,22 @@ const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'auth.error.too_many_attempts' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 const success = (res, message) => {
-  return res.json({ success: true, message: message })
+  return res.json({ data: { message: message } })
 }
-const error = (res, code, error) => {
-  return res.status(code).json({ success: false, error: error })
+const error = (res, code, err) => {
+  return res.status(code).json({ error: err })
 }
 
-router.post('/login',
+router.post('/login', loginLimiter,
   body('email').isEmail().normalizeEmail(),
   body('password').notEmpty(),
   async (req, res, next) => {
@@ -23,7 +33,7 @@ router.post('/login',
     // Validate input first before opening DB connection
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return error(res, 402, 'validation.error');
+      return error(res, 400, 'validation.error');
     }
 
     try {
@@ -48,6 +58,7 @@ router.post('/login',
       const generateTokens = (user) => {
         const accessToken = jwt.sign(
           {
+            jti: crypto.randomUUID(),
             id: user.id,
             email: user.email,
             role_key: user.role_key,
@@ -59,6 +70,7 @@ router.post('/login',
 
         const refreshToken = jwt.sign(
           {
+            jti: crypto.randomUUID(),
             id: user.id,
             email: user.email,
             tenant_id: user.tenant_id
@@ -132,9 +144,9 @@ router.get('/validate', authenticate, async (req, res, next) => {
       return error(res, 403, 'auth.error.account_inactive');
     }
 
-    // Return the new token if it was refreshed, otherwise the one from the request
+    // Return the rotated tokens if issued, otherwise the ones from the request
     const accessToken = res.getHeader('x-access-token') || req.headers.authorization?.split(' ')[1];
-    const refreshToken = req.headers['x-refresh-token'];
+    const refreshToken = res.getHeader('x-refresh-token') || req.headers['x-refresh-token'];
 
     return res.json({
       accessToken,
@@ -146,6 +158,62 @@ router.get('/validate', authenticate, async (req, res, next) => {
     });
   } catch (e) {
     return error(res, 401, 'auth.error.invalid_token');
+  }
+});
+
+// Logout - revoke tokens
+router.post('/logout', authenticate, async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const refreshToken = req.headers['x-refresh-token'];
+    const now = new Date();
+
+    const tokens = [];
+    if (authHeader) {
+      const accessToken = authHeader.split(' ')[1];
+      const decoded = jwt.decode(accessToken);
+      if (decoded && decoded.jti && decoded.exp) {
+        tokens.push({
+          jti: decoded.jti,
+          token_type: 'access',
+          user_id: req.user.id,
+          tenant_id: req.tenantId,
+          expires_at: new Date(decoded.exp * 1000)
+        });
+      }
+    }
+
+    if (refreshToken) {
+      const decodedRefresh = jwt.decode(refreshToken);
+      if (decodedRefresh && decodedRefresh.jti && decodedRefresh.exp) {
+        tokens.push({
+          jti: decodedRefresh.jti,
+          token_type: 'refresh',
+          user_id: req.user.id,
+          tenant_id: req.tenantId,
+          expires_at: new Date(decodedRefresh.exp * 1000)
+        });
+      }
+    }
+
+    for (const token of tokens) {
+      const existing = await db
+        .selectFrom('token_blacklist')
+        .select('id')
+        .where('jti', '=', token.jti)
+        .executeTakeFirst();
+
+      if (!existing) {
+        await db
+          .insertInto('token_blacklist')
+          .values(token)
+          .execute();
+      }
+    }
+
+    res.json({ message: 'auth.logout.success' });
+  } catch (e) {
+    next(e);
   }
 });
 

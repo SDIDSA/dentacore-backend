@@ -2,7 +2,8 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
-const db = require('../config/database'); // Direct DB access
+const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
@@ -12,28 +13,41 @@ router.use(authenticate);
 router.get('/', async (req, res, next) => {
   try {
     const { search } = req.query;
+    const pag = parsePagination(req);
 
     let query = db
       .selectFrom('patients')
       .select(['patients.id'])
       .where('patients.tenant_id', '=', req.tenantId)
-    //.where('patients.status_key', 'in', ['patient.status.active', 'patient.status.new']);
+
+    let countQuery = db
+      .selectFrom('patients')
+      .select(sql`COUNT(*)`.as('count'))
+      .where('patients.tenant_id', '=', req.tenantId)
 
     if (search) {
-      query = query.where((eb) =>
+      const searchFilter = (eb) =>
         eb.or([
-          eb('patients.full_name', 'ilike', `%${search}%`),
+          eb(sql`to_tsvector('simple', patients.full_name)`, '@@', sql`to_tsquery('simple', ${search})`),
           eb('patients.patient_code', 'ilike', `%${search}%`)
-        ])
-      );
+        ]);
+      query = query.where(searchFilter);
+      countQuery = countQuery.where(searchFilter);
     }
 
     const patients = await query
       .orderBy('patients.created_at', 'desc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
     const patientIds = patients.map(p => p.id);
-    res.json(patientIds);
+    if (pag.paginate) {
+      const countResult = await countQuery.executeTakeFirst();
+      res.json(wrapPaginatedResponse(patientIds, parseInt(countResult.count), pag.limit, pag.offset));
+    } else {
+      res.json(patientIds);
+    }
   } catch (error) {
     next(error);
   }
@@ -379,6 +393,175 @@ router.delete('/:id', async (req, res, next) => {
     }
 
     res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Get patient detail with related records (appointments, treatments, invoices)
+router.get('/:id/detail', async (req, res, next) => {
+  try {
+    const patientId = req.params.id;
+
+    let patient = await db
+      .selectFrom('patients')
+      .leftJoin('wilayas', 'patients.wilaya_id', 'wilayas.id')
+      .select([
+        'patients.id',
+        'patients.patient_code',
+        'patients.full_name',
+        'patients.date_of_birth',
+        'patients.gender',
+        'patients.phone',
+        'patients.email',
+        'patients.wilaya_id',
+        'patients.address',
+        'patients.emergency_contact_name',
+        'patients.emergency_contact_phone',
+        'patients.medical_history',
+        'patients.allergies',
+        'patients.blood_type',
+        'patients.status_key',
+        'patients.created_at',
+        'wilayas.name_key as wilaya_name_key',
+      ])
+      .where('patients.id', '=', patientId)
+      .where('patients.tenant_id', '=', req.tenantId)
+      .executeTakeFirst();
+
+    if (!patient) {
+      return res.status(404).json({ error: 'patient.error.not_found' });
+    }
+
+    const appointments = await db
+      .selectFrom('appointments')
+      .leftJoin('users', 'appointments.dentist_id', 'users.id')
+      .select([
+        'appointments.id',
+        'appointments.appointment_date',
+        'appointments.duration_minutes',
+        'appointments.status_key',
+        'appointments.reason',
+        'appointments.notes',
+        'users.full_name as dentist_name',
+      ])
+      .where('appointments.patient_id', '=', patientId)
+      .where('appointments.tenant_id', '=', req.tenantId)
+      .orderBy('appointments.appointment_date', 'desc')
+      .limit(20)
+      .execute();
+
+    const treatments = await db
+      .selectFrom('treatment_records')
+      .leftJoin('users', 'treatment_records.dentist_id', 'users.id')
+      .select([
+        'treatment_records.id',
+        'treatment_records.treatment_date',
+        'treatment_records.tooth_number',
+        'treatment_records.diagnosis',
+        'treatment_records.treatment_performed',
+        'treatment_records.notes',
+        'treatment_records.estimated_cost_dzd',
+        'users.full_name as dentist_name',
+      ])
+      .where('treatment_records.patient_id', '=', patientId)
+      .where('treatment_records.tenant_id', '=', req.tenantId)
+      .orderBy('treatment_records.treatment_date', 'desc')
+      .limit(20)
+      .execute();
+
+    const invoices = await db
+      .selectFrom('invoices')
+      .select([
+        'invoices.id',
+        'invoices.invoice_number',
+        'invoices.issue_date',
+        'invoices.due_date',
+        'invoices.subtotal_dzd',
+        'invoices.discount_dzd',
+        'invoices.tax_dzd',
+        'invoices.total_dzd',
+        'invoices.paid_amount_dzd',
+        sql`invoices.total_dzd - invoices.paid_amount_dzd`.as('balance_dzd'),
+        'invoices.payment_status_key',
+        'invoices.notes',
+      ])
+      .where('invoices.patient_id', '=', patientId)
+      .where('invoices.tenant_id', '=', req.tenantId)
+      .orderBy('invoices.issue_date', 'desc')
+      .limit(20)
+      .execute();
+
+    const invoiceIds = invoices.map(inv => inv.id);
+    let payments = [];
+    if (invoiceIds.length > 0) {
+      payments = await db
+        .selectFrom('payments')
+        .leftJoin('payment_methods', 'payments.payment_method_id', 'payment_methods.id')
+        .select([
+          'payments.id',
+          'payments.invoice_id',
+          'payments.amount_dzd',
+          'payments.payment_date',
+          'payments.notes',
+          'payment_methods.name_key as payment_method_key',
+        ])
+        .where('payments.invoice_id', 'in', invoiceIds)
+        .where('payments.tenant_id', '=', req.tenantId)
+        .orderBy('payments.payment_date', 'desc')
+        .execute();
+    }
+
+    const paymentsByInvoice = {};
+    for (const payment of payments) {
+      if (!paymentsByInvoice[payment.invoice_id]) {
+        paymentsByInvoice[payment.invoice_id] = [];
+      }
+      paymentsByInvoice[payment.invoice_id].push(payment);
+    }
+
+    const invoicesWithPayments = invoices.map(inv => ({
+      ...inv,
+      payments: paymentsByInvoice[inv.id] || [],
+    }));
+
+    const plans = await db
+      .selectFrom('treatment_plans')
+      .selectAll()
+      .where('treatment_plans.patient_id', '=', patientId)
+      .where('treatment_plans.tenant_id', '=', req.tenantId)
+      .orderBy('treatment_plans.created_at', 'desc')
+      .execute();
+
+    const plansWithDetails = await Promise.all(plans.map(async (plan) => {
+      const costResult = await db
+        .selectFrom('treatment_records')
+        .select(db.fn.sum('estimated_cost_dzd').as('actual_total'))
+        .where('plan_id', '=', plan.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      const treatmentCount = await db
+        .selectFrom('treatment_records')
+        .select(db.fn.count('id').as('count'))
+        .where('plan_id', '=', plan.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      return {
+        ...plan,
+        actual_total_dzd: costResult?.actual_total || 0,
+        treatment_count: parseInt(treatmentCount?.count || '0'),
+      };
+    }));
+
+    res.json({
+      patient,
+      appointments,
+      treatments,
+      invoices: invoicesWithPayments,
+      plans: plansWithDetails,
+    });
   } catch (error) {
     next(error);
   }

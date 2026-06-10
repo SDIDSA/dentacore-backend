@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.log
+backend-error.log
+backend.log
+.vscode
+.idea
+coverage
+__pycache__
+*.pyc

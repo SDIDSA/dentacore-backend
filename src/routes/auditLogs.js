@@ -3,6 +3,7 @@ const { param, query, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
 const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
@@ -11,15 +12,14 @@ router.use(authenticate);
 // Get audit log IDs with optional filters
 router.get('/', async (req, res, next) => {
   try {
+    const pag = parsePagination(req);
     const { 
       entity_type, 
       entity_id, 
       action, 
       user_id, 
       start_date, 
-      end_date, 
-      limit = 100,
-      offset = 0
+      end_date
     } = req.query;
 
     let query = db
@@ -51,14 +51,23 @@ router.get('/', async (req, res, next) => {
       query = query.where('audit_logs.created_at', '<=', end_date + ' 23:59:59');
     }
 
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
     const auditLogs = await query
       .orderBy('audit_logs.created_at', 'desc')
-      .limit(parseInt(limit))
-      .offset(parseInt(offset))
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
     const auditLogIds = auditLogs.map(log => log.id);
-    res.json(auditLogIds);
+    if (pag.paginate) {
+      const count = auditLogs.length > 0 ? Number(auditLogs[0].count) : 0;
+      res.json(wrapPaginatedResponse(auditLogIds, count, pag.limit, pag.offset));
+    } else {
+      res.json(auditLogIds);
+    }
   } catch (error) {
     next(error);
   }

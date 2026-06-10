@@ -4,6 +4,8 @@ const { authenticate } = require('../middleware/auth');
 const db = require('../config/database');
 const cloudinary = require('../config/cloudinary');
 const multer = require('multer');
+const { sql } = require('kysely');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
@@ -16,10 +18,7 @@ const upload = multer({
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE);
 if (!MAX_FILE_SIZE || MAX_FILE_SIZE < 1) {
-  if (process.env.NODE_ENV !== 'test') {
-    console.error('FATAL: MAX_FILE_SIZE env var must be a positive number');
-    process.exit(1);
-  }
+  console.warn('WARN: MAX_FILE_SIZE env var is missing or invalid, defaulting to 20MB');
 }
 
 async function uploadToCloudinary(fileBuffer, originalFilename, tenantId) {
@@ -44,6 +43,7 @@ async function uploadToCloudinary(fileBuffer, originalFilename, tenantId) {
 
 router.get('/', async (req, res, next) => {
   try {
+    const pag = parsePagination(req);
     const { start_date, end_date } = req.query;
 
     let query = db
@@ -58,11 +58,23 @@ router.get('/', async (req, res, next) => {
       query = query.where('media.created_at', '<=', end_date + ' 23:59:59');
     }
 
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
     const media = await query
       .orderBy('media.created_at', 'desc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
-    res.json(media.map(m => m.id));
+    const mediaIds = media.map(m => m.id);
+    if (pag.paginate) {
+      const count = media.length > 0 ? Number(media[0].count) : 0;
+      res.json(wrapPaginatedResponse(mediaIds, count, pag.limit, pag.offset));
+    } else {
+      res.json(mediaIds);
+    }
   } catch (error) {
     next(error);
   }

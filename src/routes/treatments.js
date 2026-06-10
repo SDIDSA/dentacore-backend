@@ -3,6 +3,7 @@ const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
 const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
@@ -18,7 +19,8 @@ const VALID_TOOTH_NUMBERS = [
 // Get treatment IDs with optional filters
 router.get('/', async (req, res, next) => {
   try {
-    const { patient_id, dentist_id, start_date, end_date, treatment_type } = req.query;
+    const pag = parsePagination(req);
+    const { patient_id, dentist_id, plan_id, start_date, end_date, treatment_type } = req.query;
 
     let query = db
       .selectFrom('treatment_records')
@@ -41,16 +43,31 @@ router.get('/', async (req, res, next) => {
       query = query.where('treatment_records.treatment_date', '<=', end_date + ' 23:59:59');
     }
 
+    if (plan_id) {
+      query = query.where('treatment_records.plan_id', '=', plan_id);
+    }
+
     if (treatment_type) {
       query = query.where('treatment_records.category_id', '=', treatment_type);
     }
 
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
     const treatments = await query
       .orderBy('treatment_records.treatment_date', 'desc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
     const treatmentIds = treatments.map(t => t.id);
-    res.json(treatmentIds);
+    if (pag.paginate) {
+      const count = treatments.length > 0 ? Number(treatments[0].count) : 0;
+      res.json(wrapPaginatedResponse(treatmentIds, count, pag.limit, pag.offset));
+    } else {
+      res.json(treatmentIds);
+    }
   } catch (error) {
     next(error);
   }
@@ -146,6 +163,7 @@ router.post('/',
   body('treatment_performed').notEmpty(),
   body('estimated_cost_dzd').isFloat({ min: 0 }),
   body('appointment_id').optional().isUUID(),
+  body('plan_id').optional().isUUID(),
   body('category_id').optional().isUUID(),
   body('tooth_number').optional().isIn(VALID_TOOTH_NUMBERS),
   async (req, res, next) => {
@@ -155,7 +173,7 @@ router.post('/',
     }
 
     try {
-      const { patient_id, dentist_id, treatment_date, appointment_id, category_id, tooth_number, diagnosis, treatment_performed, notes, estimated_cost_dzd } = req.body;
+      const { patient_id, dentist_id, treatment_date, appointment_id, plan_id, category_id, tooth_number, diagnosis, treatment_performed, notes, estimated_cost_dzd } = req.body;
 
       const treatment = await db
         .insertInto('treatment_records')
@@ -164,6 +182,7 @@ router.post('/',
           dentist_id,
           treatment_date,
           appointment_id: appointment_id || null,
+          plan_id: plan_id || null,
           category_id: category_id || null,
           tooth_number: tooth_number || null,
           diagnosis,
@@ -200,6 +219,7 @@ router.patch('/:id',
   body('dentist_id').optional().isUUID(),
   body('treatment_date').optional().isISO8601(),
   body('appointment_id').optional().isUUID(),
+  body('plan_id').optional().isUUID(),
   body('category_id').optional().isUUID(),
   body('tooth_number').optional().isIn(VALID_TOOTH_NUMBERS),
   body('diagnosis').optional().notEmpty(),
@@ -224,7 +244,7 @@ router.patch('/:id',
         return res.status(404).json({ error: 'treatment.error.not_found' });
       }
 
-      const { patient_id, dentist_id, treatment_date, appointment_id, category_id, tooth_number, diagnosis, treatment_performed, notes, estimated_cost_dzd } = req.body;
+      const { patient_id, dentist_id, treatment_date, appointment_id, plan_id, category_id, tooth_number, diagnosis, treatment_performed, notes, estimated_cost_dzd } = req.body;
 
       // Build update object with only provided fields
       const updateData = {};
@@ -232,6 +252,7 @@ router.patch('/:id',
       if (dentist_id !== undefined) updateData.dentist_id = dentist_id;
       if (treatment_date !== undefined) updateData.treatment_date = treatment_date;
       if (appointment_id !== undefined) updateData.appointment_id = appointment_id;
+      if (plan_id !== undefined) updateData.plan_id = plan_id;
       if (category_id !== undefined) updateData.category_id = category_id;
       if (tooth_number !== undefined) updateData.tooth_number = tooth_number;
       if (diagnosis !== undefined) updateData.diagnosis = diagnosis;

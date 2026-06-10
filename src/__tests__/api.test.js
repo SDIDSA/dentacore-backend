@@ -117,7 +117,7 @@ describe('POST /api/v1/auth/login', () => {
       .post('/api/v1/auth/login')
       .send({});
 
-    expect(res.statusCode).toBe(402);
+    expect(res.statusCode).toBe(400);
     expect(res.body.error).toMatch(/validation/i);
   });
 
@@ -126,7 +126,7 @@ describe('POST /api/v1/auth/login', () => {
       .post('/api/v1/auth/login')
       .send({ email: 'notanemail', password: 'SomePass123!' });
 
-    expect(res.statusCode).toBe(402);
+    expect(res.statusCode).toBe(400);
     expect(res.body.error).toMatch(/validation/i);
   });
 });

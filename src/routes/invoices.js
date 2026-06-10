@@ -3,6 +3,7 @@ const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
 const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
@@ -11,6 +12,7 @@ router.use(authenticate);
 // Get invoice IDs with optional filters
 router.get('/', async (req, res, next) => {
   try {
+    const pag = parsePagination(req);
     const { patient_id, start_date, end_date, status } = req.query;
 
     let query = db
@@ -34,12 +36,23 @@ router.get('/', async (req, res, next) => {
       query = query.where('invoices.payment_status_key', '=', status);
     }
 
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
     const invoices = await query
       .orderBy('invoices.issue_date', 'desc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
     const invoiceIds = invoices.map(i => i.id);
-    res.json(invoiceIds);
+    if (pag.paginate) {
+      const count = invoices.length > 0 ? Number(invoices[0].count) : 0;
+      res.json(wrapPaginatedResponse(invoiceIds, count, pag.limit, pag.offset));
+    } else {
+      res.json(invoiceIds);
+    }
   } catch (error) {
     next(error);
   }

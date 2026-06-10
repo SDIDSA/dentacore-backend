@@ -1,7 +1,9 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const { sql } = require('kysely');
 const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
@@ -21,6 +23,7 @@ const TRANSITIONAL_STATUSES = [
 // List purchase order IDs with filters
 router.get('/', async (req, res, next) => {
   try {
+    const pag = parsePagination(req);
     const { supplier_id, status_key, start_date, end_date } = req.query;
 
     let query = db
@@ -41,11 +44,23 @@ router.get('/', async (req, res, next) => {
       query = query.where('purchase_orders.order_date', '<=', end_date + ' 23:59:59');
     }
 
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
     const orders = await query
       .orderBy('purchase_orders.order_date', 'desc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
-    res.json(orders.map(o => o.id));
+    const orderIds = orders.map(o => o.id);
+    if (pag.paginate) {
+      const count = orders.length > 0 ? Number(orders[0].count) : 0;
+      res.json(wrapPaginatedResponse(orderIds, count, pag.limit, pag.offset));
+    } else {
+      res.json(orderIds);
+    }
   } catch (error) {
     next(error);
   }

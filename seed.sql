@@ -448,6 +448,285 @@ BEGIN
 END $$;
 
 -- ============================================================================
+-- ADDITIONAL DUMMY DATA FOR CABINET DENTAIRE EL-QODS
+-- Extra Patients, Dentists, Receptionist, and Appointments (Next 90 Days)
+-- ============================================================================
+
+DO $$
+DECLARE
+    v_tenant_id UUID;
+    v_admin_id UUID;
+    v_receptionist_id UUID;
+    v_dentist1_id UUID;
+    v_dentist2_id UUID;
+    v_dentist3_id UUID;
+    v_curr_dentist_id UUID;
+    v_curr_patient_id UUID;
+    v_dentist_role_id INTEGER;
+    v_receptionist_role_id INTEGER;
+    v_appt_date DATE;
+    v_appt_timestamp TIMESTAMP;
+    v_hour INT;
+    v_minute INT;
+    v_appts_today INT;
+    v_date_offset INT;
+    v_i INT;
+    v_r REAL;
+    v_status_key TEXT;
+    v_reason TEXT;
+    v_note TEXT;
+    v_reasons TEXT[];
+    v_notes TEXT[];
+    v_total_appts INT := 0;
+BEGIN
+    SELECT id INTO v_tenant_id FROM tenants WHERE subdomain = 'elqods';
+    SELECT id INTO v_admin_id FROM users WHERE email = 'admin@elqods.dz';
+    SELECT id INTO v_dentist1_id FROM users WHERE email = 'dentist@elqods.dz';
+    SELECT id INTO v_dentist_role_id FROM roles WHERE role_key = 'auth.role.dentist';
+    SELECT id INTO v_receptionist_role_id FROM roles WHERE role_key = 'auth.role.receptionist';
+
+    -- ========================================================================
+    -- ADD 2 MORE DENTISTS + 1 RECEPTIONIST
+    -- ========================================================================
+    INSERT INTO users (tenant_id, role_id, email, password_hash, full_name, phone, wilaya_id, address, status_key)
+    VALUES (v_tenant_id, v_dentist_role_id, 'dentist2@elqods.dz', crypt('Dentist@2025!', gen_salt('bf')), 'Dr. Samir Hadjadj', '+213555345678', 25, 'Rue des Freres Abbas, Constantine', 'user.status.active')
+    RETURNING id INTO v_dentist2_id;
+
+    INSERT INTO users (tenant_id, role_id, email, password_hash, full_name, phone, wilaya_id, address, status_key)
+    VALUES (v_tenant_id, v_dentist_role_id, 'dentist3@elqods.dz', crypt('Dentist@2025!', gen_salt('bf')), 'Dr. Fatima Bouzidi', '+213556456789', 25, 'Cite des Muriers, Constantine', 'user.status.active')
+    RETURNING id INTO v_dentist3_id;
+
+    INSERT INTO users (tenant_id, role_id, email, password_hash, full_name, phone, wilaya_id, address, status_key)
+    VALUES (v_tenant_id, v_receptionist_role_id, 'reception@elqods.dz', crypt('Recept@2025!', gen_salt('bf')), 'Nadia Khelifi', '+213557567890', 25, 'Centre Ville, Constantine', 'user.status.active')
+    RETURNING id INTO v_receptionist_id;
+
+    RAISE NOTICE 'Created 2 more dentists (Samir, Fatima) + 1 receptionist (Nadia) for El-Qods';
+
+    -- ========================================================================
+    -- ADD 98 PATIENTS (programmatic generation for ~100 total with existing 2)
+    -- ========================================================================
+    CREATE TEMP TABLE tmp_first_names (name TEXT) ON COMMIT DELETE ROWS;
+    INSERT INTO tmp_first_names VALUES
+        ('Mohamed'),('Ahmed'),('Ali'),('Sami'),('Rachid'),('Karim'),('Tarek'),('Mounir'),
+        ('Hichem'),('Djamel'),('Fares'),('Abdelkader'),('Billel'),('Sofiane'),('Nadir'),
+        ('Amine'),('Redha'),('Lyes'),('Yacine'),('Riad'),('Fouad'),('Slimane'),('Nabil'),
+        ('Youcef'),('Khalil'),('Madjid'),('Aissa'),('Abderrahmane'),('Mokhtar'),('Nour'),
+        ('Fatima'),('Karima'),('Yasmine'),('Nabila'),('Assia'),('Wahiba'),('Lynda'),
+        ('Dalila'),('Malika'),('Zineb'),('Samira'),('Houria'),('Nadia'),('Salima'),
+        ('Naima'),('Djamila'),('Saida'),('Hafida'),('Nawel'),('Meriem'),('Nezha');
+
+    CREATE TEMP TABLE tmp_last_names (name TEXT) ON COMMIT DELETE ROWS;
+    INSERT INTO tmp_last_names VALUES
+        ('Bouzid'),('Khelifi'),('Mehenni'),('Benali'),('Hamdi'),('Derradji'),('Guediri'),
+        ('Boulahia'),('Chaieb'),('Kheddam'),('Righi'),('Meddour'),('Cheriet'),('Horra'),
+        ('Lamri'),('Hadjadj'),('Bouzidi'),('Ait Ali'),('Mekki'),('Slimani'),
+        ('Bensalem'),('Ouali'),('Djebali'),('Zidane'),('Hamza'),('Belkacem'),
+        ('Mansouri'),('Cherif'),('Kherroubi'),('Messaoudi'),('Nacer'),('Saidi'),
+        ('Benyahia'),('Ouled'),('Boumediene'),('Meziane'),('Mekhalfi'),('Sahraoui'),
+        ('Bennour'),('Gacem'),('Hocine'),('Maouche'),('Zerrouki'),('Djezzar'),
+        ('Boukerrou'),('Ait Ahmed'),('Mokrani'),('Amirat'),('Rahal'),('Bouchareb');
+
+    CREATE TEMP TABLE tmp_medicals (val TEXT) ON COMMIT DELETE ROWS;
+    INSERT INTO tmp_medicals VALUES
+        (NULL),('Diabetes type 2'),('Hypertension'),('Asthma'),('Thyroid disorder'),
+        ('High cholesterol'),('Anemia'),('Heart condition'),('Arthritis'),
+        ('Allergic rhinitis'),(NULL),(NULL),('Hypothyroidism'),('Gastritis'),
+        ('Migraine'),(NULL),(NULL),(NULL);
+
+    CREATE TEMP TABLE tmp_allergies (val TEXT) ON COMMIT DELETE ROWS;
+    INSERT INTO tmp_allergies VALUES
+        (NULL),('Penicillin'),('Aspirin'),('Sulfa drugs'),('Latex'),
+        ('Ibuprofen'),('Codeine'),('Sulfonamides'),('Local anesthetics'),
+        (NULL),(NULL),(NULL),('Amoxicillin'),(NULL),(NULL);
+
+    DECLARE
+        v_patient_count INT := 0;
+        v_p_first TEXT;
+        v_p_last TEXT;
+        v_gender TEXT;
+        v_dob DATE;
+        v_phone TEXT;
+        v_email TEXT;
+        v_emergency_name TEXT;
+        v_emergency_phone TEXT;
+        v_medical TEXT;
+        v_allergy TEXT;
+        v_blood TEXT;
+        v_address TEXT;
+    BEGIN
+        FOR v_i IN 1..98 LOOP
+            SELECT name INTO v_p_first FROM tmp_first_names ORDER BY random() LIMIT 1;
+            SELECT name INTO v_p_last FROM tmp_last_names ORDER BY random() LIMIT 1;
+            v_gender := CASE WHEN random() < 0.5 THEN 'patient.gender.male' ELSE 'patient.gender.female' END;
+            v_dob := (date '1955-01-01' + (random() * 14000)::int);
+            v_phone := '+21377' || LPAD((v_i + 100)::text, 7, '0');
+            v_email := lower(replace(v_p_first, ' ', '') || '.' || replace(v_p_last, ' ', '') || v_i || '@email.dz');
+            SELECT name INTO v_emergency_name FROM tmp_first_names ORDER BY random() LIMIT 1;
+            v_emergency_phone := '+21377' || LPAD((v_i + 500)::text, 7, '0');
+            SELECT val INTO v_medical FROM tmp_medicals ORDER BY random() LIMIT 1;
+            SELECT val INTO v_allergy FROM tmp_allergies ORDER BY random() LIMIT 1;
+            v_blood := (ARRAY['A+','A-','B+','B-','AB+','AB-','O+','O-'])[1 + (random() * 8)::int];
+            v_address := (ARRAY[
+                'Rue Didouche Mourad, Constantine',
+                'Cite Zouaghi, Constantine',
+                'Nouvelle Ville, Constantine',
+                'Cite El-Bir, Constantine',
+                'Route de Batna, Constantine'
+            ])[1 + (random() * 5)::int];
+
+            INSERT INTO patients (
+                tenant_id, patient_code, full_name, date_of_birth, gender,
+                phone, email, wilaya_id, address,
+                emergency_contact_name, emergency_contact_phone,
+                medical_history, allergies, blood_type, status_key, created_by
+            ) VALUES (
+                v_tenant_id, NULL, v_p_first || ' ' || v_p_last, v_dob, v_gender,
+                v_phone, v_email, 25, v_address,
+                v_emergency_name || ' ' || v_p_last, v_emergency_phone,
+                v_medical, v_allergy, v_blood,
+                'patient.status.active', v_admin_id
+            );
+            v_patient_count := v_patient_count + 1;
+        END LOOP;
+        RAISE NOTICE 'Created % new patients for El-Qods (total: ~100 patients)', v_patient_count;
+    END;
+
+    DROP TABLE IF EXISTS tmp_first_names;
+    DROP TABLE IF EXISTS tmp_last_names;
+    DROP TABLE IF EXISTS tmp_medicals;
+    DROP TABLE IF EXISTS tmp_allergies;
+
+    -- ========================================================================
+    -- APPOINTMENT DATA POOLS
+    -- ========================================================================
+    v_reasons := ARRAY[
+        'Routine dental checkup and cleaning',
+        'Toothache evaluation - sensitivity to hot and cold',
+        'Composite filling restoration',
+        'Professional teeth cleaning and scaling',
+        'Root canal evaluation and treatment',
+        'Tooth extraction consultation',
+        'Dental crown preparation and fitting',
+        'Orthodontic braces adjustment',
+        'Teeth whitening treatment',
+        'Wisdom tooth pain evaluation',
+        'Broken tooth repair - emergency',
+        'Gum pain and bleeding treatment',
+        'Dental implant consultation',
+        'Denture adjustment and relining',
+        'Post-operative follow-up examination',
+        'Pediatric dental examination',
+        'Emergency walk-in - severe toothache',
+        'Night guard fitting for bruxism',
+        'Dental bridge preparation',
+        'Annual comprehensive oral examination'
+    ];
+
+    v_notes := ARRAY[
+        NULL,
+        'Patient reports intermittent pain lasting 2 weeks',
+        'Referred by Dr. Benali for specialist evaluation',
+        'First visit to the clinic - new patient registration',
+        NULL,
+        'Follow-up from previous root canal treatment',
+        'X-rays to be taken before procedure',
+        'Insurance pre-approval needed before proceeding',
+        NULL,
+        'Patient is anxious about dental procedures',
+        'Patient advised to arrive 15 minutes early',
+        'Bring previous dental records if available',
+        'Pediatric patient - parent/guardian will accompany',
+        'Emergency slot - no prior appointment',
+        NULL
+    ];
+
+    -- ========================================================================
+    -- GENERATE APPOINTMENTS FOR 90 DAYS
+    -- ========================================================================
+    FOR v_date_offset IN 0..89 LOOP
+        v_appt_date := CURRENT_DATE + v_date_offset;
+        
+        -- Skip Fridays (5) and Saturdays (6) - Algerian work week: Sun-Thu
+        IF EXTRACT(DOW FROM v_appt_date) IN (5, 6) THEN
+            CONTINUE;
+        END IF;
+        
+        -- 4-8 appointments per day depending on day of week
+        v_appts_today := 4 + (random() * 5)::int;
+        
+        FOR v_i IN 1..v_appts_today LOOP
+            -- Random time between 08:00 and 17:00, 30-min slots
+            v_hour := 8 + (random() * 9)::int;
+            v_minute := CASE WHEN random() < 0.5 THEN 0 ELSE 30 END;
+            
+            -- Lunch break: skip 12:00-13:30
+            IF (v_hour = 12) OR (v_hour = 13 AND v_minute >= 0) OR (v_hour = 13 AND v_minute <= 30) THEN
+                v_hour := 14 + (random() * 3)::int;
+                v_minute := CASE WHEN random() < 0.5 THEN 0 ELSE 30 END;
+            END IF;
+            
+            v_appt_timestamp := v_appt_date + make_interval(hours := v_hour, mins := v_minute);
+            
+            -- Pick random dentist via direct query
+            SELECT id INTO v_curr_dentist_id FROM users
+            WHERE tenant_id = v_tenant_id AND role_id = v_dentist_role_id
+            ORDER BY random() LIMIT 1;
+            
+            -- Pick random patient via direct query
+            SELECT id INTO v_curr_patient_id FROM patients
+            WHERE tenant_id = v_tenant_id
+            ORDER BY random() LIMIT 1;
+            
+            -- Pick random reason
+            v_reason := v_reasons[1 + (random() * (array_length(v_reasons, 1)))::int];
+            
+            -- Pick random note
+            v_note := v_notes[1 + (random() * (array_length(v_notes, 1)))::int];
+            
+            -- Determine status based on past/future
+            IF v_appt_timestamp < NOW() THEN
+                v_r := random();
+                IF v_r < 0.65 THEN
+                    v_status_key := 'appt.status.completed';
+                ELSIF v_r < 0.80 THEN
+                    v_status_key := 'appt.status.cancelled';
+                ELSIF v_r < 0.90 THEN
+                    v_status_key := 'appt.status.no_show';
+                ELSE
+                    v_status_key := 'appt.status.confirmed';
+                END IF;
+            ELSE
+                v_r := random();
+                IF v_r < 0.50 THEN
+                    v_status_key := 'appt.status.scheduled';
+                ELSIF v_r < 0.75 THEN
+                    v_status_key := 'appt.status.confirmed';
+                ELSIF v_r < 0.90 THEN
+                    v_status_key := 'appt.status.scheduled';
+                ELSE
+                    v_status_key := 'appt.status.completed';
+                END IF;
+            END IF;
+            
+            INSERT INTO appointments (
+                tenant_id, patient_id, dentist_id, appointment_date,
+                duration_minutes, status_key, reason, notes, created_by
+            ) VALUES (
+                v_tenant_id, v_curr_patient_id, v_curr_dentist_id, v_appt_timestamp,
+                CASE WHEN random() < 0.20 THEN 60 ELSE 30 END,
+                v_status_key, v_reason, v_note,
+                CASE WHEN random() < 0.5 THEN v_admin_id ELSE v_receptionist_id END
+            );
+            
+            v_total_appts := v_total_appts + 1;
+        END LOOP;
+    END LOOP;
+
+    RAISE NOTICE 'Generated % appointments across 90 days for El-Qods', v_total_appts;
+    RAISE NOTICE '--------------------------------------------';
+END $$;
+
+-- ============================================================================
 -- Tenant 2: Clinique Dentaire Sourire (Algiers)
 -- ============================================================================
 
@@ -831,8 +1110,9 @@ BEGIN
     RAISE NOTICE '   Subdomain: elqods.dms.dz';
     RAISE NOTICE '   Status: Active (Professional Plan)';
     RAISE NOTICE '   Admin: admin@elqods.dz / Admin@2025!';
-    RAISE NOTICE '   Dentist: dentist@elqods.dz / Dentist@2025!';
-    RAISE NOTICE '   Patients: 2 | Suppliers: 3 | Inventory: 8 items | Expenses: 4';
+    RAISE NOTICE '   Dentists: Amina, Samir, Fatima | Receptionist: Nadia';
+    RAISE NOTICE '   Patients: 100 | Suppliers: 3 | Inventory: 8 items | Expenses: 4';
+    RAISE NOTICE '   Appointments: Generated across 90+ days';
     RAISE NOTICE '';
     RAISE NOTICE '2. Clinique Dentaire Sourire (Algiers)';
     RAISE NOTICE '   Subdomain: sourire.dms.dz';
@@ -1321,7 +1601,8 @@ BEGIN
     RAISE NOTICE 'Total Paid: % DZD', v_total_paid;
     RAISE NOTICE 'Total Outstanding: % DZD', v_total_outstanding;
     RAISE NOTICE '--------------------------------------------';
-    RAISE NOTICE 'El-Qods: 4 invoices (2 paid, 1 partial, 1 overdue)';
+    RAISE NOTICE 'El-Qods: 4 invoices (2 paid, 1 partial, 1 overdue) + 90 days appointments';
+    RAISE NOTICE '   +100 patients, 3 dentists, 1 receptionist, appointments across 90 days';
     RAISE NOTICE 'Sourire: 2 invoices (1 paid, 1 unpaid)';
     RAISE NOTICE 'Dr. Teyar: 6 invoices (4 paid, 1 partial, 1 unpaid)';
     RAISE NOTICE '--------------------------------------------';

@@ -3,6 +3,7 @@ const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const { sql } = require('kysely');
 const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
@@ -15,6 +16,7 @@ router.use(authenticate);
 // Get all inventory items
 router.get('/items', async (req, res, next) => {
   try {
+    const pag = parsePagination(req);
     const { search, category_id, status, low_stock } = req.query;
 
     let query = db
@@ -45,12 +47,23 @@ router.get('/items', async (req, res, next) => {
       query = query.where('inventory_items.current_stock', '<=', sql`inventory_items.min_stock_level`);
     }
 
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
     const items = await query
       .orderBy('inventory_items.created_at', 'desc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
     const itemIds = items.map(item => item.id);
-    res.json(itemIds);
+    if (pag.paginate) {
+      const count = items.length > 0 ? Number(items[0].count) : 0;
+      res.json(wrapPaginatedResponse(itemIds, count, pag.limit, pag.offset));
+    } else {
+      res.json(itemIds);
+    }
   } catch (error) {
     next(error);
   }
@@ -431,28 +444,34 @@ router.get('/movements/:id', async (req, res, next) => {
 // Get all inventory categories
 router.get('/categories', async (req, res, next) => {
   try {
-    const categories = await db
+    const pag = parsePagination(req);
+
+    let query = db
       .selectFrom('inventory_categories')
-      .leftJoin('inventory_categories as parent', 'inventory_categories.parent_id', 'parent.id')
-      .select([
-        'inventory_categories.id',
-        'inventory_categories.category_key',
-        'inventory_categories.parent_id',
-        'inventory_categories.description',
-        'inventory_categories.is_active',
-        'inventory_categories.created_at',
-        'parent.category_key as parent_category_key',
-        sql`CASE WHEN inventory_categories.tenant_id IS NULL THEN true ELSE false END`.as('is_global')
-      ])
+      .select(['inventory_categories.id'])
       .where((eb) => eb.or([
-        eb('inventory_categories.tenant_id', 'is', null), // Global categories
-        eb('inventory_categories.tenant_id', '=', req.tenantId) // Tenant-specific categories
+        eb('inventory_categories.tenant_id', 'is', null),
+        eb('inventory_categories.tenant_id', '=', req.tenantId)
       ]))
-      .where('inventory_categories.is_active', '=', true)
+      .where('inventory_categories.is_active', '=', true);
+
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
+    const cats = await query
       .orderBy('inventory_categories.category_key')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
-    res.json(categories);
+    const categoryIds = cats.map(c => c.id);
+    if (pag.paginate) {
+      const count = cats.length > 0 ? Number(cats[0].count) : 0;
+      res.json(wrapPaginatedResponse(categoryIds, count, pag.limit, pag.offset));
+    } else {
+      res.json(categoryIds);
+    }
   } catch (error) {
     next(error);
   }
@@ -678,6 +697,7 @@ router.delete('/categories/:id',
 // Get all suppliers
 router.get('/suppliers', async (req, res, next) => {
   try {
+    const pag = parsePagination(req);
     const { search, status } = req.query;
 
     let query = db
@@ -700,12 +720,23 @@ router.get('/suppliers', async (req, res, next) => {
       query = query.where('suppliers.status_key', '=', status);
     }
 
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
     const suppliers = await query
       .orderBy('suppliers.created_at', 'desc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
     const supplierIds = suppliers.map(supplier => supplier.id);
-    res.json(supplierIds);
+    if (pag.paginate) {
+      const count = suppliers.length > 0 ? Number(suppliers[0].count) : 0;
+      res.json(wrapPaginatedResponse(supplierIds, count, pag.limit, pag.offset));
+    } else {
+      res.json(supplierIds);
+    }
   } catch (error) {
     next(error);
   }

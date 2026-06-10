@@ -1,7 +1,9 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const { sql } = require('kysely');
 const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
@@ -27,6 +29,7 @@ async function resolvePaymentMethodId(key) {
 // List expense IDs with optional filters
 router.get('/', async (req, res, next) => {
   try {
+    const pag = parsePagination(req);
     const { start_date, end_date, status_key, category_key, supplier_id } = req.query;
 
     let query = db
@@ -50,13 +53,24 @@ router.get('/', async (req, res, next) => {
       query = query.where('expenses.supplier_id', '=', supplier_id);
     }
 
+    if (pag.paginate) {
+      query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+    }
+
     const expenses = await query
       .orderBy('expenses.expense_date', 'desc')
       .orderBy('expenses.created_at', 'desc')
+      .limit(pag.paginate ? pag.limit : null)
+      .offset(pag.paginate ? pag.offset : null)
       .execute();
 
     const ids = expenses.map(e => e.id);
-    res.json(ids);
+    if (pag.paginate) {
+      const count = expenses.length > 0 ? Number(expenses[0].count) : 0;
+      res.json(wrapPaginatedResponse(ids, count, pag.limit, pag.offset));
+    } else {
+      res.json(ids);
+    }
   } catch (error) {
     next(error);
   }

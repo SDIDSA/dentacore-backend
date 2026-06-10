@@ -1,7 +1,9 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const { sql } = require('kysely');
 const db = require('../config/database');
+const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 const cloudinary = require('../config/cloudinary');
 const multer = require('multer');
 
@@ -16,10 +18,7 @@ const upload = multer({
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE);
 if (!MAX_FILE_SIZE || MAX_FILE_SIZE < 1) {
-  if (process.env.NODE_ENV !== 'test') {
-    console.error('FATAL: MAX_FILE_SIZE env var must be a positive number');
-    process.exit(1);
-  }
+  console.warn('WARN: MAX_FILE_SIZE env var is missing or invalid, defaulting to 20MB');
 }
 
 async function uploadToCloudinary(fileBuffer, originalFilename, tenantId) {
@@ -76,24 +75,13 @@ router.get('/',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
+      const pag = parsePagination(req);
+
       let query = db
         .selectFrom('xrays')
         .innerJoin('media', 'xrays.media_id', 'media.id')
         .innerJoin('patients', 'xrays.patient_id', 'patients.id')
-        .select([
-          'xrays.id',
-          'xrays.media_id',
-          'xrays.patient_id',
-          'patients.full_name as patient_name',
-          'xrays.treatment_record_id',
-          'xrays.tooth_number',
-          'xrays.description',
-          'xrays.captured_date',
-          'xrays.created_at',
-          'xrays.updated_at',
-          'media.cloudinary_url',
-          'media.original_filename'
-        ])
+        .select(['xrays.id'])
         .where('xrays.tenant_id', '=', req.tenantId);
 
       if (req.query.patient_id) {
@@ -103,12 +91,24 @@ router.get('/',
         query = query.where('xrays.treatment_record_id', '=', req.query.treatment_record_id);
       }
 
+      if (pag.paginate) {
+        query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+      }
+
       const xrays = await query
         .orderBy('xrays.captured_date', 'desc')
         .orderBy('xrays.created_at', 'desc')
+        .limit(pag.paginate ? pag.limit : null)
+        .offset(pag.paginate ? pag.offset : null)
         .execute();
 
-      res.json(xrays);
+      const ids = xrays.map(x => x.id);
+      if (pag.paginate) {
+        const count = xrays.length > 0 ? Number(xrays[0].count) : 0;
+        res.json(wrapPaginatedResponse(ids, count, pag.limit, pag.offset));
+      } else {
+        res.json(ids);
+      }
     } catch (error) {
       next(error);
     }
