@@ -272,6 +272,7 @@ router.patch('/:id',
         .selectFrom('appointments')
         .selectAll()
         .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (!currentAppointment) {

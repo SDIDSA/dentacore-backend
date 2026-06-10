@@ -361,7 +361,7 @@ router.patch('/:id/receive',
           .insertInto('stock_movements')
           .values({
             inventory_item_id: existing.inventory_item_id,
-            movement_type: 'purchase',
+            movement_type: 'stock.movement.purchase',
             quantity: incoming.quantity_received,
             unit_cost_dzd: existing.unit_cost_dzd,
             reference_type: 'purchase_order',

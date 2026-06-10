@@ -2,11 +2,16 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const request = require('supertest');
 const app = require('../app');
+const {
+  TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD,
+  TEST_DENTIST_EMAIL, TEST_DENTIST_PASSWORD,
+  TEST_RECEPTION_EMAIL, TEST_RECEPTION_PASSWORD,
+} = require('./helpers/config');
 
 const CREDENTIALS = {
-  admin: { email: 'admin@elqods.dz', password: 'Admin@2025!', role: 'auth.role.admin' },
-  dentist: { email: 'dentist@elqods.dz', password: 'Dentist@2025!', role: 'auth.role.dentist' },
-  reception: { email: 'reception@elqods.dz', password: 'Recept@2025!', role: 'auth.role.receptionist' },
+  admin: { email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD, role: 'auth.role.admin' },
+  dentist: { email: TEST_DENTIST_EMAIL, password: TEST_DENTIST_PASSWORD, role: 'auth.role.dentist' },
+  reception: { email: TEST_RECEPTION_EMAIL, password: TEST_RECEPTION_PASSWORD, role: 'auth.role.receptionist' },
 };
 
 const tokens = {};

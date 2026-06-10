@@ -39,6 +39,7 @@ router.get('/', async (req, res, next) => {
       return res.status(400).json({ error: 'validation.error', details: 'end_date must be a valid ISO date' });
     }
 
+    let query = db
       .selectFrom('payments')
       .select(['payments.id'])
       .where('payments.tenant_id', '=', req.tenantId);

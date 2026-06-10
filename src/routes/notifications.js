@@ -7,9 +7,11 @@ const router = express.Router();
 
 router.use(authenticate);
 
+const MAX_LIMIT = 500;
+
 router.get('/', async (req, res, next) => {
   try {
-    const limit = parseInt(req.query.limit) || 50;
+    const limit = Math.min(parseInt(req.query.limit) || 50, MAX_LIMIT);
     const notifications = await db
       .selectFrom('notifications')
       .selectAll()

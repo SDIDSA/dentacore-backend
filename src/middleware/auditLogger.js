@@ -97,7 +97,7 @@ const auditLogger = {
       req.audit = {
         log: (params) => this.log({
           userId: req.user?.id,
-          tenantId: req.tenantId || req.currentTenantId,
+          tenantId: req.tenantId,
           ipAddress: req.ip || req.connection?.remoteAddress,
           userAgent: req.get('User-Agent'),
           ...params

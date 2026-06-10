@@ -6,6 +6,7 @@ const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 const cloudinary = require('../config/cloudinary');
 const multer = require('multer');
+const { validateFile, uploadToCloudinary, MAX_FILE_SIZE } = require('../utils/upload');
 
 const router = express.Router();
 
@@ -13,33 +14,8 @@ router.use(authenticate);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 20971520 }
+  limits: { fileSize: MAX_FILE_SIZE || 20971520 }
 });
-
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE);
-if (!MAX_FILE_SIZE || MAX_FILE_SIZE < 1) {
-  console.warn('WARN: MAX_FILE_SIZE env var is missing or invalid, defaulting to 20MB');
-}
-
-async function uploadToCloudinary(fileBuffer, originalFilename, tenantId) {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: `tenants/${tenantId}/xrays`,
-        resource_type: 'image',
-        public_id: `${Date.now()}_${originalFilename.replace(/\.[^.]+$/, '')}`,
-        use_filename: true,
-        unique_filename: false
-      },
-      (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
-      }
-    );
-    uploadStream.on('error', reject);
-    uploadStream.end(fileBuffer);
-  });
-}
 
 async function attachMediaToXray(xray) {
   if (!xray) return null;
@@ -185,19 +161,15 @@ router.post('/upload',
     }
 
     try {
-      if (!req.file) {
-        return res.status(400).json({ error: 'xray.error.no_file' });
-      }
-
-      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'];
-      if (!allowedMimeTypes.includes(req.file.mimetype)) {
-        return res.status(400).json({ error: 'xray.error.invalid_mime_type' });
+      const fileCheck = validateFile(req.file);
+      if (!fileCheck.valid) {
+        return res.status(400).json({ error: fileCheck.error });
       }
 
       const cloudinaryResult = await uploadToCloudinary(
         req.file.buffer,
         req.file.originalname,
-        req.tenantId
+        `${req.tenantId}/xrays`
       );
 
       const result = await db.transaction().execute(async (trx) => {
@@ -335,17 +307,16 @@ router.delete('/:id',
         return res.status(404).json({ error: 'xray.error.not_found' });
       }
 
-      try {
-        await cloudinary.uploader.destroy(xray.cloudinary_public_id);
-      } catch (cloudinaryError) {
-        console.error('Cloudinary deletion failed:', cloudinaryError);
-      }
-
       await db.transaction().execute(async (trx) => {
         await trx
           .deleteFrom('xrays')
           .where('id', '=', req.params.id)
           .where('tenant_id', '=', req.tenantId)
+          .execute();
+
+        await trx
+          .deleteFrom('media')
+          .where('id', '=', xray.media_id)
           .execute();
 
         await trx
@@ -363,10 +334,11 @@ router.delete('/:id',
           .execute();
       });
 
-      await db
-        .deleteFrom('media')
-        .where('id', '=', xray.media_id)
-        .execute();
+      try {
+        await cloudinary.uploader.destroy(xray.cloudinary_public_id);
+      } catch (cloudinaryError) {
+        console.error('Cloudinary deletion failed:', cloudinaryError);
+      }
 
       res.status(204).end();
     } catch (error) {

@@ -128,6 +128,7 @@ router.get('/:id',
             .selectFrom('patients')
             .select(['full_name', 'patient_code'])
             .where('id', '=', treatment.patient_id)
+            .where('tenant_id', '=', req.tenantId)
             .executeTakeFirst();
           if (patient) {
             treatment.patient_name = patient.full_name;
@@ -140,6 +141,7 @@ router.get('/:id',
             .selectFrom('users')
             .select('full_name')
             .where('id', '=', treatment.dentist_id)
+            .where('tenant_id', '=', req.tenantId)
             .executeTakeFirst();
           if (dentist) {
             treatment.dentist_name = dentist.full_name;

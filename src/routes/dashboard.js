@@ -6,6 +6,25 @@ const router = express.Router();
 
 router.use(authenticate);
 
+const MAX_LIMIT = 1000;
+
+function parseLimit(req) {
+  const limit = parseInt(req.query.limit);
+  if (isNaN(limit) || limit < 1) return 100;
+  return Math.min(limit, MAX_LIMIT);
+}
+
+function parseDays(req) {
+  const days = parseInt(req.query.days);
+  if (isNaN(days) || days < 1) return 7;
+  return Math.min(days, 365);
+}
+
+function toEndOfDay(dateStr) {
+  if (!dateStr || isNaN(Date.parse(dateStr))) return dateStr;
+  return dateStr + 'T23:59:59Z';
+}
+
 // Raw patient data endpoint
 router.get('/patients/raw', async (req, res, next) => {
   try {
@@ -20,7 +39,7 @@ router.get('/patients/raw', async (req, res, next) => {
       query = query.where('patients.created_at', '>=', start_date);
     }
     if (end_date) {
-      query = query.where('patients.created_at', '<=', end_date + 'T23:59:59Z');
+      query = query.where('patients.created_at', '<=', toEndOfDay(end_date));
     }
     if (status_key) {
       query = query.where('patients.status_key', '=', status_key);
@@ -35,7 +54,7 @@ router.get('/patients/raw', async (req, res, next) => {
 
     const patients = await query
       .orderBy('patients.created_at', 'desc')
-      .limit(parseInt(req.query.limit) || 100)
+      .limit(parseLimit(req))
       .execute();
 
     res.json({ patients });
@@ -71,7 +90,7 @@ router.get('/appointments/raw', async (req, res, next) => {
       query = query.where('appointments.appointment_date', '>=', start_date);
     }
     if (end_date) {
-      query = query.where('appointments.appointment_date', '<=', end_date + 'T23:59:59Z');
+      query = query.where('appointments.appointment_date', '<=', toEndOfDay(end_date));
     }
     if (status_key) {
       query = query.where('appointments.status_key', '=', status_key);
@@ -79,7 +98,7 @@ router.get('/appointments/raw', async (req, res, next) => {
 
     const appointments = await query
       .orderBy('appointments.appointment_date', 'desc')
-      .limit(parseInt(req.query.limit) || 100)
+      .limit(parseLimit(req))
       .execute();
 
     res.json({ appointments });
@@ -116,7 +135,7 @@ router.get('/treatments/raw', async (req, res, next) => {
       query = query.where('treatment_records.treatment_date', '>=', start_date);
     }
     if (end_date) {
-      query = query.where('treatment_records.treatment_date', '<=', end_date + 'T23:59:59Z');
+      query = query.where('treatment_records.treatment_date', '<=', toEndOfDay(end_date));
     }
     if (patient_id) {
       query = query.where('treatment_records.patient_id', '=', patient_id);
@@ -127,7 +146,7 @@ router.get('/treatments/raw', async (req, res, next) => {
 
     const treatments = await query
       .orderBy('treatment_records.treatment_date', 'desc')
-      .limit(parseInt(req.query.limit) || 100)
+      .limit(parseLimit(req))
       .execute();
 
     res.json({ treatments });
@@ -163,7 +182,7 @@ router.get('/payments/raw', async (req, res, next) => {
       query = query.where('payments.payment_date', '>=', start_date);
     }
     if (end_date) {
-      query = query.where('payments.payment_date', '<=', end_date + 'T23:59:59Z');
+      query = query.where('payments.payment_date', '<=', toEndOfDay(end_date));
     }
     if (payment_method) {
       query = query.where('payments.payment_method', '=', payment_method);
@@ -174,7 +193,7 @@ router.get('/payments/raw', async (req, res, next) => {
 
     const payments = await query
       .orderBy('payments.payment_date', 'desc')
-      .limit(parseInt(req.query.limit) || 100)
+      .limit(parseLimit(req))
       .execute();
 
     res.json({ payments });
@@ -224,8 +243,8 @@ router.get('/appointments/today', async (req, res, next) => {
 router.get('/recent-activity', async (req, res, next) => {
 
   try {
-    const limit = parseInt(req.query.limit) || 20;
-    const days = parseInt(req.query.days) || 7;
+    const limit = parseLimit(req);
+    const days = parseDays(req);
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);

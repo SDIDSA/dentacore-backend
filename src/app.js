@@ -34,7 +34,9 @@ const app = express();
 app.use(helmet());
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
-  : (process.env.NODE_ENV === 'production' ? [] : ['http://localhost:3000', 'http://localhost:5173']);
+  : (process.env.NODE_ENV === 'production'
+    ? (() => { console.warn('CORS_ORIGIN not set in production — all cross-origin requests will be blocked. Set CORS_ORIGIN to your frontend URL.'); return []; })()
+    : ['http://localhost:3000', 'http://localhost:5173']);
 
 app.use(cors({
   origin: (origin, callback) => {

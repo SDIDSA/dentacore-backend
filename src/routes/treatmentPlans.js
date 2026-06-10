@@ -9,14 +9,20 @@ const router = express.Router();
 
 router.use(authenticate);
 
-const SORT_FIELDS = ['created_at', 'plan_name', 'estimated_total_dzd', 'status_key', 'updated_at'];
+const SORT_FIELDS_MAP = {
+  created_at: 'treatment_plans.created_at',
+  plan_name: 'treatment_plans.plan_name',
+  estimated_total_dzd: 'treatment_plans.estimated_total_dzd',
+  status_key: 'treatment_plans.status_key',
+  updated_at: 'treatment_plans.updated_at',
+};
 const SORT_ORDERS = ['asc', 'desc'];
 
 // Get treatment plans with pagination, search, and sort
 router.get('/',
   query('patient_id').optional().isUUID(),
   query('search').optional().isString(),
-  query('sort_by').optional().isIn(SORT_FIELDS),
+  query('sort_by').optional().isIn(Object.keys(SORT_FIELDS_MAP)),
   query('sort_order').optional().isIn(SORT_ORDERS),
   async (req, res, next) => {
     try {
@@ -44,36 +50,41 @@ router.get('/',
         query = query.select([sql`COUNT(*) OVER()`.as('count')]);
       }
 
-      const sortField = sort_by && SORT_FIELDS.includes(sort_by) ? sort_by : 'created_at';
+      const sortField = sort_by && SORT_FIELDS_MAP[sort_by] ? SORT_FIELDS_MAP[sort_by] : 'treatment_plans.created_at';
       const sortDir = sort_order && SORT_ORDERS.includes(sort_order) ? sort_order : 'desc';
 
       const plans = await query
         .selectAll()
-        .orderBy(`treatment_plans.${sortField}`, sortDir)
+        .orderBy(sortField, sortDir)
         .limit(pag.paginate ? pag.limit : null)
         .offset(pag.paginate ? pag.offset : null)
         .execute();
 
-      const plansWithCosts = await Promise.all(plans.map(async (plan) => {
-        const costResult = await db
+      const planIds = plans.map(p => p.id);
+      let aggregates = [];
+      if (planIds.length > 0) {
+        aggregates = await db
           .selectFrom('treatment_records')
-          .select(db.fn.sum('estimated_cost_dzd').as('actual_total'))
-          .where('plan_id', '=', plan.id)
+          .select([
+            'plan_id',
+            db.fn.sum('estimated_cost_dzd').as('actual_total'),
+            db.fn.count('id').as('treatment_count'),
+          ])
+          .where('plan_id', 'in', planIds)
           .where('tenant_id', '=', req.tenantId)
-          .executeTakeFirst();
+          .groupBy('plan_id')
+          .execute();
+      }
 
-        const treatmentCount = await db
-          .selectFrom('treatment_records')
-          .select(db.fn.count('id').as('count'))
-          .where('plan_id', '=', plan.id)
-          .where('tenant_id', '=', req.tenantId)
-          .executeTakeFirst();
+      const aggMap = {};
+      for (const agg of aggregates) {
+        aggMap[agg.plan_id] = agg;
+      }
 
-        return {
-          ...plan,
-          actual_total_dzd: costResult?.actual_total || 0,
-          treatment_count: parseInt(treatmentCount?.count || '0'),
-        };
+      const plansWithCosts = plans.map(plan => ({
+        ...plan,
+        actual_total_dzd: aggMap[plan.id]?.actual_total || 0,
+        treatment_count: parseInt(aggMap[plan.id]?.treatment_count || '0'),
       }));
 
       if (pag.paginate) {
@@ -207,11 +218,16 @@ router.patch('/:id',
       }
 
       const { plan_name, description, status_key, estimated_total_dzd } = req.body;
-      const updateData = { updated_at: new Date() };
+      const updateData = {};
       if (plan_name !== undefined) updateData.plan_name = plan_name;
       if (description !== undefined) updateData.description = description;
       if (status_key !== undefined) updateData.status_key = status_key;
       if (estimated_total_dzd !== undefined) updateData.estimated_total_dzd = estimated_total_dzd;
+
+      if (Object.keys(updateData).length === 0) {
+        return res.json(current);
+      }
+      updateData.updated_at = new Date();
 
       const plan = await db
         .updateTable('treatment_plans')

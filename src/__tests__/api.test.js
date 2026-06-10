@@ -1,8 +1,8 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
-
 const request = require('supertest');
 const app = require('../app');
+const { TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD } = require('./helpers/config');
 
 // Track IDs created during tests so we can clean up
 const createdIds = {
@@ -10,16 +10,13 @@ const createdIds = {
   inventoryItems: [],
 };
 
-const ADMIN_EMAIL = 'admin@elqods.dz';
-const ADMIN_PASSWORD = 'Admin@2025!';
-
 let authToken = null;
 let refreshToken = null;
 
 beforeAll(async () => {
   const res = await request(app)
     .post('/api/v1/auth/login')
-    .send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    .send({ email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD });
 
   if (res.statusCode !== 200) {
     throw new Error(
@@ -83,7 +80,7 @@ describe('POST /api/v1/auth/login', () => {
   it('should login with valid credentials', async () => {
     const res = await request(app)
       .post('/api/v1/auth/login')
-      .send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+      .send({ email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD });
 
     expect(res.statusCode).toBe(200);
     expect(res.body.accessToken).toBeDefined();
@@ -97,7 +94,7 @@ describe('POST /api/v1/auth/login', () => {
   it('should reject wrong password', async () => {
     const res = await request(app)
       .post('/api/v1/auth/login')
-      .send({ email: ADMIN_EMAIL, password: 'wrongpassword' });
+      .send({ email: TEST_ADMIN_EMAIL, password: 'wrongpassword' });
 
     expect(res.statusCode).toBe(401);
     expect(res.body.error).toMatch(/invalid_credentials/i);
@@ -358,8 +355,7 @@ describe('GET /api/v1/appointments', () => {
       .set('Authorization', `Bearer ${authToken}`);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body).toHaveProperty('appointments');
-    expect(Array.isArray(res.body.appointments)).toBe(true);
+    expect(Array.isArray(res.body)).toBe(true);
   });
 });
 

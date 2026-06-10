@@ -6,6 +6,7 @@ const cloudinary = require('../config/cloudinary');
 const multer = require('multer');
 const { sql } = require('kysely');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
+const { validateFile, uploadToCloudinary, MAX_FILE_SIZE } = require('../utils/upload');
 
 const router = express.Router();
 
@@ -13,33 +14,8 @@ router.use(authenticate);
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 20971520 }
+  limits: { fileSize: MAX_FILE_SIZE || 20971520 }
 });
-
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE);
-if (!MAX_FILE_SIZE || MAX_FILE_SIZE < 1) {
-  console.warn('WARN: MAX_FILE_SIZE env var is missing or invalid, defaulting to 20MB');
-}
-
-async function uploadToCloudinary(fileBuffer, originalFilename, tenantId) {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: `tenants/${tenantId}/media`,
-        resource_type: 'auto',
-        public_id: `${Date.now()}_${originalFilename.replace(/\.[^.]+$/, '')}`,
-        use_filename: true,
-        unique_filename: false
-      },
-      (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
-      }
-    );
-    uploadStream.on('error', reject);
-    uploadStream.end(fileBuffer);
-  });
-}
 
 router.get('/', async (req, res, next) => {
   try {
@@ -122,19 +98,15 @@ router.post('/upload',
   upload.single('file'),
   async (req, res, next) => {
     try {
-      if (!req.file) {
-        return res.status(400).json({ error: 'media.error.no_file' });
-      }
-
-      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-      if (!allowedMimeTypes.includes(req.file.mimetype)) {
-        return res.status(400).json({ error: 'media.error.invalid_mime_type' });
+      const fileCheck = validateFile(req.file);
+      if (!fileCheck.valid) {
+        return res.status(400).json({ error: fileCheck.error });
       }
 
       const cloudinaryResult = await uploadToCloudinary(
         req.file.buffer,
         req.file.originalname,
-        req.tenantId
+        `${req.tenantId}/media`
       );
 
       const media = await db

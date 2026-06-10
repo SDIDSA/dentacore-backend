@@ -1,4 +1,5 @@
 const express = require('express');
+const { sql } = require('kysely');
 const { authenticate } = require('../middleware/auth');
 const db = require('../config/database');
 
@@ -11,8 +12,17 @@ function safeNumber(value, decimals = 2) {
   return parseFloat(Number(value).toFixed(decimals));
 }
 
-function applyDateFilter(query, table, req, dateColumn) {
+function applyDateFilter(query, tableAndCol, req, _ignored) {
   const { start_date, end_date, months } = req.query;
+  const [table, dateColumn] = tableAndCol.split('.');
+  const allowedTables = { payments: 1, invoices: 1, treatment_records: 1 };
+  const allowedCols = { payment_date: 1, invoice_date: 1, treatment_date: 1, created_at: 1 };
+  if (!allowedTables[table]) {
+    throw new Error(`Invalid table in applyDateFilter: ${table}`);
+  }
+  if (!allowedCols[dateColumn]) {
+    throw new Error(`Invalid dateColumn in applyDateFilter: ${dateColumn}`);
+  }
   if (start_date) {
     query = query.where(`${table}.${dateColumn}`, '>=', start_date);
   }
@@ -20,7 +30,8 @@ function applyDateFilter(query, table, req, dateColumn) {
     query = query.where(`${table}.${dateColumn}`, '<=', end_date + 'T23:59:59Z');
   }
   if (months && !start_date && !end_date) {
-    query = query.where(`${table}.${dateColumn}`, '>=', db.sql`NOW() - INTERVAL '${months + ' months'}'`);
+    const validMonths = Math.max(1, Math.min(parseInt(months) || 12, 60));
+    query = query.where(`${table}.${dateColumn}`, '>=', db.sql`NOW() - INTERVAL ${sql.literal(`${validMonths} months`)}`);
   }
   return query;
 }
@@ -39,7 +50,7 @@ function toCsvRow(obj, columns) {
 // Monthly revenue report
 router.get('/revenue/monthly', async (req, res, next) => {
   try {
-    const months = parseInt(req.query.months) || 12;
+    const months = Math.max(1, Math.min(parseInt(req.query.months) || 12, 60));
 
     const data = await db
       .selectFrom('payments')
@@ -49,7 +60,7 @@ router.get('/revenue/monthly', async (req, res, next) => {
         db.fn.sum('amount_dzd').as('total_revenue_dzd'),
       ])
       .where('tenant_id', '=', req.tenantId)
-      .where('payment_date', '>=', db.sql`NOW() - INTERVAL '${months + ' months'}'`)
+      .where('payment_date', '>=', db.sql`NOW() - INTERVAL ${sql.literal(`${months} months`)}`)
       .groupBy('month')
       .orderBy('month', 'desc')
       .execute();
@@ -66,7 +77,7 @@ router.get('/revenue/monthly', async (req, res, next) => {
 // Procedure frequency report
 router.get('/procedures/frequency', async (req, res, next) => {
   try {
-    const months = parseInt(req.query.months) || 12;
+    const months = Math.max(1, Math.min(parseInt(req.query.months) || 12, 60));
 
     const data = await db
       .selectFrom('treatment_records')
@@ -78,7 +89,7 @@ router.get('/procedures/frequency', async (req, res, next) => {
         db.fn.sum('treatment_records.estimated_cost_dzd').as('total_estimated_dzd'),
       ])
       .where('treatment_records.tenant_id', '=', req.tenantId)
-      .where('treatment_records.treatment_date', '>=', db.sql`NOW() - INTERVAL '${months + ' months'}'`)
+      .where('treatment_records.treatment_date', '>=', db.sql`NOW() - INTERVAL ${sql.literal(`${months} months`)}`)
       .groupBy(['treatment_records.category_id', 'treatment_categories.category_key'])
       .orderBy('procedure_count', 'desc')
       .execute();
@@ -103,7 +114,7 @@ router.get('/procedures/frequency', async (req, res, next) => {
 // New patients report
 router.get('/patients/new', async (req, res, next) => {
   try {
-    const months = parseInt(req.query.months) || 12;
+    const months = Math.max(1, Math.min(parseInt(req.query.months) || 12, 60));
 
     const data = await db
       .selectFrom('patients')
@@ -112,7 +123,7 @@ router.get('/patients/new', async (req, res, next) => {
         db.fn.count('id').as('new_patients'),
       ])
       .where('tenant_id', '=', req.tenantId)
-      .where('created_at', '>=', db.sql`NOW() - INTERVAL '${months + ' months'}'`)
+      .where('created_at', '>=', db.sql`NOW() - INTERVAL ${sql.literal(`${months} months`)}`)
       .groupBy('month')
       .orderBy('month', 'desc')
       .execute();
@@ -128,7 +139,7 @@ router.get('/patients/new', async (req, res, next) => {
 // Appointment statistics report
 router.get('/appointments/stats', async (req, res, next) => {
   try {
-    const months = parseInt(req.query.months) || 12;
+    const months = Math.max(1, Math.min(parseInt(req.query.months) || 12, 60));
 
     const data = await db
       .selectFrom('appointments')
@@ -138,7 +149,7 @@ router.get('/appointments/stats', async (req, res, next) => {
         db.fn.count('id').as('appointment_count'),
       ])
       .where('tenant_id', '=', req.tenantId)
-      .where('appointment_date', '>=', db.sql`NOW() - INTERVAL '${months + ' months'}'`)
+      .where('appointment_date', '>=', db.sql`NOW() - INTERVAL ${sql.literal(`${months} months`)}`)
       .groupBy(['month', 'status_key'])
       .orderBy('month', 'desc')
       .execute();
@@ -211,7 +222,7 @@ router.get('/revenue/by-method', async (req, res, next) => {
       ])
       .where('tenant_id', '=', req.tenantId);
 
-    query = applyDateFilter(query, 'payments', req, 'payment_date');
+    query = applyDateFilter(query, 'payments.payment_date', req);
 
     const data = await query
       .groupBy('payment_method')
@@ -248,7 +259,7 @@ router.get('/dentist/stats', async (req, res, next) => {
       ])
       .where('treatment_records.tenant_id', '=', req.tenantId);
 
-    query = applyDateFilter(query, 'treatment_records', req, 'treatment_date');
+    query = applyDateFilter(query, 'treatment_records.treatment_date', req);
 
     const data = await query
       .groupBy(['treatment_records.dentist_id', 'users.full_name'])
@@ -286,7 +297,7 @@ router.get('/tax/summary', async (req, res, next) => {
       ])
       .where('tenant_id', '=', req.tenantId);
 
-    query = applyDateFilter(query, 'invoices', req, 'invoice_date');
+    query = applyDateFilter(query, 'invoices.invoice_date', req);
 
     const data = await query
       .groupBy('month')
@@ -326,7 +337,7 @@ router.get('/revenue/export', async (req, res, next) => {
       ])
       .where('payments.tenant_id', '=', req.tenantId);
 
-    query = applyDateFilter(query, 'payments', req, 'payment_date');
+    query = applyDateFilter(query, 'payments.payment_date', req);
 
     const payments = await query
       .orderBy('payments.payment_date', 'desc')

@@ -2,16 +2,14 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const request = require('supertest');
 const app = require('../app');
-
-const ADMIN_EMAIL = 'admin@elqods.dz';
-const ADMIN_PASSWORD = 'Admin@2025!';
+const { TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD } = require('./helpers/config');
 
 let authToken = null;
 
 beforeAll(async () => {
   const res = await request(app)
     .post('/api/v1/auth/login')
-    .send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    .send({ email: TEST_ADMIN_EMAIL, password: TEST_ADMIN_PASSWORD });
   if (res.statusCode !== 200) throw new Error('Login failed');
   authToken = res.body.accessToken;
 });
