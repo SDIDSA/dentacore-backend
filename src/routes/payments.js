@@ -24,42 +24,6 @@ async function resolvePaymentMethodId(key) {
   return row ? row.id : null;
 }
 
-async function syncInvoicePaidAmount(invoiceId, tenantId, trx) {
-  const result = await (trx || db)
-    .selectFrom('payments')
-    .where('invoice_id', '=', invoiceId)
-    .where('tenant_id', '=', tenantId)
-    .select(sql`COALESCE(SUM(amount_dzd), 0)::float8`.as('paid'))
-    .executeTakeFirst();
-
-  const paid = result ? parseFloat(result.paid) : 0;
-
-  const invoice = await (trx || db)
-    .selectFrom('invoices')
-    .select(['total_dzd'])
-    .where('id', '=', invoiceId)
-    .where('tenant_id', '=', tenantId)
-    .executeTakeFirst();
-
-  if (!invoice) return;
-
-  const total = parseFloat(invoice.total_dzd);
-  let statusKey;
-  if (paid <= 0) {
-    statusKey = 'invoice.status.unpaid';
-  } else if (paid >= total) {
-    statusKey = 'invoice.status.paid';
-  } else {
-    statusKey = 'invoice.status.partial';
-  }
-
-  await (trx || db)
-    .updateTable('invoices')
-    .set({ paid_amount_dzd: paid, payment_status_key: statusKey, updated_at: new Date() })
-    .where('id', '=', invoiceId)
-    .where('tenant_id', '=', tenantId)
-    .execute();
-}
 
 // Get payment IDs with optional filters
 router.get('/', async (req, res, next) => {
@@ -67,7 +31,14 @@ router.get('/', async (req, res, next) => {
     const pag = parsePagination(req);
     const { invoice_id, start_date, end_date, payment_method_key } = req.query;
 
-    let query = db
+    // Validate date parameters if provided
+    if (start_date && isNaN(Date.parse(start_date))) {
+      return res.status(400).json({ error: 'validation.error', details: 'start_date must be a valid ISO date' });
+    }
+    if (end_date && isNaN(Date.parse(end_date))) {
+      return res.status(400).json({ error: 'validation.error', details: 'end_date must be a valid ISO date' });
+    }
+
       .selectFrom('payments')
       .select(['payments.id'])
       .where('payments.tenant_id', '=', req.tenantId);
@@ -243,7 +214,6 @@ router.post('/',
       };
       delete result.payment_method_id;
 
-      await syncInvoicePaidAmount(invoice_id, req.tenantId);
 
       res.status(201).json(result);
     } catch (error) {
@@ -316,7 +286,6 @@ router.patch('/:id',
       };
       delete result.payment_method_id;
 
-      await syncInvoicePaidAmount(currentPayment.invoice_id, req.tenantId);
 
       res.json(result);
     } catch (error) {
@@ -362,7 +331,6 @@ router.delete('/:id',
         }, db);
       }
 
-      await syncInvoicePaidAmount(payment.invoice_id, req.tenantId);
 
       res.status(204).end();
     } catch (error) {
@@ -372,3 +340,4 @@ router.delete('/:id',
 );
 
 module.exports = router;
+

@@ -1,5 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
 const { sql } = require('kysely');
@@ -13,6 +14,20 @@ router.use(authenticate);
 
 // Apply admin authorization to all routes
 router.use(authorize('auth.role.admin'));
+
+// Rate limiters for sensitive operations
+const createUserLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: 'auth.error.too_many_requests', details: 'Too many user creation attempts, please try again later' }
+});
+
+const changePasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { error: 'auth.error.too_many_requests', details: 'Too many password change attempts, please try again later' }
+});
+
 
 // Get all users
 router.get('/', async (req, res, next) => {
@@ -110,7 +125,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // Create new user
-router.post('/',
+router.post('/', createUserLimiter,
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 8 }),
   body('full_name').trim().notEmpty(),
@@ -205,7 +220,7 @@ router.post('/',
 );
 
 // Update user
-router.put('/:id',
+router.patch('/:id',
   body('email').optional().isEmail().normalizeEmail(),
   body('full_name').optional().trim().notEmpty(),
   body('phone').optional().matches(/^\+213[0-9]{9}$/),
@@ -324,7 +339,7 @@ router.put('/:id',
 );
 
 // Change user password
-router.patch('/:id/password',
+router.patch('/:id/password', changePasswordLimiter,
   body('new_password').isLength({ min: 8 }),
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -499,3 +514,5 @@ router.get('/meta/roles', async (req, res, next) => {
 });
 
 module.exports = router;
+
+

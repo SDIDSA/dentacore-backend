@@ -2,7 +2,7 @@ const { Kysely, PostgresDialect } = require('kysely');
 const { Pool } = require('pg');
 
 const pg = require('pg');
-pg.types.setTypeParser(1114, (str) => str)
+pg.types.setTypeParser(1114, (str) => { const d = new Date(str.replace(' ', 'T') + 'Z'); return isNaN(d.getTime()) ? str : d; })
 
 const dialect = new PostgresDialect({
   pool: new Pool({

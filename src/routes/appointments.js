@@ -184,36 +184,42 @@ router.post('/',
     try {
       const { patient_id, dentist_id, appointment_date, duration_minutes, reason, notes } = req.body;
 
-      const hasOverlap = await db
-        .selectFrom('appointments')
-        .select('appointments.id')
-        .where('dentist_id', '=', dentist_id)
-        .where('tenant_id', '=', req.tenantId)
-        .where('appointment_date', '<', sql`${appointment_date}::timestamp + (${duration_minutes} || ' minutes')::interval`)
-        .where(sql`${appointment_date}`, '<', sql`appointment_date + (duration_minutes || ' minutes')::interval`)
-        .where('status_key', 'not in', ['appt.status.cancelled', 'appt.status.no_show'])
-        .executeTakeFirst();
+      // Use transaction with SERIALIZABLE isolation to prevent race conditions
+      const appointment = await db.transaction().execute(async (trx) => {
+        await sql`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`.execute(trx);
 
-      if (hasOverlap) {
-        return res.status(409).json({ error: 'appointment.error.overlap' });
-      }
+        const hasOverlap = await trx
+          .selectFrom('appointments')
+          .select('appointments.id')
+          .where('dentist_id', '=', dentist_id)
+          .where('tenant_id', '=', req.tenantId)
+          .where('appointment_date', '<', sql`${appointment_date}::timestamp + (${duration_minutes} || ' minutes')::interval`)
+          .where(sql`${appointment_date}`, '<', sql`appointment_date + (duration_minutes || ' minutes')::interval`)
+          .where('status_key', 'not in', ['appt.status.cancelled', 'appt.status.no_show'])
+          .executeTakeFirst();
 
-      const appointment = await db
-        .insertInto('appointments')
-        .values({
-          patient_id,
-          dentist_id,
-          appointment_date,
-          duration_minutes,
-          status_key: 'appt.status.scheduled',
-          reason: reason || null,
-          notes: notes || null,
-          created_by: req.user.id,
-          tenant_id: req.tenantId
-        })
-        .returningAll()
-        .executeTakeFirst();
+        if (hasOverlap) {
+          const err = new Error('APPOINTMENT_OVERLAP');
+          err.statusCode = 409;
+          throw err;
+        }
 
+        return await trx
+          .insertInto('appointments')
+          .values({
+            patient_id,
+            dentist_id,
+            appointment_date,
+            duration_minutes,
+            status_key: 'appt.status.scheduled',
+            reason: reason || null,
+            notes: notes || null,
+            created_by: req.user.id,
+            tenant_id: req.tenantId
+          })
+          .returningAll()
+          .executeTakeFirst();
+      });
       // Log the appointment creation
       if (req.audit) {
         await req.audit.log({
@@ -233,6 +239,9 @@ router.post('/',
 
       res.status(201).json(appointment);
     } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: 'appointment.error.overlap' });
+      }
       next(error);
     }
   }
@@ -452,3 +461,4 @@ router.delete('/:id',
 );
 
 module.exports = router;
+

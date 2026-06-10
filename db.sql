@@ -1096,14 +1096,22 @@ CREATE TRIGGER trg_set_expense_number
 -- Trigger to update stock levels on stock movements
 CREATE OR REPLACE FUNCTION update_stock_levels()
 RETURNS TRIGGER AS $$
+DECLARE
+    new_stock DECIMAL(10, 3);
 BEGIN
-    -- Update current stock based on movement
+    -- Atomically update current stock based on movement
     UPDATE inventory_items 
     SET current_stock = current_stock + NEW.quantity,
         updated_at = NOW()
     WHERE id = NEW.inventory_item_id 
-      AND tenant_id = NEW.tenant_id;
-    
+      AND tenant_id = NEW.tenant_id
+    RETURNING current_stock INTO new_stock;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'inventory.error.not_found'
+            USING DETAIL = format('Inventory item %s for tenant %s not found', NEW.inventory_item_id, NEW.tenant_id);
+    END IF;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

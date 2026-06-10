@@ -84,7 +84,7 @@ router.get('/:id', async (req, res, next) => {
           .whereRef('appointments.patient_id', '=', 'patients.id')
           .whereRef('appointments.tenant_id', '=', 'patients.tenant_id')
           .where('appointments.appointment_date', '<', sql`NOW()`)
-          //.where('appointments.status_key', '=', 'appt.status.completed')
+          .where('appointments.status_key', '=', 'appt.status.completed')
           .orderBy('appointments.appointment_date', 'desc')
           .limit(1)
           .as('last_visit_date'),
@@ -94,7 +94,7 @@ router.get('/:id', async (req, res, next) => {
           .select('appointments.appointment_date')
           .whereRef('appointments.patient_id', '=', 'patients.id')
           .whereRef('appointments.tenant_id', '=', 'patients.tenant_id')
-          //.where('appointments.status_key', 'in', ['appt.status.scheduled', 'appt.status.confirmed'])
+          .where('appointments.status_key', 'in', ['appt.status.scheduled', 'appt.status.confirmed'])
           .where('appointments.appointment_date', '>', sql`NOW()`)
           .orderBy('appointments.appointment_date', 'asc')
           .limit(1)
@@ -533,26 +533,31 @@ router.get('/:id/detail', async (req, res, next) => {
       .orderBy('treatment_plans.created_at', 'desc')
       .execute();
 
-    const plansWithDetails = await Promise.all(plans.map(async (plan) => {
-      const costResult = await db
+    const planIds = plans.map(p => p.id);
+    let aggregates = [];
+    if (planIds.length > 0) {
+      aggregates = await db
         .selectFrom('treatment_records')
-        .select(db.fn.sum('estimated_cost_dzd').as('actual_total'))
-        .where('plan_id', '=', plan.id)
+        .select([
+          'plan_id',
+          db.fn.sum('estimated_cost_dzd').as('actual_total'),
+          db.fn.count('id').as('treatment_count'),
+        ])
+        .where('plan_id', 'in', planIds)
         .where('tenant_id', '=', req.tenantId)
-        .executeTakeFirst();
+        .groupBy('plan_id')
+        .execute();
+    }
 
-      const treatmentCount = await db
-        .selectFrom('treatment_records')
-        .select(db.fn.count('id').as('count'))
-        .where('plan_id', '=', plan.id)
-        .where('tenant_id', '=', req.tenantId)
-        .executeTakeFirst();
+    const aggMap = {};
+    for (const agg of aggregates) {
+      aggMap[agg.plan_id] = agg;
+    }
 
-      return {
-        ...plan,
-        actual_total_dzd: costResult?.actual_total || 0,
-        treatment_count: parseInt(treatmentCount?.count || '0'),
-      };
+    const plansWithDetails = plans.map(plan => ({
+      ...plan,
+      actual_total_dzd: aggMap[plan.id]?.actual_total || 0,
+      treatment_count: parseInt(aggMap[plan.id]?.treatment_count || '0'),
     }));
 
     res.json({
@@ -568,3 +573,4 @@ router.get('/:id/detail', async (req, res, next) => {
 });
 
 module.exports = router;
+

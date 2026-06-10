@@ -16,9 +16,10 @@ const errorHandler = (err, req, res, next) => {
     return res.status(400).json({ error: 'error.foreign_key_violation' });
   }
 
-  res.status(err.status || 500).json({
+  res.status(err.statusCode || err.status || 500).json({
     error: err.message || 'error.internal_server',
   });
 };
 
 module.exports = errorHandler;
+
