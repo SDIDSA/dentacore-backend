@@ -164,11 +164,12 @@ router.get('/payments/raw', async (req, res, next) => {
       .selectFrom('payments')
       .leftJoin('patients', 'payments.patient_id', 'patients.id')
       .leftJoin('invoices', 'payments.invoice_id', 'invoices.id')
+      .innerJoin('payment_methods', 'payments.payment_method_id', 'payment_methods.id')
       .select([
         'payments.id',
         'payments.amount_dzd',
         'payments.payment_date',
-        'payments.payment_method',
+        'payment_methods.method_key as payment_method',
         'payments.reference_number',
         'payments.notes',
         'payments.patient_id',
@@ -185,7 +186,7 @@ router.get('/payments/raw', async (req, res, next) => {
       query = query.where('payments.payment_date', '<=', toEndOfDay(end_date));
     }
     if (payment_method) {
-      query = query.where('payments.payment_method', '=', payment_method);
+      query = query.where('payment_methods.method_key', '=', payment_method);
     }
     if (patient_id) {
       query = query.where('payments.patient_id', '=', patient_id);

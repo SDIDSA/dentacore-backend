@@ -18,7 +18,6 @@ CREATE TABLE tenants (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     subdomain VARCHAR(100) NOT NULL UNIQUE,
-    tax_id VARCHAR(50), -- NIF/NIS for Algerian businesses
     logo_url TEXT,
     primary_color VARCHAR(7), -- Hex color code
     subscription_status VARCHAR(50) NOT NULL DEFAULT 'tenant.status.trial',
@@ -43,7 +42,7 @@ CREATE TABLE tenants (
 
 COMMENT ON TABLE tenants IS 'Dental clinic tenants - each represents an independent practice';
 COMMENT ON COLUMN tenants.subdomain IS 'Unique subdomain for clinic access (e.g., clinic.dms.dz)';
-COMMENT ON COLUMN tenants.tax_id IS 'Algerian Tax ID (NIF/NIS)';
+
 COMMENT ON COLUMN tenants.settings IS 'JSONB for branding, features, and custom configurations';
 
 CREATE INDEX idx_tenants_subdomain ON tenants(subdomain);
@@ -305,7 +304,6 @@ CREATE TABLE invoices (
     due_date TIMESTAMP,
     subtotal_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     discount_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    tax_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     total_dzd DECIMAL(12, 2) NOT NULL,
     paid_amount_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     payment_status_key VARCHAR(50) NOT NULL,
@@ -324,7 +322,6 @@ CREATE TABLE invoices (
     CONSTRAINT chk_invoice_amounts CHECK (
         subtotal_dzd >= 0 AND
         discount_dzd >= 0 AND
-        tax_dzd >= 0 AND
         total_dzd >= 0 AND
         paid_amount_dzd >= 0 AND
         paid_amount_dzd <= total_dzd
@@ -415,7 +412,6 @@ CREATE TABLE suppliers (
     phone VARCHAR(20),
     wilaya_id SMALLINT REFERENCES wilayas(id) ON DELETE SET NULL,
     address TEXT,
-    tax_id VARCHAR(50),
     payment_terms_days INTEGER DEFAULT 30,
     status_key VARCHAR(50) NOT NULL DEFAULT 'supplier.status.active',
     notes TEXT,
@@ -534,7 +530,6 @@ CREATE TABLE purchase_orders (
     expected_delivery_date TIMESTAMP,
     actual_delivery_date TIMESTAMP,
     subtotal_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    tax_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     shipping_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     total_dzd DECIMAL(12, 2) NOT NULL,
     status_key VARCHAR(50) NOT NULL DEFAULT 'po.status.draft',
@@ -556,7 +551,6 @@ CREATE TABLE purchase_orders (
     )),
     CONSTRAINT chk_po_amounts CHECK (
         subtotal_dzd >= 0 AND
-        tax_dzd >= 0 AND
         shipping_dzd >= 0 AND
         total_dzd >= 0
     ),

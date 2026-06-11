@@ -17,11 +17,8 @@ function applyDateFilter(query, tableAndCol, req) {
   const [table, dateColumn] = tableAndCol.split('.');
   const allowedTables = { payments: 1, invoices: 1, treatment_records: 1 };
   const allowedCols = { payment_date: 1, invoice_date: 1, treatment_date: 1, created_at: 1 };
-  if (!allowedTables[table]) {
-    throw new Error(`Invalid table in applyDateFilter: ${table}`);
-  }
-  if (!allowedCols[dateColumn]) {
-    throw new Error(`Invalid dateColumn in applyDateFilter: ${dateColumn}`);
+  if (!allowedTables[table] || !allowedCols[dateColumn]) {
+    return null;
   }
   if (start_date) {
     query = query.where(`${table}.${dateColumn}`, '>=', start_date);
@@ -215,17 +212,19 @@ router.get('/revenue/by-method', async (req, res, next) => {
   try {
     let query = db
       .selectFrom('payments')
+      .innerJoin('payment_methods', 'payments.payment_method_id', 'payment_methods.id')
       .select([
-        'payment_method',
-        db.fn.count('id').as('transaction_count'),
-        db.fn.sum('amount_dzd').as('total_dzd'),
+        'payment_methods.method_key as payment_method',
+        db.fn.count('payments.id').as('transaction_count'),
+        db.fn.sum('payments.amount_dzd').as('total_dzd'),
       ])
-      .where('tenant_id', '=', req.tenantId);
+      .where('payments.tenant_id', '=', req.tenantId);
 
     query = applyDateFilter(query, 'payments.payment_date', req);
+    if (!query) return res.status(400).json({ error: 'Invalid date filter parameters' });
 
     const data = await query
-      .groupBy('payment_method')
+      .groupBy('payment_methods.method_key')
       .orderBy('total_dzd', 'desc')
       .execute();
 
@@ -260,6 +259,7 @@ router.get('/dentist/stats', async (req, res, next) => {
       .where('treatment_records.tenant_id', '=', req.tenantId);
 
     query = applyDateFilter(query, 'treatment_records.treatment_date', req);
+    if (!query) return res.status(400).json({ error: 'Invalid date filter parameters' });
 
     const data = await query
       .groupBy(['treatment_records.dentist_id', 'users.full_name'])
@@ -298,6 +298,7 @@ router.get('/tax/summary', async (req, res, next) => {
       .where('tenant_id', '=', req.tenantId);
 
     query = applyDateFilter(query, 'invoices.invoice_date', req);
+    if (!query) return res.status(400).json({ error: 'Invalid date filter parameters' });
 
     const data = await query
       .groupBy('month')
@@ -326,11 +327,12 @@ router.get('/revenue/export', async (req, res, next) => {
     let query = db
       .selectFrom('payments')
       .leftJoin('patients', 'payments.patient_id', 'patients.id')
+      .innerJoin('payment_methods', 'payments.payment_method_id', 'payment_methods.id')
       .select([
         'payments.id',
         'payments.payment_date',
         'payments.amount_dzd',
-        'payments.payment_method',
+        'payment_methods.method_key as payment_method',
         'payments.reference_number',
         'patients.full_name as patient_name',
         'patients.patient_code',
@@ -338,6 +340,7 @@ router.get('/revenue/export', async (req, res, next) => {
       .where('payments.tenant_id', '=', req.tenantId);
 
     query = applyDateFilter(query, 'payments.payment_date', req);
+    if (!query) return res.status(400).json({ error: 'Invalid date filter parameters' });
 
     const payments = await query
       .orderBy('payments.payment_date', 'desc')

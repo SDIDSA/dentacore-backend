@@ -1203,13 +1203,13 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient1_id, 
         NOW() - INTERVAL '15 days',
         NOW() - INTERVAL '8 days',
-        8500.00, 0.00, 0.00, 8500.00, 8500.00,
+        8500.00, 0.00, 8500.00, 8500.00,
         'invoice.status.paid',
         'Composite filling - tooth 16',
         v_dentist_user_id
@@ -1228,13 +1228,13 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient1_id,
         NOW() - INTERVAL '10 days',
         NOW() - INTERVAL '3 days',
-        4500.00, 500.00, 0.00, 4000.00, 4000.00,
+        4500.00, 500.00, 4000.00, 4000.00,
         'invoice.status.paid',
         'Professional cleaning with senior discount',
         v_dentist_user_id
@@ -1253,13 +1253,13 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient2_id,
         NOW() - INTERVAL '8 days',
         NOW() + INTERVAL '7 days',
-        25000.00, 0.00, 0.00, 25000.00, 15000.00,
+        25000.00, 0.00, 25000.00, 15000.00,
         'invoice.status.partial',
         'Dental crown - tooth 26. Partial payment received.',
         v_dentist_user_id
@@ -1278,13 +1278,13 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient2_id,
         NOW() - INTERVAL '25 days',
         NOW() - INTERVAL '18 days',
-        2500.00, 0.00, 0.00, 2500.00, 0.00,
+        2500.00, 0.00, 2500.00, 0.00,
         'invoice.status.overdue',
         'Initial consultation and examination - OVERDUE',
         v_dentist_user_id
@@ -1334,13 +1334,13 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient_id,
         NOW() - INTERVAL '5 days',
         NOW() + INTERVAL '2 days',
-        3000.00, 0.00, 0.00, 3000.00, 3000.00,
+        3000.00, 0.00, 3000.00, 3000.00,
         'invoice.status.paid',
         'Routine dental checkup',
         v_admin_user_id
@@ -1359,7 +1359,7 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient_id,
@@ -1443,7 +1443,7 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient_id,
@@ -1466,7 +1466,7 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient_id,
@@ -1489,7 +1489,7 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient_id,
@@ -1512,7 +1512,7 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient_id,
@@ -1535,7 +1535,7 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient_id,
@@ -1558,7 +1558,7 @@ BEGIN
     -- ========================================================================
     INSERT INTO invoices (
         tenant_id, patient_id, issue_date, due_date,
-        subtotal_dzd, discount_dzd, tax_dzd, total_dzd, paid_amount_dzd,
+        subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
         payment_status_key, notes, created_by
     ) VALUES (
         v_tenant_id, v_patient_id,
