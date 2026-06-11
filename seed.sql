@@ -394,10 +394,10 @@ BEGIN
     -- ========================================================================
 
     -- Create some suppliers
-    INSERT INTO suppliers (tenant_id, name, contact_person, email, phone, wilaya_id, address, tax_id, created_by) VALUES
-    (v_tenant_id, 'Dental Supply Algeria', 'Ahmed Benaissa', 'contact@dentalsupply.dz', '+213550987654', 25, 'Zone Industrielle, Constantine', '099912345678901', v_admin_user_id),
-    (v_tenant_id, 'MediDent Distribution', 'Fatima Khelifi', 'info@medident.dz', '+213551876543', 16, 'Bab Ezzouar, Algiers', '099987654321098', v_admin_user_id),
-    (v_tenant_id, 'Pharma Dental', 'Youcef Mansouri', 'sales@pharmadental.dz', '+213552765432', 25, 'Nouvelle Ville, Constantine', '099876543210987', v_admin_user_id);
+    INSERT INTO suppliers (tenant_id, name, contact_person, email, phone, wilaya_id, address, created_by) VALUES
+    (v_tenant_id, 'Dental Supply Algeria', 'Ahmed Benaissa', 'contact@dentalsupply.dz', '+213550987654', 25, 'Zone Industrielle, Constantine', v_admin_user_id),
+    (v_tenant_id, 'MediDent Distribution', 'Fatima Khelifi', 'info@medident.dz', '+213551876543', 16, 'Bab Ezzouar, Algiers', v_admin_user_id),
+    (v_tenant_id, 'Pharma Dental', 'Youcef Mansouri', 'sales@pharmadental.dz', '+213552765432', 25, 'Nouvelle Ville, Constantine', v_admin_user_id);
 
     -- Get category IDs for inventory items
     DECLARE
@@ -955,10 +955,10 @@ BEGIN
     -- ========================================================================
 
     -- Create premium suppliers
-    INSERT INTO suppliers (tenant_id, name, contact_person, email, phone, wilaya_id, address, tax_id, payment_terms_days, created_by) VALUES
-    (v_tenant_id, 'Premium Dental Equipment', 'Nadia Belkacem', 'sales@premiumdental.dz', '+213557654321', 9, 'Zone Industrielle Boufarik, Blida', '099923456789012', 15, v_dentist_user_id),
-    (v_tenant_id, 'International Dental Supplies', 'Omar Benali', 'orders@intldental.dz', '+213558765432', 16, 'Hydra, Algiers', '099834567890123', 30, v_dentist_user_id),
-    (v_tenant_id, 'Advanced Materials Co.', 'Leila Cherif', 'info@advancedmat.dz', '+213559876543', 9, 'Chiffa, Blida', '099745678901234', 21, v_dentist_user_id);
+    INSERT INTO suppliers (tenant_id, name, contact_person, email, phone, wilaya_id, address, payment_terms_days, created_by) VALUES
+    (v_tenant_id, 'Premium Dental Equipment', 'Nadia Belkacem', 'sales@premiumdental.dz', '+213557654321', 9, 'Zone Industrielle Boufarik, Blida', 15, v_dentist_user_id),
+    (v_tenant_id, 'International Dental Supplies', 'Omar Benali', 'orders@intldental.dz', '+213558765432', 16, 'Hydra, Algiers', 30, v_dentist_user_id),
+    (v_tenant_id, 'Advanced Materials Co.', 'Leila Cherif', 'info@advancedmat.dz', '+213559876543', 9, 'Chiffa, Blida', 21, v_dentist_user_id);
 
     -- Get category IDs for premium inventory
     DECLARE
@@ -1365,7 +1365,7 @@ BEGIN
         v_tenant_id, v_patient_id,
         NOW() - INTERVAL '2 days',
         NOW() + INTERVAL '5 days',
-        1500.00, 0.00, 0.00, 1500.00, 0.00,
+        1500.00, 0.00, 1500.00, 0.00,
         'invoice.status.unpaid',
         'Follow-up consultation',
         v_admin_user_id
@@ -1449,7 +1449,7 @@ BEGIN
         v_tenant_id, v_patient_id,
         NOW() - INTERVAL '30 days',
         NOW() - INTERVAL '23 days',
-        15000.00, 0.00, 0.00, 15000.00, 15000.00,
+        15000.00, 0.00, 15000.00, 15000.00,
         'invoice.status.paid',
         'Root canal therapy - Phase 1 (tooth 36)',
         v_dentist_user_id
@@ -1472,7 +1472,7 @@ BEGIN
         v_tenant_id, v_patient_id,
         NOW() - INTERVAL '23 days',
         NOW() - INTERVAL '16 days',
-        12000.00, 1000.00, 0.00, 11000.00, 11000.00,
+        12000.00, 1000.00, 11000.00, 11000.00,
         'invoice.status.paid',
         'Root canal therapy - Phase 2 with loyalty discount',
         v_dentist_user_id
@@ -1495,7 +1495,7 @@ BEGIN
         v_tenant_id, v_patient_id,
         NOW() - INTERVAL '16 days',
         NOW() - INTERVAL '9 days',
-        28000.00, 0.00, 0.00, 28000.00, 28000.00,
+        28000.00, 0.00, 28000.00, 28000.00,
         'invoice.status.paid',
         'Premium ceramic crown - tooth 36',
         v_dentist_user_id
@@ -1518,7 +1518,7 @@ BEGIN
         v_tenant_id, v_patient_id,
         NOW() - INTERVAL '12 days',
         NOW() - INTERVAL '5 days',
-        5500.00, 0.00, 0.00, 5500.00, 5500.00,
+        5500.00, 0.00, 5500.00, 5500.00,
         'invoice.status.paid',
         'Maintenance cleaning and fluoride',
         v_dentist_user_id
@@ -1541,7 +1541,7 @@ BEGIN
         v_tenant_id, v_patient_id,
         NOW() - INTERVAL '5 days',
         NOW() + INTERVAL '2 days',
-        18000.00, 0.00, 0.00, 18000.00, 10000.00,
+        18000.00, 0.00, 18000.00, 10000.00,
         'invoice.status.partial',
         'Surgical wisdom tooth extraction - partial payment received',
         v_dentist_user_id
@@ -1564,7 +1564,7 @@ BEGIN
         v_tenant_id, v_patient_id,
         NOW() - INTERVAL '2 days',
         NOW() + INTERVAL '5 days',
-        4000.00, 0.00, 0.00, 4000.00, 0.00,
+        4000.00, 0.00, 4000.00, 0.00,
         'invoice.status.unpaid',
         'Comprehensive consultation for orthodontic evaluation',
         v_dentist_user_id

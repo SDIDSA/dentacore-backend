@@ -76,7 +76,6 @@ const options = {
             invoice_number: { type: 'string' },
             invoice_date: { type: 'string', format: 'date' },
             subtotal_dzd: { type: 'number' },
-            tax_amount_dzd: { type: 'number' },
             total_dzd: { type: 'number' },
             status_key: { type: 'string' },
           },
@@ -556,9 +555,6 @@ const options = {
       },
       '/reports/dentist/stats': {
         get: { tags: ['Reports'], summary: 'Per-dentist statistics', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Dentist stats' } } },
-      },
-      '/reports/tax/summary': {
-        get: { tags: ['Reports'], summary: 'Tax/VAT summary', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Tax data' } } },
       },
       '/notifications': {
         get: { tags: ['Notifications'], summary: 'List notifications', security: [{ bearerAuth: [] }], responses: { 200: { description: 'Notification list' } } },

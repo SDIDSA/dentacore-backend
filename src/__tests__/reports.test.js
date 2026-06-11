@@ -86,15 +86,6 @@ describe('GET /api/v1/reports', () => {
     expect(res.body).toHaveProperty('summary');
   });
 
-  it('GET /tax/summary should return VAT summary', async () => {
-    const res = await request(app)
-      .get('/api/v1/reports/tax/summary')
-      .set('Authorization', `Bearer ${authToken}`);
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toHaveProperty('data');
-    expect(res.body).toHaveProperty('summary');
-  });
-
   it('GET /revenue/export should return CSV', async () => {
     const res = await request(app)
       .get('/api/v1/reports/revenue/export')

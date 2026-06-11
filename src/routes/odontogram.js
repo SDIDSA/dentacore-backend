@@ -1,5 +1,5 @@
 const express = require('express');
-const { param, validationResult } = require('express-validator');
+const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
 const db = require('../config/database');
 
@@ -92,13 +92,33 @@ router.get('/:patientId',
         .where('tooth_number', 'is not', null)
         .execute();
 
+      const conditions = await db
+        .selectFrom('odontogram_conditions')
+        .select([
+          'tooth_number',
+          'condition',
+          'notes',
+          'updated_at',
+        ])
+        .where('patient_id', '=', patientId)
+        .where('tenant_id', '=', req.tenantId)
+        .execute();
+
+      const conditionMap = {};
+      for (const c of conditions) {
+        conditionMap[c.tooth_number] = c;
+      }
+
       const toothMap = {};
       for (const t of FDI_TEETH) {
         const toothTreatments = treatments.filter(tr => tr.tooth_number === t);
         const toothXrays = xrays.filter(x => x.tooth_number === t);
+        const savedCondition = conditionMap[t];
         toothMap[t] = {
           ...getToothInfo(t),
-          status: determineStatus(toothTreatments, toothXrays),
+          status: savedCondition ? savedCondition.condition : determineStatus(toothTreatments, toothXrays),
+          condition: savedCondition ? savedCondition.condition : null,
+          condition_notes: savedCondition ? savedCondition.notes : null,
           treatments: toothTreatments.map(tr => ({
             treatment_performed: tr.treatment_performed,
             diagnosis: tr.diagnosis,
@@ -126,6 +146,94 @@ router.get('/:patientId',
           { id: 4, label: 'Lower Right', teeth: FDI_TEETH.filter(t => t.startsWith('4')) },
         ],
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Add or update a tooth condition note
+router.put('/:patientId/tooth/:toothNumber',
+  param('patientId').isUUID(),
+  param('toothNumber').isIn(FDI_TEETH),
+  body('condition').isString().notEmpty(),
+  body('notes').optional().isString(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+      }
+
+      const { patientId, toothNumber } = req.params;
+      const { condition, notes } = req.body;
+
+      await db
+        .selectFrom('patients')
+        .select('id')
+        .where('id', '=', patientId)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirstOrThrow(() => Object.assign(new Error('patient.error.not_found'), { status: 404 }));
+
+      const existing = await db
+        .selectFrom('odontogram_conditions')
+        .select('id')
+        .where('patient_id', '=', patientId)
+        .where('tooth_number', '=', toothNumber)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (existing) {
+        await db
+          .updateTable('odontogram_conditions')
+          .set({
+            condition,
+            notes: notes || null,
+            updated_at: db.sql`NOW()`,
+          })
+          .where('id', '=', existing.id)
+          .execute();
+      } else {
+        await db
+          .insertInto('odontogram_conditions')
+          .values({
+            patient_id: patientId,
+            tooth_number: toothNumber,
+            condition,
+            notes: notes || null,
+            tenant_id: req.tenantId,
+          })
+          .execute();
+      }
+
+      res.json({ success: true, tooth_number: toothNumber, condition });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Remove a tooth condition
+router.delete('/:patientId/tooth/:toothNumber',
+  param('patientId').isUUID(),
+  param('toothNumber').isIn(FDI_TEETH),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+      }
+
+      const { patientId, toothNumber } = req.params;
+
+      await db
+        .deleteFrom('odontogram_conditions')
+        .where('patient_id', '=', patientId)
+        .where('tooth_number', '=', toothNumber)
+        .where('tenant_id', '=', req.tenantId)
+        .execute();
+
+      res.json({ success: true });
     } catch (error) {
       next(error);
     }

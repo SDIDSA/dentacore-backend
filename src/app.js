@@ -112,6 +112,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/odontogram', odontogramRoutes);
 
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 const path = require('path');
 const fs = require('fs');

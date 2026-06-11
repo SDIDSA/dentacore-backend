@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { sql } = require('kysely');
 const db = require('../config/database');
+const log = require('../utils/logger');
 
 function generateJti() {
   return crypto.randomUUID();

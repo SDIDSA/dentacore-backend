@@ -1,5 +1,6 @@
 const { Kysely, PostgresDialect } = require('kysely');
 const { Pool } = require('pg');
+const log = require('../utils/logger');
 
 const pg = require('pg');
 pg.types.setTypeParser(1114, (str) => { const d = new Date(str.replace(' ', 'T') + 'Z'); return isNaN(d.getTime()) ? str : d; })
@@ -28,9 +29,9 @@ if (process.env.NODE_ENV !== 'test') {
     try {
       const { sql } = require('kysely');
       await sql`SELECT 1`.execute(db);
-      console.log('✅ Database connected');
+      log.info('Database connected');
     } catch (error) {
-      console.error('❌ Database connection failed:', error.message);
+      log.error('Database connection failed', { message: error.message });
     }
   })();
 }

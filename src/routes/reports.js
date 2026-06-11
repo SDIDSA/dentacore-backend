@@ -3,9 +3,20 @@ const { sql } = require('kysely');
 const { authenticate } = require('../middleware/auth');
 const db = require('../config/database');
 
+const MAX_MONTHS = 24;
+
 const router = express.Router();
 
 router.use(authenticate);
+
+function queryTimeout(req, res, next) {
+  res.setTimeout(30000, () => {
+    res.status(503).json({ error: 'Report query timed out' });
+    req.destroy();
+  });
+  next();
+}
+router.use(queryTimeout);
 
 function safeNumber(value, decimals = 2) {
   if (value === null || value === undefined || !isFinite(value)) return 0;
@@ -278,44 +289,6 @@ router.get('/dentist/stats', async (req, res, next) => {
       })),
       summary: { total_treatments: grandTotal },
     });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Tax/VAT summary report
-router.get('/tax/summary', async (req, res, next) => {
-  try {
-    let query = db
-      .selectFrom('invoices')
-      .select([
-        db.fn('DATE_TRUNC', ['month', 'invoice_date']).as('month'),
-        db.fn.count('id').as('invoice_count'),
-        db.fn.sum('subtotal_dzd').as('total_subtotal_dzd'),
-        db.fn.sum('tax_amount_dzd').as('total_tax_dzd'),
-        db.fn.sum('total_dzd').as('total_dzd'),
-      ])
-      .where('tenant_id', '=', req.tenantId);
-
-    query = applyDateFilter(query, 'invoices.invoice_date', req);
-    if (!query) return res.status(400).json({ error: 'Invalid date filter parameters' });
-
-    const data = await query
-      .groupBy('month')
-      .orderBy('month', 'desc')
-      .execute();
-
-    const summary = data.reduce(
-      (acc, row) => ({
-        total_invoices: acc.total_invoices + parseInt(row.invoice_count),
-        total_subtotal_dzd: safeNumber(acc.total_subtotal_dzd + safeNumber(row.total_subtotal_dzd)),
-        total_tax_dzd: safeNumber(acc.total_tax_dzd + safeNumber(row.total_tax_dzd)),
-        total_dzd: safeNumber(acc.total_dzd + safeNumber(row.total_dzd)),
-      }),
-      { total_invoices: 0, total_subtotal_dzd: 0, total_tax_dzd: 0, total_dzd: 0 }
-    );
-
-    res.json({ data, summary });
   } catch (error) {
     next(error);
   }

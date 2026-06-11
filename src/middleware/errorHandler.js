@@ -1,5 +1,7 @@
+const log = require('../utils/logger');
+
 const errorHandler = (err, req, res, next) => {
-  console.error('Error:', err);
+  log.error('Unhandled error', { message: err.message, stack: err.stack });
 
   if (err.name === 'ValidationError') {
     return res.status(400).json({
