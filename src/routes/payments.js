@@ -85,6 +85,43 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Get payments by IDs (batch)
+router.get('/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const payments = await db
+      .selectFrom('payments')
+      .leftJoin('payment_methods', 'payments.payment_method_id', 'payment_methods.id')
+      .leftJoin('invoices', 'payments.invoice_id', 'invoices.id')
+      .select([
+        'payments.id',
+        'payments.invoice_id',
+        'payments.amount_dzd',
+        'payment_methods.method_key as payment_method_key',
+        'payments.payment_date',
+        'payments.notes',
+        'payments.created_at',
+        'invoices.invoice_number'
+      ])
+      .where('payments.id', 'in', idArray)
+      .where('payments.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(payments);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get payment by ID
 router.get('/:id',
   param('id').isUUID(),

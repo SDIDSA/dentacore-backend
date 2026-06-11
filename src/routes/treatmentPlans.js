@@ -54,10 +54,45 @@ router.get('/',
       const sortDir = sort_order && SORT_ORDERS.includes(sort_order) ? sort_order : 'desc';
 
       const plans = await query
-        .selectAll()
+        .select(['treatment_plans.id'])
         .orderBy(sortField, sortDir)
         .limit(pag.paginate ? pag.limit : null)
         .offset(pag.paginate ? pag.offset : null)
+        .execute();
+
+      const planIds = plans.map(p => p.id);
+      if (pag.paginate) {
+        const total = plans.length > 0 ? Number(plans[0].count) : 0;
+        res.json(wrapPaginatedResponse(planIds, total, pag.limit, pag.offset));
+      } else {
+        res.json(planIds);
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Get treatment plans by IDs (batch)
+router.get('/batch',
+  query('ids').optional().isString(),
+  async (req, res, next) => {
+    try {
+      const { ids } = req.query;
+      if (!ids) {
+        return res.status(400).json({ error: 'ids query parameter is required' });
+      }
+
+      const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+      if (idArray.length === 0) {
+        return res.json([]);
+      }
+
+      const plans = await db
+        .selectFrom('treatment_plans')
+        .selectAll()
+        .where('treatment_plans.id', 'in', idArray)
+        .where('treatment_plans.tenant_id', '=', req.tenantId)
         .execute();
 
       const planIds = plans.map(p => p.id);
@@ -87,12 +122,7 @@ router.get('/',
         treatment_count: parseInt(aggMap[plan.id]?.treatment_count || '0'),
       }));
 
-      if (pag.paginate) {
-        const total = plans.length > 0 ? Number(plans[0].count) : 0;
-        res.json(wrapPaginatedResponse(plansWithCosts, total, pag.limit, pag.offset));
-      } else {
-        res.json(plansWithCosts);
-      }
+      res.json(plansWithCosts);
     } catch (error) {
       next(error);
     }

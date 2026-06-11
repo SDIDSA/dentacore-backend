@@ -91,6 +91,50 @@ router.get('/',
   }
 );
 
+// Get xrays by IDs (batch)
+router.get('/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const xrays = await db
+      .selectFrom('xrays')
+      .innerJoin('media', 'xrays.media_id', 'media.id')
+      .innerJoin('patients', 'xrays.patient_id', 'patients.id')
+      .select([
+        'xrays.id',
+        'xrays.media_id',
+        'xrays.patient_id',
+        'patients.full_name as patient_name',
+        'xrays.treatment_record_id',
+        'xrays.tooth_number',
+        'xrays.description',
+        'xrays.captured_date',
+        'xrays.created_at',
+        'xrays.updated_at',
+        'media.cloudinary_url',
+        'media.cloudinary_public_id',
+        'media.original_filename',
+        'media.mime_type',
+        'media.file_size'
+      ])
+      .where('xrays.id', 'in', idArray)
+      .where('xrays.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(xrays);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/:id',
   param('id').isUUID(),
   async (req, res, next) => {

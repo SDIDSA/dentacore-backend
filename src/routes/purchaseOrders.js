@@ -66,6 +66,56 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Get purchase orders by IDs (batch)
+router.get('/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const orders = await db
+      .selectFrom('purchase_orders')
+      .leftJoin('suppliers', 'purchase_orders.supplier_id', 'suppliers.id')
+      .leftJoin('users as creator', 'purchase_orders.created_by', 'creator.id')
+      .leftJoin('users as approver', 'purchase_orders.approved_by', 'approver.id')
+      .select([
+        'purchase_orders.id',
+        'purchase_orders.po_number',
+        'purchase_orders.supplier_id',
+        'suppliers.name as supplier_name',
+        'purchase_orders.order_date',
+        'purchase_orders.expected_delivery_date',
+        'purchase_orders.actual_delivery_date',
+        'purchase_orders.subtotal_dzd',
+        'purchase_orders.tax_dzd',
+        'purchase_orders.shipping_dzd',
+        'purchase_orders.total_dzd',
+        'purchase_orders.status_key',
+        'purchase_orders.notes',
+        'purchase_orders.created_by',
+        'creator.full_name as created_by_name',
+        'purchase_orders.approved_by',
+        'approver.full_name as approved_by_name',
+        'purchase_orders.approved_at',
+        'purchase_orders.created_at',
+        'purchase_orders.updated_at'
+      ])
+      .where('purchase_orders.id', 'in', idArray)
+      .where('purchase_orders.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(orders);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get purchase order by ID (with items)
 router.get('/:id',
   param('id').isUUID(),

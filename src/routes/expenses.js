@@ -76,6 +76,57 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Get expenses by IDs (batch)
+router.get('/batch', async (req, res, next) => {
+  try {
+    const { ids } = req.query;
+    if (!ids) {
+      return res.status(400).json({ error: 'ids query parameter is required' });
+    }
+
+    const idArray = ids.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (idArray.length === 0) {
+      return res.json([]);
+    }
+
+    const expenses = await db
+      .selectFrom('expenses')
+      .leftJoin('payment_methods', 'expenses.payment_method_id', 'payment_methods.id')
+      .leftJoin('suppliers', 'expenses.supplier_id', 'suppliers.id')
+      .leftJoin('users as approver', 'expenses.approved_by', 'approver.id')
+      .select([
+        'expenses.id',
+        'expenses.expense_number',
+        'expenses.category_key',
+        'expenses.subcategory_key',
+        'expenses.description',
+        'expenses.amount_dzd',
+        'expenses.expense_date',
+        'payment_methods.method_key as payment_method_key',
+        'expenses.supplier_id',
+        'suppliers.name as supplier_name',
+        'expenses.receipt_number',
+        'expenses.is_recurring',
+        'expenses.recurring_frequency',
+        'expenses.status_key',
+        'expenses.approved_by',
+        'approver.full_name as approved_by_name',
+        'expenses.approved_at',
+        'expenses.paid_at',
+        'expenses.notes',
+        'expenses.created_at',
+        'expenses.updated_at'
+      ])
+      .where('expenses.id', 'in', idArray)
+      .where('expenses.tenant_id', '=', req.tenantId)
+      .execute();
+
+    res.json(expenses);
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get expense by ID
 router.get('/:id',
   param('id').isUUID(),
