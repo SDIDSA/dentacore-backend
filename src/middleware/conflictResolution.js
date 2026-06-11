@@ -3,6 +3,8 @@ function conflictCheck(req, res, next) {
     return next();
   }
 
+  res.conflictCheck = () => false;
+
   const clientTimestamp = parseInt(req.headers['x-client-timestamp'], 10) ||
                           (req.body && !isNaN(parseInt(req.body?.clientTimestamp)) ? parseInt(req.body.clientTimestamp) : NaN);
   if (isNaN(clientTimestamp)) {
