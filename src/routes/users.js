@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const { authenticate, authorize } = require('../middleware/auth');
+const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
@@ -11,6 +12,7 @@ const router = express.Router();
 
 // Apply authentication to all routes
 router.use(authenticate);
+router.use(conflictResolution);
 
 // Apply admin authorization to all routes
 router.use(authorize('auth.role.admin'));
@@ -293,6 +295,8 @@ router.patch('/:id',
       if (!existingUser) {
         return res.status(404).json({ error: 'user.error.not_found' });
       }
+
+      if (res.conflictCheck(existingUser)) return;
 
       // Check for email conflicts (excluding current user)
       if (email) {

@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
@@ -11,6 +12,7 @@ const { validateFile, uploadToCloudinary, MAX_FILE_SIZE } = require('../utils/up
 const router = express.Router();
 
 router.use(authenticate);
+router.use(conflictResolution);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -291,6 +293,8 @@ router.patch('/:id',
       if (!current) {
         return res.status(404).json({ error: 'xray.error.not_found' });
       }
+
+      if (res.conflictCheck(current)) return;
 
       const { tooth_number, description, captured_date } = req.body;
       const updateData = {};

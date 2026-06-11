@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
@@ -8,6 +9,7 @@ const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 const router = express.Router();
 
 router.use(authenticate);
+router.use(conflictResolution);
 
 // Get all patients
 router.get('/', async (req, res, next) => {
@@ -311,6 +313,8 @@ router.patch('/:id',
       if (!currentPatient) {
         return res.status(404).json({ error: 'patient.error.not_found' });
       }
+
+      if (res.conflictCheck(currentPatient)) return;
 
       const updateData = {};
       if (full_name !== undefined) updateData.full_name = full_name;

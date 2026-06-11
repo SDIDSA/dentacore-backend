@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
@@ -8,6 +9,7 @@ const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 const router = express.Router();
 
 router.use(authenticate);
+router.use(conflictResolution);
 
 const VALID_STATUSES = [
   'po.status.draft', 'po.status.pending_approval', 'po.status.approved',
@@ -307,6 +309,8 @@ router.patch('/:id/status',
         return res.status(404).json({ error: 'po.error.not_found' });
       }
 
+      if (res.conflictCheck(current)) return;
+
       const { status_key } = req.body;
       const updateData = { status_key, updated_at: new Date() };
 
@@ -365,6 +369,8 @@ router.patch('/:id/receive',
       if (!order) {
         return res.status(404).json({ error: 'po.error.not_found' });
       }
+
+      if (res.conflictCheck(order)) return;
 
       if (order.status_key === 'po.status.cancelled' || order.status_key === 'po.status.draft') {
         return res.status(400).json({ error: 'po.error.invalid_status' });

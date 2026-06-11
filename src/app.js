@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const errorHandler = require('./middleware/errorHandler');
 const auditLogger = require('./middleware/auditLogger');
+const conflictResolution = require('./middleware/conflictResolution');
 const logger = require('./config/logger');
 
 const authRoutes = require('./routes/auth');

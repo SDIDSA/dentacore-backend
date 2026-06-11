@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
@@ -319,6 +320,8 @@ router.patch('/:id',
       if (!currentAppointment) {
         return res.status(404).json({ error: 'appointment.error.not_found' });
       }
+
+      if (res.conflictCheck(currentAppointment)) return;
 
       const { patient_id, dentist_id, appointment_date, duration_minutes, status_key, reason, notes } = req.body;
 

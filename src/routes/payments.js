@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
@@ -8,6 +9,7 @@ const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 const router = express.Router();
 
 router.use(authenticate);
+router.use(conflictResolution);
 
 const VALID_METHOD_KEYS = [
   'pay.method.cash', 'pay.method.cib', 'pay.method.baridimob',

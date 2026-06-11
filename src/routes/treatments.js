@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
@@ -8,6 +9,7 @@ const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 const router = express.Router();
 
 router.use(authenticate);
+router.use(conflictResolution);
 
 const VALID_TOOTH_NUMBERS = [
   '11', '12', '13', '14', '15', '16', '17', '18',
@@ -290,6 +292,8 @@ router.patch('/:id',
       if (!currentTreatment) {
         return res.status(404).json({ error: 'treatment.error.not_found' });
       }
+
+      if (res.conflictCheck(currentTreatment)) return;
 
       const { patient_id, dentist_id, treatment_date, appointment_id, plan_id, category_id, tooth_number, diagnosis, treatment_performed, notes, estimated_cost_dzd } = req.body;
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
@@ -8,6 +9,7 @@ const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 const router = express.Router();
 
 router.use(authenticate);
+router.use(conflictResolution);
 
 // ============================================================================
 // INVENTORY ITEMS ROUTES
@@ -314,6 +316,8 @@ router.patch('/items/:id',
       if (!currentItem) {
         return res.status(404).json({ error: 'inventory.error.item_not_found' });
       }
+
+      if (res.conflictCheck(currentItem)) return;
 
       const updateData = {};
       if (name !== undefined) updateData.name = name;
@@ -675,6 +679,8 @@ router.patch('/categories/:id',
         return res.status(404).json({ error: 'inventory.error.category_not_found' });
       }
 
+      if (res.conflictCheck(currentCategory)) return;
+
       const updateData = {};
       if (category_key !== undefined) updateData.category_key = category_key;
       // Allow parent_id to be set to null if explicitly provided
@@ -1001,6 +1007,8 @@ router.patch('/suppliers/:id',
       if (!currentSupplier) {
         return res.status(404).json({ error: 'inventory.error.supplier_not_found' });
       }
+
+      if (res.conflictCheck(currentSupplier)) return;
 
       const updateData = {};
       if (name !== undefined) updateData.name = name;

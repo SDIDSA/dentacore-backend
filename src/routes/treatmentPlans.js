@@ -2,12 +2,14 @@ const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { sql } = require('kysely');
 const { authenticate } = require('../middleware/auth');
+const conflictResolution = require('../middleware/conflictResolution');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 
 const router = express.Router();
 
 router.use(authenticate);
+router.use(conflictResolution);
 
 const SORT_FIELDS_MAP = {
   created_at: 'treatment_plans.created_at',
@@ -246,6 +248,8 @@ router.patch('/:id',
       if (!current) {
         return res.status(404).json({ error: 'plan.error.not_found' });
       }
+
+      if (res.conflictCheck(current)) return;
 
       const { plan_name, description, status_key, estimated_total_dzd } = req.body;
       const updateData = {};
