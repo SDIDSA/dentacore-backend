@@ -95,7 +95,6 @@ router.get('/batch', async (req, res, next) => {
         'purchase_orders.expected_delivery_date',
         'purchase_orders.actual_delivery_date',
         'purchase_orders.subtotal_dzd',
-        'purchase_orders.tax_dzd',
         'purchase_orders.shipping_dzd',
         'purchase_orders.total_dzd',
         'purchase_orders.status_key',
@@ -142,7 +141,6 @@ router.get('/:id',
           'purchase_orders.expected_delivery_date',
           'purchase_orders.actual_delivery_date',
           'purchase_orders.subtotal_dzd',
-          'purchase_orders.tax_dzd',
           'purchase_orders.shipping_dzd',
           'purchase_orders.total_dzd',
           'purchase_orders.status_key',
@@ -205,7 +203,6 @@ router.get('/:id',
 router.post('/',
   body('supplier_id').isUUID(),
   body('expected_delivery_date').optional({ values: 'null' }).isISO8601(),
-  body('tax_dzd').optional().isFloat({ min: 0 }),
   body('shipping_dzd').optional().isFloat({ min: 0 }),
   body('notes').optional().isString(),
   body('items').isArray({ min: 1 }),
@@ -224,14 +221,13 @@ router.post('/',
     try {
       const {
         supplier_id, expected_delivery_date,
-        tax_dzd, shipping_dzd, notes, items
+        shipping_dzd, notes, items
       } = req.body;
 
       const subtotal = items.reduce(
         (sum, item) => sum + item.quantity_ordered * item.unit_cost_dzd, 0);
-      const tax = tax_dzd || 0;
       const shipping = shipping_dzd || 0;
-      const total = subtotal + tax + shipping;
+      const total = subtotal + shipping;
 
       const order = await db
         .insertInto('purchase_orders')
@@ -239,7 +235,6 @@ router.post('/',
           supplier_id,
           expected_delivery_date: expected_delivery_date || null,
           subtotal_dzd: subtotal,
-          tax_dzd: tax,
           shipping_dzd: shipping,
           total_dzd: total,
           notes: notes || null,

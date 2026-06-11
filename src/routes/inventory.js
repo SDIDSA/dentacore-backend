@@ -862,7 +862,6 @@ router.get('/suppliers/batch', async (req, res, next) => {
         'suppliers.phone',
         'suppliers.wilaya_id',
         'suppliers.address',
-        'suppliers.tax_id',
         'suppliers.payment_terms_days',
         'suppliers.status_key',
         'suppliers.notes',
@@ -897,7 +896,6 @@ router.get('/suppliers/:id', async (req, res, next) => {
         'suppliers.phone',
         'suppliers.wilaya_id',
         'suppliers.address',
-        'suppliers.tax_id',
         'suppliers.payment_terms_days',
         'suppliers.status_key',
         'suppliers.notes',
@@ -945,7 +943,7 @@ router.post('/suppliers',
     try {
       const {
         name, contact_person, email, phone, wilaya_id,
-        address, tax_id, payment_terms_days = 30, notes
+        address, payment_terms_days = 30, notes
       } = req.body;
 
       const supplier = await db
@@ -958,7 +956,6 @@ router.post('/suppliers',
           phone: phone || null,
           wilaya_id: wilaya_id || null,
           address: address || null,
-          tax_id: tax_id || null,
           payment_terms_days,
           notes: notes || null,
           created_by: req.user.id
@@ -995,7 +992,7 @@ router.patch('/suppliers/:id',
     }
 
     try {
-      const { name, contact_person, email, phone, address, tax_id, payment_terms_days, notes, status_key } = req.body;
+      const { name, contact_person, email, phone, address, payment_terms_days, notes, status_key } = req.body;
 
       const currentSupplier = await db
         .selectFrom('suppliers')
@@ -1016,7 +1013,6 @@ router.patch('/suppliers/:id',
       if (email !== undefined) updateData.email = email;
       if (phone !== undefined) updateData.phone = phone;
       if (address !== undefined) updateData.address = address;
-      if (tax_id !== undefined) updateData.tax_id = tax_id;
       if (payment_terms_days !== undefined) updateData.payment_terms_days = payment_terms_days;
       if (notes !== undefined) updateData.notes = notes;
       if (status_key !== undefined) updateData.status_key = status_key;

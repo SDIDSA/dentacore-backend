@@ -84,7 +84,6 @@ router.get('/batch', async (req, res, next) => {
         'invoices.due_date',
         'invoices.subtotal_dzd',
         'invoices.discount_dzd',
-        'invoices.tax_dzd',
         'invoices.total_dzd',
         'invoices.paid_amount_dzd',
         'invoices.payment_status_key',
@@ -128,7 +127,6 @@ router.get('/:id',
           'invoices.due_date',
           'invoices.subtotal_dzd',
           'invoices.discount_dzd',
-          'invoices.tax_dzd',
           'invoices.total_dzd',
           'invoices.paid_amount_dzd',
           'invoices.payment_status_key',
@@ -214,7 +212,6 @@ router.post('/',
   body('line_items.*.unit_price_dzd').isFloat({ min: 0 }),
   body('line_items.*.treatment_record_id').optional().isUUID(),
   body('discount_dzd').optional().isFloat({ min: 0 }),
-  body('tax_dzd').optional().isFloat({ min: 0 }),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -222,7 +219,7 @@ router.post('/',
     }
 
     try {
-      const { patient_id, issue_date, due_date, line_items, notes, discount_dzd = 0, tax_dzd = 0 } = req.body;
+      const { patient_id, issue_date, due_date, line_items, notes, discount_dzd = 0 } = req.body;
 
       // Calculate subtotal
       const subtotal_dzd = line_items.reduce((sum, item) => {
@@ -230,7 +227,7 @@ router.post('/',
       }, 0);
 
       // Calculate total
-      const total_dzd = subtotal_dzd - discount_dzd + tax_dzd;
+      const total_dzd = subtotal_dzd - discount_dzd;
 
       // Create invoice
       const invoice = await db
@@ -241,7 +238,6 @@ router.post('/',
           due_date: due_date || null,
           subtotal_dzd,
           discount_dzd,
-          tax_dzd,
           total_dzd,
           paid_amount_dzd: 0,
           payment_status_key: 'invoice.status.unpaid',
@@ -424,7 +420,6 @@ router.put('/:id',
   body('issue_date').optional().isISO8601(),
   body('due_date').optional({ values: 'null' }).isISO8601(),
   body('discount_dzd').optional().isFloat({ min: 0 }),
-  body('tax_dzd').optional().isFloat({ min: 0 }),
   body('paid_amount_dzd').optional().isFloat({ min: 0 }),
   body('payment_status_key').optional().isString(),
   body('notes').optional().isString(),
@@ -448,14 +443,13 @@ router.put('/:id',
 
       if (res.conflictCheck(currentInvoice)) return;
 
-      const { patient_id, issue_date, due_date, discount_dzd, tax_dzd, paid_amount_dzd, payment_status_key, notes } = req.body;
+      const { patient_id, issue_date, due_date, discount_dzd, paid_amount_dzd, payment_status_key, notes } = req.body;
 
       const updateData = {};
       if (patient_id !== undefined) updateData.patient_id = patient_id;
       if (issue_date !== undefined) updateData.issue_date = issue_date;
       if (due_date !== undefined) updateData.due_date = due_date;
       if (discount_dzd !== undefined) updateData.discount_dzd = discount_dzd;
-      if (tax_dzd !== undefined) updateData.tax_dzd = tax_dzd;
 
       if (paid_amount_dzd !== undefined) {
         updateData.paid_amount_dzd = paid_amount_dzd;

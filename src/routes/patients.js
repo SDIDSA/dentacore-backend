@@ -552,7 +552,6 @@ router.get('/:id/detail', async (req, res, next) => {
         'invoices.due_date',
         'invoices.subtotal_dzd',
         'invoices.discount_dzd',
-        'invoices.tax_dzd',
         'invoices.total_dzd',
         'invoices.paid_amount_dzd',
         sql`invoices.total_dzd - invoices.paid_amount_dzd`.as('balance_dzd'),
