@@ -235,7 +235,6 @@ BEGIN
     INSERT INTO tenants (
         name, 
         subdomain, 
-        tax_id, 
         primary_color,
         subscription_status,
         subscription_plan,
@@ -245,7 +244,6 @@ BEGIN
     ) VALUES (
         'Cabinet Dentaire El-Qods',
         'elqods',
-        '099925123456789', -- Sample NIF
         '#2563EB', -- Blue
         'tenant.status.active',
         'plan.professional',
@@ -465,7 +463,7 @@ DECLARE
     v_dentist_role_id INTEGER;
     v_receptionist_role_id INTEGER;
     v_appt_date DATE;
-    v_appt_timestamp TIMESTAMP;
+    v_appt_timestamp TIMESTAMPTZ;
     v_hour INT;
     v_minute INT;
     v_appts_today INT;
@@ -744,7 +742,6 @@ BEGIN
     INSERT INTO tenants (
         name,
         subdomain,
-        tax_id,
         primary_color,
         subscription_status,
         subscription_plan,
@@ -754,7 +751,6 @@ BEGIN
     ) VALUES (
         'Clinique Dentaire Sourire',
         'sourire',
-        '099916987654321',
         '#10B981', -- Green
         'tenant.status.trial',
         'plan.starter',
@@ -871,7 +867,6 @@ BEGIN
     INSERT INTO tenants (
         name,
         subdomain,
-        tax_id,
         primary_color,
         subscription_status,
         subscription_plan,
@@ -881,7 +876,6 @@ BEGIN
     ) VALUES (
         'Cabinet Dr. Teyar',
         'teyar',
-        '099909123456789',
         '#8B5CF6', -- Purple
         'tenant.status.active',
         'plan.enterprise',
@@ -1615,3 +1609,4 @@ BEGIN
     RAISE NOTICE '  - Multi-tenant isolation verified';
     RAISE NOTICE '============================================';
 END $$;
+

@@ -5,9 +5,36 @@ function conflictCheck(req, res, next) {
 
   res.conflictCheck = () => false;
 
-  const clientTimestamp = parseInt(req.headers['x-client-timestamp'], 10) ||
-                          (req.body && !isNaN(parseInt(req.body?.clientTimestamp)) ? parseInt(req.body.clientTimestamp) : NaN);
-  if (isNaN(clientTimestamp)) {
+  const parseTimestamp = (value) => {
+    if (value instanceof Date) {
+      return value.getTime();
+    }
+
+    if (typeof value === 'number' && !Number.isNaN(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      const numeric = Number(value);
+      if (!Number.isNaN(numeric)) {
+        return numeric;
+      }
+
+      let candidate = value.trim();
+      if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(candidate)) {
+        candidate = candidate.replace(' ', 'T') + 'Z';
+      }
+
+      const parsed = Date.parse(candidate);
+      return Number.isNaN(parsed) ? NaN : parsed;
+    }
+
+    return NaN;
+  };
+
+  const rawClientTimestamp = req.headers['x-client-timestamp'] ?? req.body?.clientTimestamp;
+  const clientTimestamp = parseTimestamp(rawClientTimestamp);
+  if (Number.isNaN(clientTimestamp)) {
     return next();
   }
 
@@ -19,7 +46,12 @@ function conflictCheck(req, res, next) {
 
   res.conflictCheck = (record) => {
     if (!record || !record.updated_at) return false;
-    const serverTime = new Date(record.updated_at).getTime();
+
+    const serverTime = parseTimestamp(record.updated_at);
+    if (Number.isNaN(serverTime)) return false;
+
+    console.log('Conflict Check - Server Time:', serverTime, 'Client Time:', req.clientTimestamp);
+
     if (serverTime > req.clientTimestamp) {
       res.status(409).json({
         error: 'conflict.detected',

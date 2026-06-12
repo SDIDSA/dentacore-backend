@@ -9,6 +9,9 @@ const { emitToTenant } = require('../socket');
 
 const router = express.Router();
 
+router.use(authenticate);
+router.use(conflictResolution);
+
 // Helper function to validate ISO8601 date
 function isValidISO8601(dateString) {
   const date = new Date(dateString);

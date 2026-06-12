@@ -25,23 +25,24 @@ echo Using PostgreSQL at: %PSQL_PATH%
 echo Using hardcoded passwords for development
 echo.
 
-echo [1/6] Creating dentacore user (if not exists)...
-set PGPASSWORD=%POSTGRES_PASSWORD%
-%PSQL_PATH% -U postgres -c "CREATE USER dentacore WITH PASSWORD '%DENTACORE_PASSWORD%';" 2>nul
-if %errorlevel% equ 0 (
-    echo User 'dentacore' created successfully
-) else (
-    echo User 'dentacore' already exists or creation failed - continuing...
-)
-
 echo.
-echo [2/6] Dropping existing database...
+echo [1/6] Dropping existing database...
 set PGPASSWORD=%POSTGRES_PASSWORD%
 %PSQL_PATH% -U postgres -c "DROP DATABASE IF EXISTS dentacore;"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to drop database
     pause
     exit /b 1
+)
+
+echo [2/6] recreating dentacore user (if not exists)...
+set PGPASSWORD=%POSTGRES_PASSWORD%
+%PSQL_PATH% -U postgres -c "DROP USER IF EXISTS dentacore;" 2>nul
+%PSQL_PATH% -U postgres -c "CREATE USER dentacore WITH PASSWORD '%DENTACORE_PASSWORD%';" 2>nul
+if %errorlevel% equ 0 (
+    echo User 'dentacore' recreated successfully
+) else (
+    echo User 'dentacore' couldn't be dropped or recreated - continuing...
 )
 
 echo.

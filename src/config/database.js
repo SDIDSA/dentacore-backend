@@ -3,7 +3,7 @@ const { Pool } = require('pg');
 const log = require('../utils/logger');
 
 const pg = require('pg');
-pg.types.setTypeParser(1114, (str) => { const d = new Date(str.replace(' ', 'T') + 'Z'); return isNaN(d.getTime()) ? str : d; })
+//pg.types.setTypeParser(1114, (str) => { const d = new Date(str); return isNaN(d.getTime()) ? str : d; })
 
 const dialect = new PostgresDialect({
   pool: new Pool({

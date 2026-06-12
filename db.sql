@@ -22,12 +22,12 @@ CREATE TABLE tenants (
     primary_color VARCHAR(7), -- Hex color code
     subscription_status VARCHAR(50) NOT NULL DEFAULT 'tenant.status.trial',
     subscription_plan VARCHAR(50),
-    subscription_started_at TIMESTAMP,
-    subscription_ends_at TIMESTAMP,
+    subscription_started_at TIMESTAMPTZ,
+    subscription_ends_at TIMESTAMPTZ,
     settings JSONB DEFAULT '{}'::jsonb,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_subdomain_format CHECK (subdomain ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$'),
     CONSTRAINT chk_subscription_status CHECK (subscription_status IN (
@@ -57,8 +57,8 @@ CREATE TABLE roles (
     id SERIAL PRIMARY KEY,
     role_key VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE roles IS 'System roles using translation keys (e.g., auth.role.admin)';
@@ -74,7 +74,7 @@ CREATE TABLE wilayas (
     id SMALLINT PRIMARY KEY,
     code VARCHAR(2) NOT NULL UNIQUE,
     name_key VARCHAR(100) NOT NULL UNIQUE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE wilayas IS '58 Algerian provinces with translation keys';
@@ -92,7 +92,7 @@ CREATE TABLE payment_methods (
     method_key VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE payment_methods IS 'Available payment methods in Algeria';
@@ -115,9 +115,9 @@ CREATE TABLE users (
     wilaya_id SMALLINT REFERENCES wilayas(id) ON DELETE SET NULL,
     address TEXT,
     status_key VARCHAR(50) NOT NULL DEFAULT 'user.status.active',
-    last_login_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    last_login_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_phone_format CHECK (phone ~ '^\+213[0-9]{9}$'),
     CONSTRAINT chk_user_status CHECK (status_key IN ('user.status.active', 'user.status.inactive', 'user.status.deleted')),
@@ -157,8 +157,8 @@ CREATE TABLE patients (
     blood_type VARCHAR(5),
     status_key VARCHAR(50) NOT NULL DEFAULT 'patient.status.new',
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_patient_phone CHECK (phone ~ '^\+213[0-9]{9}$'),
     CONSTRAINT chk_patient_gender CHECK (gender IN ('patient.gender.male', 'patient.gender.female')),
@@ -197,8 +197,8 @@ CREATE TABLE treatment_categories (
     parent_id UUID REFERENCES treatment_categories(id) ON DELETE CASCADE,
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT uq_treatment_cat_key UNIQUE (tenant_id, category_key)
 );
@@ -220,14 +220,14 @@ CREATE TABLE appointments (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     dentist_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    appointment_date TIMESTAMP NOT NULL,
+    appointment_date TIMESTAMPTZ NOT NULL,
     duration_minutes INTEGER NOT NULL DEFAULT 30,
     status_key VARCHAR(50) NOT NULL,
     reason TEXT,
     notes TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_appt_status CHECK (status_key IN (
         'appt.status.scheduled',
@@ -262,14 +262,14 @@ CREATE TABLE treatment_records (
     appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
     dentist_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     category_id UUID REFERENCES treatment_categories(id) ON DELETE SET NULL,
-    treatment_date TIMESTAMP NOT NULL,
+    treatment_date TIMESTAMPTZ NOT NULL,
     tooth_number VARCHAR(10),
     diagnosis TEXT NOT NULL,
     treatment_performed TEXT NOT NULL,
     notes TEXT,
     estimated_cost_dzd DECIMAL(12, 2),
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_tooth_number CHECK (
         tooth_number ~ '^[0-9]{1,2}$' OR 
@@ -300,8 +300,8 @@ CREATE TABLE invoices (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     invoice_number VARCHAR(30) NOT NULL,
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE RESTRICT,
-    issue_date TIMESTAMP NOT NULL DEFAULT NOW(),
-    due_date TIMESTAMP,
+    issue_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    due_date TIMESTAMPTZ,
     subtotal_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     discount_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     total_dzd DECIMAL(12, 2) NOT NULL,
@@ -309,8 +309,8 @@ CREATE TABLE invoices (
     payment_status_key VARCHAR(50) NOT NULL,
     notes TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_invoice_payment_status CHECK (payment_status_key IN (
         'invoice.status.unpaid',
@@ -352,7 +352,7 @@ CREATE TABLE invoice_items (
     quantity INTEGER NOT NULL DEFAULT 1,
     unit_price_dzd DECIMAL(12, 2) NOT NULL,
     total_price_dzd DECIMAL(12, 2) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_item_quantity CHECK (quantity > 0),
     CONSTRAINT chk_item_prices CHECK (
@@ -380,11 +380,11 @@ CREATE TABLE payments (
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     payment_method_id UUID NOT NULL REFERENCES payment_methods(id) ON DELETE RESTRICT,
     amount_dzd DECIMAL(12, 2) NOT NULL,
-    payment_date TIMESTAMP NOT NULL DEFAULT NOW(),
+    payment_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     transaction_reference VARCHAR(100),
     notes TEXT,
     received_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_payment_amount CHECK (amount_dzd > 0)
 );
@@ -416,8 +416,8 @@ CREATE TABLE suppliers (
     status_key VARCHAR(50) NOT NULL DEFAULT 'supplier.status.active',
     notes TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_supplier_phone CHECK (phone ~ '^\+213[0-9]{9}$' OR phone IS NULL),
     CONSTRAINT chk_supplier_status CHECK (status_key IN (
@@ -448,8 +448,8 @@ CREATE TABLE inventory_categories (
     parent_id UUID REFERENCES inventory_categories(id) ON DELETE CASCADE,
     description TEXT,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT uq_inventory_cat_key UNIQUE (tenant_id, category_key)
 );
@@ -484,8 +484,8 @@ CREATE TABLE inventory_items (
     status_key VARCHAR(50) NOT NULL DEFAULT 'item.status.active',
     notes TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_item_status CHECK (status_key IN (
         'item.status.active',
@@ -526,9 +526,9 @@ CREATE TABLE purchase_orders (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     po_number VARCHAR(30) NOT NULL,
     supplier_id UUID NOT NULL REFERENCES suppliers(id) ON DELETE RESTRICT,
-    order_date TIMESTAMP NOT NULL DEFAULT NOW(),
-    expected_delivery_date TIMESTAMP,
-    actual_delivery_date TIMESTAMP,
+    order_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expected_delivery_date TIMESTAMPTZ,
+    actual_delivery_date TIMESTAMPTZ,
     subtotal_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     shipping_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     total_dzd DECIMAL(12, 2) NOT NULL,
@@ -536,9 +536,9 @@ CREATE TABLE purchase_orders (
     notes TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    approved_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    approved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_po_status CHECK (status_key IN (
         'po.status.draft',
@@ -579,10 +579,10 @@ CREATE TABLE purchase_order_items (
     quantity_received DECIMAL(10, 3) NOT NULL DEFAULT 0,
     unit_cost_dzd DECIMAL(12, 2) NOT NULL,
     total_cost_dzd DECIMAL(12, 2) NOT NULL,
-    expiry_date TIMESTAMP,
+    expiry_date TIMESTAMPTZ,
     batch_number VARCHAR(50),
     notes TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_po_item_quantities CHECK (
         quantity_ordered > 0 AND
@@ -617,10 +617,10 @@ CREATE TABLE stock_movements (
     reference_type VARCHAR(50),
     reference_id UUID,
     batch_number VARCHAR(50),
-    expiry_date TIMESTAMP,
+    expiry_date TIMESTAMPTZ,
     notes TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_movement_type CHECK (movement_type IN (
         'stock.movement.purchase',
@@ -658,7 +658,7 @@ CREATE TABLE expenses (
     subcategory_key VARCHAR(100),
     description TEXT NOT NULL,
     amount_dzd DECIMAL(12, 2) NOT NULL,
-    expense_date TIMESTAMP NOT NULL DEFAULT NOW(),
+    expense_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     payment_method_id UUID REFERENCES payment_methods(id) ON DELETE SET NULL,
     supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
     purchase_order_id UUID REFERENCES purchase_orders(id) ON DELETE SET NULL,
@@ -667,12 +667,12 @@ CREATE TABLE expenses (
     recurring_frequency VARCHAR(20),
     status_key VARCHAR(50) NOT NULL DEFAULT 'expense.status.pending',
     approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    approved_at TIMESTAMP,
-    paid_at TIMESTAMP,
+    approved_at TIMESTAMPTZ,
+    paid_at TIMESTAMPTZ,
     notes TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_expense_amount CHECK (amount_dzd > 0),
     CONSTRAINT chk_expense_status CHECK (status_key IN (
@@ -715,7 +715,7 @@ CREATE TABLE audit_logs (
     new_values JSONB,
     ip_address INET,
     user_agent TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE audit_logs IS 'Tenant-scoped audit trail';
@@ -740,8 +740,8 @@ CREATE TABLE media (
     mime_type TEXT,
     file_size BIGINT,
     uploaded_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE media IS 'Tenant-scoped media files stored on Cloudinary';
@@ -764,8 +764,8 @@ CREATE TABLE xrays (
     tooth_number VARCHAR(10),
     description TEXT,
     captured_date DATE DEFAULT CURRENT_DATE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE xrays IS 'Tenant-scoped X-ray images linked to media and patients';
@@ -1302,7 +1302,7 @@ RETURNS TABLE (
     password_hash VARCHAR,
     full_name VARCHAR,
     status_key VARCHAR,
-    last_login_at TIMESTAMP,
+    last_login_at TIMESTAMPTZ,
     tenant_id UUID,
     role_key VARCHAR
 ) AS $$
@@ -1395,8 +1395,8 @@ CREATE TABLE token_blacklist (
     token_type VARCHAR(20) NOT NULL CHECK (token_type IN ('access', 'refresh')),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_token_blacklist_jti ON token_blacklist(jti);
@@ -1416,8 +1416,8 @@ CREATE TABLE IF NOT EXISTS treatment_plans (
     estimated_total_dzd DECIMAL(12, 2) DEFAULT 0,
     notes TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT chk_plan_status CHECK (status_key IN (
         'plan.status.draft', 'plan.status.active', 'plan.status.completed', 'plan.status.cancelled'
     ))
@@ -1507,3 +1507,4 @@ BEGIN
     RAISE NOTICE 'Next Step: Run seed_multitenant.sql';
     RAISE NOTICE '============================================';
 END $$;
+
