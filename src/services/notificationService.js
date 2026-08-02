@@ -106,4 +106,47 @@ async function sendEmailNotification(recipient, subject, message) {
   }
 }
 
-module.exports = { checkUpcomingAppointments, sendEmailNotification };
+async function checkLowStockAndNotify(tenantId, itemId) {
+  const lowStockItems = await db
+    .selectFrom('v_low_stock_items')
+    .selectAll()
+    .where('tenant_id', '=', tenantId)
+    .execute();
+
+  const created = [];
+  for (const item of lowStockItems) {
+    if (itemId && item.id !== itemId) continue;
+
+    const existing = await db
+      .selectFrom('notifications')
+      .select('id')
+      .where('tenant_id', '=', tenantId)
+      .where('inventory_item_id', '=', item.id)
+      .where('type', '=', 'low_stock')
+      .where('status', '=', 'unread')
+      .executeTakeFirst();
+
+    if (existing) continue;
+
+    const message = `Low stock alert: "${item.name}" (${item.item_code}) — current stock: ${item.current_stock}, minimum: ${item.min_stock_level}. Shortage: ${item.shortage_quantity} ${item.unit_of_measure || 'units'}.`;
+
+    await db
+      .insertInto('notifications')
+      .values({
+        tenant_id: tenantId,
+        inventory_item_id: item.id,
+        type: 'low_stock',
+        channel: 'in_app',
+        message,
+        status: 'unread',
+        created_at: new Date(),
+      })
+      .execute();
+
+    created.push(item.id);
+  }
+
+  return created;
+}
+
+module.exports = { checkUpcomingAppointments, sendEmailNotification, checkLowStockAndNotify };

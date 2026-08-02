@@ -27,4 +27,21 @@ async function recordMigration(filename, checksum) {
     .execute();
 }
 
-module.exports = { ensureMigrationsTable, getAppliedMigrations, recordMigration };
+async function removeMigration(filename) {
+  await db
+    .deleteFrom('schema_migrations')
+    .where('filename', '=', filename)
+    .execute();
+}
+
+async function getLastMigration() {
+  const row = await db
+    .selectFrom('schema_migrations')
+    .select(['filename', 'checksum'])
+    .orderBy('filename', 'desc')
+    .limit(1)
+    .executeTakeFirst();
+  return row || null;
+}
+
+module.exports = { ensureMigrationsTable, getAppliedMigrations, recordMigration, removeMigration, getLastMigration };

@@ -18,6 +18,36 @@ const VALID_TOOTH_NUMBERS = [
   '41', '42', '43', '44', '45', '46', '47', '48'
 ];
 
+// Search treatments
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('treatment_records')
+      .select('treatment_records.id')
+      .innerJoin('patients', 'treatment_records.patient_id', 'patients.id')
+      .where('treatment_records.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('treatment_records.diagnosis', 'ilike', `%${sanitized}%`),
+          eb('treatment_records.treatment_performed', 'ilike', `%${sanitized}%`),
+          eb('patients.full_name', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get treatment IDs with optional filters
 router.get('/', async (req, res, next) => {
   try {
@@ -365,6 +395,8 @@ router.delete('/:id',
         .where('id', '=', req.params.id)
         .where('tenant_id', '=', req.tenantId)
         .execute();
+
+      treatment.status_key = 'treatment.status.deleted';
 
       // Log the deletion
       if (req.audit) {

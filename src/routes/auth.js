@@ -103,7 +103,7 @@ router.post('/login', loginLimiter,
               }).execute();
             }
           }
-        } catch { /* ignore invalid old tokens */ }
+        } catch (err) { console.error('Token blacklist error:', err); }
       }
 
       const newLoginTime = new Date();

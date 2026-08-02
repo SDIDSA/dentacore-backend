@@ -20,6 +20,36 @@ function isValidISO8601(dateString) {
 
 router.use(authenticate);
 
+// Search appointments by patient or dentist name
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('appointments')
+      .select('appointments.id')
+      .innerJoin('patients', 'appointments.patient_id', 'patients.id')
+      .innerJoin('users', 'appointments.dentist_id', 'users.id')
+      .where('appointments.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('patients.full_name', 'ilike', `%${sanitized}%`),
+          eb('users.full_name', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get appointments
 router.get('/', async (req, res, next) => {
   try {
@@ -495,6 +525,8 @@ router.delete('/:id',
         .where('id', '=', req.params.id)
         .where('tenant_id', '=', req.tenantId)
         .execute();
+
+      appointment.status_key = 'appointment.status.deleted';
 
       if (req.audit) {
         await req.audit.log({

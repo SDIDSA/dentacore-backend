@@ -20,6 +20,35 @@ const SORT_FIELDS_MAP = {
 };
 const SORT_ORDERS = ['asc', 'desc'];
 
+// Search treatment plans
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('treatment_plans')
+      .select('treatment_plans.id')
+      .innerJoin('patients', 'treatment_plans.patient_id', 'patients.id')
+      .where('treatment_plans.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('treatment_plans.plan_name', 'ilike', `%${sanitized}%`),
+          eb('patients.full_name', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get treatment plans with pagination, search, and sort
 router.get('/',
   query('patient_id').optional().isUUID(),
@@ -315,6 +344,8 @@ router.delete('/:id',
         .where('id', '=', req.params.id)
         .where('tenant_id', '=', req.tenantId)
         .execute();
+
+      plan.status_key = 'plan.status.deleted';
 
       if (req.audit) {
         await req.audit.log({

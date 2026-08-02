@@ -39,7 +39,7 @@ function applyDateFilter(query, tableAndCol, req) {
   }
   if (months && !start_date && !end_date) {
     const validMonths = Math.max(1, Math.min(parseInt(months) || 12, 60));
-    query = query.where(`${table}.${dateColumn}`, '>=', sql`NOW() - INTERVAL ${sql.literal(`${validMonths} months`)}`);
+    query = query.where(`${table}.${dateColumn}`, '>=', sql`NOW() - INTERVAL '1 month' * ${validMonths}`);
   }
   return query;
 }
@@ -63,12 +63,12 @@ router.get('/revenue/monthly', async (req, res, next) => {
     const data = await db
       .selectFrom('payments')
       .select([
-        db.fn('DATE_TRUNC', ['month', 'payment_date']).as('month'),
+        sql`DATE_TRUNC('month', payment_date)`.as('month'),
         db.fn.count('id').as('transaction_count'),
         db.fn.sum('amount_dzd').as('total_revenue_dzd'),
       ])
       .where('tenant_id', '=', req.tenantId)
-      .where('payment_date', '>=', db.sql`NOW() - INTERVAL ${sql.literal(`${months} months`)}`)
+      .where('payment_date', '>=', sql`NOW() - INTERVAL '1 month' * ${months}`)
       .groupBy('month')
       .orderBy('month', 'desc')
       .execute();
@@ -97,7 +97,7 @@ router.get('/procedures/frequency', async (req, res, next) => {
         db.fn.sum('treatment_records.estimated_cost_dzd').as('total_estimated_dzd'),
       ])
       .where('treatment_records.tenant_id', '=', req.tenantId)
-      .where('treatment_records.treatment_date', '>=', db.sql`NOW() - INTERVAL ${sql.literal(`${months} months`)}`)
+      .where('treatment_records.treatment_date', '>=', sql`NOW() - INTERVAL '1 month' * ${months}`)
       .groupBy(['treatment_records.category_id', 'treatment_categories.category_key'])
       .orderBy('procedure_count', 'desc')
       .execute();
@@ -127,11 +127,11 @@ router.get('/patients/new', async (req, res, next) => {
     const data = await db
       .selectFrom('patients')
       .select([
-        db.fn('DATE_TRUNC', ['month', 'created_at']).as('month'),
+        sql`DATE_TRUNC('month', created_at)`.as('month'),
         db.fn.count('id').as('new_patients'),
       ])
       .where('tenant_id', '=', req.tenantId)
-      .where('created_at', '>=', db.sql`NOW() - INTERVAL ${sql.literal(`${months} months`)}`)
+      .where('created_at', '>=', sql`NOW() - INTERVAL '1 month' * ${months}`)
       .groupBy('month')
       .orderBy('month', 'desc')
       .execute();
@@ -152,12 +152,12 @@ router.get('/appointments/stats', async (req, res, next) => {
     const data = await db
       .selectFrom('appointments')
       .select([
-        db.fn('DATE_TRUNC', ['month', 'appointment_date']).as('month'),
+        sql`DATE_TRUNC('month', appointment_date)`.as('month'),
         'status_key',
         db.fn.count('id').as('appointment_count'),
       ])
       .where('tenant_id', '=', req.tenantId)
-      .where('appointment_date', '>=', db.sql`NOW() - INTERVAL ${sql.literal(`${months} months`)}`)
+      .where('appointment_date', '>=', sql`NOW() - INTERVAL '1 month' * ${months}`)
       .groupBy(['month', 'status_key'])
       .orderBy('month', 'desc')
       .execute();
@@ -299,14 +299,15 @@ router.get('/revenue/export', async (req, res, next) => {
   try {
     let query = db
       .selectFrom('payments')
-      .leftJoin('patients', 'payments.patient_id', 'patients.id')
+      .leftJoin('invoices', 'payments.invoice_id', 'invoices.id')
+      .leftJoin('patients', 'invoices.patient_id', 'patients.id')
       .innerJoin('payment_methods', 'payments.payment_method_id', 'payment_methods.id')
       .select([
         'payments.id',
         'payments.payment_date',
         'payments.amount_dzd',
         'payment_methods.method_key as payment_method',
-        'payments.reference_number',
+        'payments.transaction_reference',
         'patients.full_name as patient_name',
         'patients.patient_code',
       ])
@@ -320,7 +321,7 @@ router.get('/revenue/export', async (req, res, next) => {
       .limit(10000)
       .execute();
 
-    const columns = ['id', 'payment_date', 'amount_dzd', 'payment_method', 'reference_number', 'patient_name', 'patient_code'];
+    const columns = ['id', 'payment_date', 'amount_dzd', 'payment_method', 'transaction_reference', 'patient_name', 'patient_code'];
     const header = columns.join(',');
     const rows = payments.map(p => toCsvRow(p, columns));
     const csv = header + '\n' + rows.join('\n');

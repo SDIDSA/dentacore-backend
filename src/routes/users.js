@@ -17,6 +17,34 @@ router.use(conflictResolution);
 // Apply admin authorization to all routes
 router.use(authorize('auth.role.admin'));
 
+// Search users by query
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-@._]/g, '');
+    const results = await db
+      .selectFrom('users')
+      .select('users.id')
+      .where('users.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('users.full_name', 'ilike', `%${sanitized}%`),
+          eb('users.email', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Rate limiters for sensitive operations
 const createUserLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes

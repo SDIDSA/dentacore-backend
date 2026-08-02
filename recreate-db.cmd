@@ -1,9 +1,42 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM Database passwords (hardcoded for development convenience)
-set POSTGRES_PASSWORD=8520
-set DENTACORE_PASSWORD=8520
+REM Load DB_PASSWORD from .env if available
+if exist ".env" (
+    for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
+        if "%%a"=="DB_PASSWORD" set "DB_PASSWORD=%%b"
+    )
+)
+
+echo DB_PASSWORD loaded from .env: %DB_PASSWORD%
+
+REM DENTACORE_PASSWORD: fall back to DB_PASSWORD from .env, then prompt
+if "%DENTACORE_PASSWORD%"=="" (
+    if not "%DB_PASSWORD%"=="" (
+        set "DENTACORE_PASSWORD=%DB_PASSWORD%"
+    ) else (
+        set /p DENTACORE_PASSWORD="Enter dentacore application user password: "
+        if "!DENTACORE_PASSWORD!"=="" (
+            echo ERROR: dentacore password is required
+            pause
+            exit /b 1
+        )
+    )
+)
+
+REM POSTGRES_PASSWORD: fall back to DB_PASSWORD from .env, else prompt
+if "%POSTGRES_PASSWORD%"=="" (
+    if not "%DB_PASSWORD%"=="" (
+        set "POSTGRES_PASSWORD=%DB_PASSWORD%"
+    ) else (
+        set /p POSTGRES_PASSWORD="Enter postgres superuser password: "
+        if "!POSTGRES_PASSWORD!"=="" (
+            echo ERROR: postgres superuser password is required
+            pause
+            exit /b 1
+        )
+    )
+)
 
 REM Check if PostgreSQL is installed and find the correct path
 set PSQL_PATH=""

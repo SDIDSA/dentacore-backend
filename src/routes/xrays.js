@@ -14,6 +14,34 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+// Search xrays
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('xrays')
+      .select('xrays.id')
+      .where('xrays.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('xrays.description', 'ilike', `%${sanitized}%`),
+          eb('xrays.tooth_number', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE || 20971520 }
@@ -366,6 +394,8 @@ router.delete('/:id',
           .deleteFrom('media')
           .where('id', '=', xray.media_id)
           .execute();
+
+        xray.status_key = 'xray.status.deleted';
 
         await trx
           .insertInto('audit_logs')

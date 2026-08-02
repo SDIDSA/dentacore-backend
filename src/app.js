@@ -23,17 +23,18 @@ const xrayRoutes = require('./routes/xrays');
 
 const auditLogsRoutes = require('./routes/auditLogs');
 const treatmentPlanRoutes = require('./routes/treatmentPlans');
+const prescriptionRoutes = require('./routes/prescriptions');
 const reportRoutes = require('./routes/reports');
 const notificationRoutes = require('./routes/notifications');
 const odontogramRoutes = require('./routes/odontogram');
 
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
+const { apiLimiter, mutationLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
 
 app.use(helmet({
-  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
 const allowedOrigins = process.env.CORS_ORIGIN
@@ -107,12 +108,32 @@ app.use('/api/v1/xrays', xrayRoutes);
 
 app.use('/api/v1/audit-logs', auditLogsRoutes);
 app.use('/api/v1/treatment-plans', treatmentPlanRoutes);
+app.use('/api/v1/prescriptions', prescriptionRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/odontogram', odontogramRoutes);
 
-app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use('/api/v1', apiLimiter);
+app.use('/api/v1/patients', mutationLimiter);
+app.use('/api/v1/appointments', mutationLimiter);
+app.use('/api/v1/inventory', mutationLimiter);
+app.use('/api/v1/treatments', mutationLimiter);
+app.use('/api/v1/payments', mutationLimiter);
+app.use('/api/v1/invoices', mutationLimiter);
+app.use('/api/v1/expenses', mutationLimiter);
+app.use('/api/v1/purchase-orders', mutationLimiter);
+app.use('/api/v1/media', mutationLimiter);
+app.use('/api/v1/xrays', mutationLimiter);
+app.use('/api/v1/treatment-plans', mutationLimiter);
+app.use('/api/v1/prescriptions', mutationLimiter);
+app.use('/api/v1/notifications', mutationLimiter);
+app.use('/api/v1/odontogram', mutationLimiter);
+app.use('/api/v1/users', mutationLimiter);
+
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+}
 
 const path = require('path');
 const fs = require('fs');

@@ -12,6 +12,33 @@ const router = express.Router();
 
 router.use(authenticate);
 
+// Search media
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('media')
+      .select('media.id')
+      .where('media.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('media.original_filename', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE || 20971520 }
@@ -166,6 +193,60 @@ router.post('/upload',
   }
 );
 
+// Update media metadata
+router.patch('/:id',
+  param('id').isUUID(),
+  body('description').optional().isString(),
+  body('category').optional().isString(),
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
+
+    try {
+      const current = await db
+        .selectFrom('media')
+        .selectAll()
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (!current) {
+        return res.status(404).json({ error: 'media.error.not_found' });
+      }
+
+      const { description, category } = req.body;
+      const updateData = { updated_at: new Date() };
+      if (description !== undefined) updateData.description = description;
+      if (category !== undefined) updateData.category = category;
+
+      const updated = await db
+        .updateTable('media')
+        .set(updateData)
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .returningAll()
+        .executeTakeFirst();
+
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'media',
+          entityId: updated.id,
+          tenantId: req.tenantId,
+          oldValues: { description: current.description, category: current.category },
+          newValues: { description: updated.description, category: updated.category }
+        });
+      }
+
+      res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 router.delete('/:id',
   param('id').isUUID(),
   async (req, res, next) => {
@@ -197,6 +278,8 @@ router.delete('/:id',
         .where('id', '=', req.params.id)
         .where('tenant_id', '=', req.tenantId)
         .execute();
+
+      media.status_key = 'media.status.deleted';
 
       if (req.audit) {
         await req.audit.log({

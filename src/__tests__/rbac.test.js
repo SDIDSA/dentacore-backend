@@ -70,12 +70,23 @@ describe('RBAC authorization', () => {
         .get('/api/v1/patients')
         .set('Authorization', `Bearer ${tokens.dentist}`);
       if (patRes.body.length === 0) return;
+
+      const userRes = await request(app)
+        .get('/api/v1/users')
+        .set('Authorization', `Bearer ${tokens.dentist}`);
+      let dentistId;
+      if (userRes.body.length > 0) {
+        dentistId = typeof userRes.body[0] === 'string' ? userRes.body[0] : userRes.body[0].id;
+      } else {
+        return;
+      }
+
       const res = await request(app)
         .post('/api/v1/treatments')
         .set('Authorization', `Bearer ${tokens.dentist}`)
         .send({
           patient_id: patRes.body[0],
-          dentist_id: (await request(app).get('/api/v1/users').set('Authorization', `Bearer ${tokens.dentist}`)).body[0],
+          dentist_id: dentistId,
           treatment_date: new Date().toISOString(),
           diagnosis: 'RBAC test diagnosis',
           treatment_performed: 'RBAC test procedure',

@@ -1,8 +1,36 @@
 #!/bin/bash
 
-# Database passwords (hardcoded for development convenience)
-POSTGRES_PASSWORD="8520"
-DENTACORE_PASSWORD="8520"
+# Load DB_PASSWORD from .env if available
+if [ -f ".env" ]; then
+    DB_PASSWORD=$(grep -oP '^DB_PASSWORD=\K.*' .env)
+fi
+
+# DENTACORE_PASSWORD: fall back to DB_PASSWORD from .env, then prompt
+if [ -z "$DENTACORE_PASSWORD" ]; then
+    if [ -n "$DB_PASSWORD" ]; then
+        DENTACORE_PASSWORD="$DB_PASSWORD"
+    else
+        read -r -p "Enter dentacore application user password: " DENTACORE_PASSWORD
+        if [ -z "$DENTACORE_PASSWORD" ]; then
+            echo "ERROR: dentacore password is required"
+            exit 1
+        fi
+    fi
+fi
+
+# POSTGRES_PASSWORD: fall back to DB_PASSWORD from .env, else prompt
+if [ -z "$POSTGRES_PASSWORD" ]; then
+    if [ -n "$DB_PASSWORD" ]; then
+        POSTGRES_PASSWORD="$DB_PASSWORD"
+    else
+        read -r -s -p "Enter postgres superuser password: " POSTGRES_PASSWORD
+        echo
+        if [ -z "$POSTGRES_PASSWORD" ]; then
+            echo "ERROR: postgres superuser password is required"
+            exit 1
+        fi
+    fi
+fi
 
 # Check if PostgreSQL is installed and find the correct path
 PSQL_PATH=""

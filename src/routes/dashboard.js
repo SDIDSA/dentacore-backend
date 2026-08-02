@@ -162,17 +162,17 @@ router.get('/payments/raw', async (req, res, next) => {
 
     let query = db
       .selectFrom('payments')
-      .leftJoin('patients', 'payments.patient_id', 'patients.id')
       .leftJoin('invoices', 'payments.invoice_id', 'invoices.id')
+      .leftJoin('patients', 'invoices.patient_id', 'patients.id')
       .innerJoin('payment_methods', 'payments.payment_method_id', 'payment_methods.id')
       .select([
         'payments.id',
         'payments.amount_dzd',
         'payments.payment_date',
         'payment_methods.method_key as payment_method',
-        'payments.reference_number',
+        'payments.transaction_reference',
         'payments.notes',
-        'payments.patient_id',
+        'invoices.patient_id',
         'payments.invoice_id',
         'patients.full_name as patient_name',
         'invoices.invoice_number',
@@ -189,7 +189,7 @@ router.get('/payments/raw', async (req, res, next) => {
       query = query.where('payment_methods.method_key', '=', payment_method);
     }
     if (patient_id) {
-      query = query.where('payments.patient_id', '=', patient_id);
+      query = query.where('invoices.patient_id', '=', patient_id);
     }
 
     const payments = await query

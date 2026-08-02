@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
 const { authenticate } = require('../middleware/auth');
+const { sql } = require('kysely');
 const db = require('../config/database');
 
 const router = express.Router();
@@ -189,7 +190,7 @@ router.put('/:patientId/tooth/:toothNumber',
           .set({
             condition,
             notes: notes || null,
-            updated_at: db.sql`NOW()`,
+            updated_at: sql`NOW()`,
           })
           .where('id', '=', existing.id)
           .execute();
@@ -226,12 +227,36 @@ router.delete('/:patientId/tooth/:toothNumber',
 
       const { patientId, toothNumber } = req.params;
 
+      const condition = await db
+        .selectFrom('odontogram_conditions')
+        .selectAll()
+        .where('patient_id', '=', patientId)
+        .where('tooth_number', '=', toothNumber)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (!condition) {
+        return res.status(404).json({ error: 'odontogram.error.not_found' });
+      }
+
       await db
         .deleteFrom('odontogram_conditions')
         .where('patient_id', '=', patientId)
         .where('tooth_number', '=', toothNumber)
         .where('tenant_id', '=', req.tenantId)
         .execute();
+
+      condition.status_key = 'odontogram_condition.status.deleted';
+
+      if (req.audit) {
+        await req.audit.log({
+          action: 'DELETE',
+          entityType: 'odontogram_conditions',
+          entityId: `${patientId}:${toothNumber}`,
+          tenantId: req.tenantId,
+          oldValues: condition
+        });
+      }
 
       res.json({ success: true });
     } catch (error) {

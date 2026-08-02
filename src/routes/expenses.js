@@ -11,6 +11,34 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+// Search expenses
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('expenses')
+      .select('expenses.id')
+      .where('expenses.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('expenses.description', 'ilike', `%${sanitized}%`),
+          eb('expenses.expense_number', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 const VALID_STATUSES = [
   'expense.status.pending', 'expense.status.approved',
   'expense.status.paid', 'expense.status.cancelled'
@@ -432,6 +460,8 @@ router.delete('/:id',
         .where('id', '=', req.params.id)
         .where('tenant_id', '=', req.tenantId)
         .execute();
+
+      expense.status_key = 'expense.status.deleted';
 
       if (req.audit) {
         await req.audit.log({

@@ -11,6 +11,35 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+// Search invoices
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('invoices')
+      .select('invoices.id')
+      .innerJoin('patients', 'invoices.patient_id', 'patients.id')
+      .where('invoices.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('invoices.invoice_number', 'ilike', `%${sanitized}%`),
+          eb('patients.full_name', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get invoice IDs with optional filters
 router.get('/', async (req, res, next) => {
   try {
@@ -413,8 +442,7 @@ router.patch('/:id/payment',
   }
 );
 
-// Update invoice (full update - for mutation replay)
-router.put('/:id',
+const updateInvoice = [
   param('id').isUUID(),
   body('patient_id').optional().isUUID(),
   body('issue_date').optional().isISO8601(),
@@ -489,6 +517,55 @@ router.put('/:id',
       }
 
       res.json(invoice);
+    } catch (error) {
+      next(error);
+    }
+  }
+];
+
+router.patch('/:id', ...updateInvoice);
+router.put('/:id', ...updateInvoice);
+
+// Delete invoice
+router.delete('/:id',
+  param('id').isUUID(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+      }
+
+      const invoice = await db
+        .selectFrom('invoices')
+        .selectAll()
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (!invoice) {
+        return res.status(404).json({ error: 'invoice.error.not_found' });
+      }
+
+      await db
+        .deleteFrom('invoices')
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .execute();
+
+      invoice.payment_status_key = 'invoice.status.deleted';
+
+      if (req.audit) {
+        await req.audit.log({
+          action: 'DELETE',
+          entityType: 'invoices',
+          entityId: req.params.id,
+          tenantId: req.tenantId,
+          oldValues: invoice
+        });
+      }
+
+      res.status(204).end();
     } catch (error) {
       next(error);
     }

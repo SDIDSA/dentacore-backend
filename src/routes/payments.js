@@ -11,6 +11,33 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+// Search payments
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('payments')
+      .select('payments.id')
+      .where('payments.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('payments.notes', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 const VALID_METHOD_KEYS = [
   'pay.method.cash', 'pay.method.cib', 'pay.method.baridimob',
   'pay.method.edahabia', 'pay.method.bank_transfer', 'pay.method.check',
@@ -373,6 +400,8 @@ router.delete('/:id',
         .where('id', '=', req.params.id)
         .where('tenant_id', '=', req.tenantId)
         .execute();
+
+      payment.status_key = 'payment.status.deleted';
 
       if (req.audit) {
         await req.audit.log({

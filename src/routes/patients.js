@@ -5,6 +5,7 @@ const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
+const { generateCsv, sendCsv } = require('../utils/csv');
 
 const router = express.Router();
 
@@ -28,10 +29,11 @@ router.get('/', async (req, res, next) => {
       .where('patients.tenant_id', '=', req.tenantId)
 
     if (search) {
+      const sanitized = search.replace(/[^a-zA-Z0-9\s\-]/g, '');
       const searchFilter = (eb) =>
         eb.or([
-          eb(sql`to_tsvector('simple', patients.full_name)`, '@@', sql`to_tsquery('simple', ${search})`),
-          eb('patients.patient_code', 'ilike', `%${search}%`)
+          eb(sql`to_tsvector('simple', patients.full_name)`, '@@', sql`to_tsquery('simple', ${sanitized})`),
+          eb('patients.patient_code', 'ilike', `%${sanitized}%`)
         ]);
       query = query.where(searchFilter);
       countQuery = countQuery.where(searchFilter);
@@ -50,6 +52,36 @@ router.get('/', async (req, res, next) => {
     } else {
       res.json(patientIds);
     }
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Search patients by query
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('patients')
+      .select(['patients.id'])
+      .where('patients.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb(sql`to_tsvector('simple', patients.full_name)`, '@@', sql`to_tsquery('simple', ${sanitized})`),
+          eb('patients.patient_code', 'ilike', `%${sanitized}%`),
+          eb('patients.phone', 'ilike', `%${sanitized}%`),
+          eb('patients.email', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
   } catch (error) {
     next(error);
   }
@@ -643,6 +675,119 @@ router.get('/:id/detail', async (req, res, next) => {
     next(error);
   }
 });
+
+// Export patients as CSV
+router.get('/export', async (req, res, next) => {
+  try {
+    const patients = await db
+      .selectFrom('patients')
+      .select([
+        'id', 'patient_code', 'full_name', 'date_of_birth',
+        'gender', 'phone', 'email', 'wilaya_name',
+        'status_key', 'last_visit_date', 'next_appointment_date', 'created_at',
+      ])
+      .where('tenant_id', '=', req.tenantId)
+      .orderBy('created_at', 'desc')
+      .limit(10000)
+      .execute();
+
+    const columns = ['id', 'patient_code', 'full_name', 'date_of_birth', 'gender', 'phone', 'email', 'wilaya_name', 'status_key', 'last_visit_date', 'next_appointment_date', 'created_at'];
+    const csv = generateCsv(patients, columns);
+    sendCsv(res, csv, 'patients-export.csv');
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Import patients from CSV
+router.post('/import',
+  require('multer')({ storage: require('multer').memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }).single('file'),
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'validation.error', details: 'CSV file required' });
+      }
+
+      const csv = req.file.buffer.toString('utf-8');
+      const lines = csv.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length < 2) {
+        return res.status(400).json({ error: 'validation.error', details: 'CSV must have a header row and at least one data row' });
+      }
+
+      const header = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+      const nameIdx = header.indexOf('full_name');
+      const phoneIdx = header.indexOf('phone');
+      const emailIdx = header.indexOf('email');
+      const genderIdx = header.indexOf('gender');
+      const dobIdx = header.indexOf('date_of_birth');
+
+      if (nameIdx === -1) {
+        return res.status(400).json({ error: 'validation.error', details: 'CSV must contain a "full_name" column' });
+      }
+
+      const created = [];
+      const errors = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCsvLine(lines[i]);
+        const fullName = cols[nameIdx]?.replace(/^"|"$/g, '').trim();
+        if (!fullName) {
+          errors.push({ row: i + 1, error: 'full_name is required' });
+          continue;
+        }
+
+        try {
+          const result = await db
+            .insertInto('patients')
+            .values({
+              tenant_id: req.tenantId,
+              full_name: fullName,
+              phone: phoneIdx >= 0 ? cols[phoneIdx]?.replace(/^"|"$/g, '').trim() || null : null,
+              email: emailIdx >= 0 ? cols[emailIdx]?.replace(/^"|"$/g, '').trim() || null : null,
+              gender: genderIdx >= 0 ? cols[genderIdx]?.replace(/^"|"$/g, '').trim() || null : null,
+              date_of_birth: dobIdx >= 0 ? cols[dobIdx]?.replace(/^"|"$/g, '').trim() || null : null,
+              status_key: 'patient.status.active',
+              created_by: req.user.id,
+            })
+            .returning('id')
+            .executeTakeFirst();
+
+          created.push(result.id);
+        } catch (err) {
+          errors.push({ row: i + 1, error: err.message });
+        }
+      }
+
+      res.status(201).json({ created: created.length, errors, total: lines.length - 1 });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+function parseCsvLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
 
 module.exports = router;
 

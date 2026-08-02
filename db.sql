@@ -1403,6 +1403,28 @@ CREATE INDEX idx_token_blacklist_jti ON token_blacklist(jti);
 CREATE INDEX idx_token_blacklist_expires ON token_blacklist(expires_at);
 
 -- ============================================================================
+-- NOTIFICATIONS TABLE (v3.0 - In-App Notifications)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+    inventory_item_id UUID REFERENCES inventory_items(id) ON DELETE SET NULL,
+    type VARCHAR(50) NOT NULL,
+    channel VARCHAR(20) NOT NULL,
+    recipient VARCHAR(255),
+    message TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'unread',
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_tenant ON notifications(tenant_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(tenant_id, type);
+
+-- ============================================================================
 -- TREATMENT PLANS TABLE (v3.0 - Treatment Planning)
 -- ============================================================================
 
@@ -1436,6 +1458,52 @@ END $$;
 -- Index for faster plan lookups
 CREATE INDEX IF NOT EXISTS idx_treatment_plans_patient ON treatment_plans(tenant_id, patient_id);
 CREATE INDEX IF NOT EXISTS idx_treatment_records_plan ON treatment_records(tenant_id, plan_id);
+
+-- ============================================================================
+-- PRESCRIPTIONS TABLE (v3.0 - Prescriptions / eRx)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS prescriptions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    dentist_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    prescription_number VARCHAR(20) NOT NULL,
+    medication_name VARCHAR(255) NOT NULL,
+    dosage VARCHAR(100) NOT NULL,
+    frequency VARCHAR(100) NOT NULL,
+    duration VARCHAR(100),
+    notes TEXT,
+    status_key VARCHAR(50) NOT NULL DEFAULT 'prescription.status.active',
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_prescription_status CHECK (status_key IN (
+        'prescription.status.active', 'prescription.status.completed', 'prescription.status.cancelled'
+    ))
+);
+
+CREATE INDEX IF NOT EXISTS idx_prescriptions_tenant ON prescriptions(tenant_id, patient_id);
+CREATE INDEX IF NOT EXISTS idx_prescriptions_patient ON prescriptions(tenant_id, patient_id, status_key);
+
+-- ============================================================================
+-- ODONTOGRAM CONDITIONS TABLE (v3.0 - Dental Chart)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS odontogram_conditions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    tooth_number VARCHAR(10) NOT NULL,
+    condition VARCHAR(50) NOT NULL,
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_odontogram_condition UNIQUE (patient_id, tooth_number, tenant_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_odontogram_conditions_tenant ON odontogram_conditions(tenant_id, patient_id);
+CREATE INDEX IF NOT EXISTS idx_odontogram_conditions_patient ON odontogram_conditions(patient_id, tooth_number);
 
 -- ============================================================================
 -- REPORTS SUPPORT VIEWS (v3.0 - Reports & Analytics)

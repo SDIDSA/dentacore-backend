@@ -1,9 +1,15 @@
 const log = require('../utils/logger');
 
 const errorHandler = (err, req, res, next) => {
-  log.error('Unhandled error', { message: err.message, stack: err.stack });
+  const isDev = process.env.NODE_ENV !== 'production';
+  if (isDev) {
+    log.error('Unhandled error', { message: err.message, stack: err.stack });
+  } else {
+    log.error('Unhandled error', { message: err.message });
+  }
 
   if (err.name === 'ValidationError') {
+    err.statusCode = 400;
     return res.status(400).json({
       error: 'validation.error',
       details: err.details,

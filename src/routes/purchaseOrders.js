@@ -11,6 +11,35 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+// Search purchase orders
+router.get('/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('purchase_orders')
+      .select('purchase_orders.id')
+      .leftJoin('suppliers', 'purchase_orders.supplier_id', 'suppliers.id')
+      .where('purchase_orders.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('purchase_orders.po_number', 'ilike', `%${sanitized}%`),
+          eb('suppliers.name', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 const VALID_STATUSES = [
   'po.status.draft', 'po.status.pending_approval', 'po.status.approved',
   'po.status.sent', 'po.status.partially_received', 'po.status.received',
@@ -282,6 +311,69 @@ router.post('/',
   }
 );
 
+// Update purchase order (generic fields)
+router.patch('/:id',
+  param('id').isUUID(),
+  body('notes').optional().isString(),
+  body('expected_delivery_date').optional({ values: 'null' }).isISO8601(),
+  body('shipping_dzd').optional().isFloat({ min: 0 }),
+  body('supplier_id').optional().isUUID(),
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
+
+    try {
+      const current = await db
+        .selectFrom('purchase_orders')
+        .selectAll()
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (!current) {
+        return res.status(404).json({ error: 'po.error.not_found' });
+      }
+
+      if (res.conflictCheck(current)) return;
+
+      const { notes, expected_delivery_date, shipping_dzd, supplier_id } = req.body;
+      const updateData = { updated_at: new Date() };
+      if (notes !== undefined) updateData.notes = notes;
+      if (expected_delivery_date !== undefined) updateData.expected_delivery_date = expected_delivery_date;
+      if (shipping_dzd !== undefined) {
+        updateData.shipping_dzd = shipping_dzd;
+        updateData.total_dzd = current.subtotal_dzd + shipping_dzd;
+      }
+      if (supplier_id !== undefined) updateData.supplier_id = supplier_id;
+
+      const updated = await db
+        .updateTable('purchase_orders')
+        .set(updateData)
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .returningAll()
+        .executeTakeFirst();
+
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE',
+          entityType: 'purchase_orders',
+          entityId: updated.id,
+          tenantId: req.tenantId,
+          oldValues: current,
+          newValues: updated
+        }, db);
+      }
+
+      res.json(updated);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 // Update purchase order status
 router.patch('/:id/status',
   param('id').isUUID(),
@@ -544,6 +636,8 @@ router.delete('/:id',
         .where('id', '=', order.id)
         .where('tenant_id', '=', req.tenantId)
         .execute();
+
+      order.status_key = 'po.status.deleted';
 
       if (req.audit) {
         await req.audit.log({

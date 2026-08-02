@@ -5,6 +5,7 @@ const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
+const { checkLowStockAndNotify } = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -174,6 +175,34 @@ router.get('/items/:id', async (req, res, next) => {
   }
 });
 
+// Search inventory items
+router.get('/items/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const results = await db
+      .selectFrom('inventory_items')
+      .select('inventory_items.id')
+      .where('inventory_items.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('inventory_items.name', 'ilike', `%${sanitized}%`),
+          eb('inventory_items.item_code', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Create inventory item
 router.post('/items',
   body('name').trim().notEmpty(),
@@ -278,6 +307,8 @@ router.post('/items',
         });
       }
 
+      checkLowStockAndNotify(req.tenantId, item.id).catch(() => {});
+
       res.status(201).json(item);
     } catch (error) {
       next(error);
@@ -354,7 +385,55 @@ router.patch('/items/:id',
         });
       }
 
+      checkLowStockAndNotify(req.tenantId, item.id).catch(() => {});
+
       res.json(item);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Delete inventory item
+router.delete('/items/:id',
+  param('id').isUUID(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+      }
+
+      const item = await db
+        .selectFrom('inventory_items')
+        .selectAll()
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (!item) {
+        return res.status(404).json({ error: 'inventory.error.item_not_found' });
+      }
+
+      await db
+        .deleteFrom('inventory_items')
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .execute();
+
+      item.status_key = 'inventory_item.status.deleted';
+
+      if (req.audit) {
+        await req.audit.log({
+          action: 'DELETE',
+          entityType: 'inventory_items',
+          entityId: req.params.id,
+          tenantId: req.tenantId,
+          oldValues: item
+        });
+      }
+
+      res.status(204).end();
     } catch (error) {
       next(error);
     }
@@ -422,6 +501,8 @@ router.post('/items/:id/adjust-stock',
           newValues: { current_stock: updatedItem.current_stock, adjustment: quantity, reason }
         });
       }
+
+      checkLowStockAndNotify(req.tenantId, item.id).catch(() => {});
 
       res.json(updatedItem);
     } catch (error) {
@@ -766,6 +847,8 @@ router.delete('/categories/:id',
         .where('tenant_id', '=', req.tenantId)
         .execute();
 
+      category.status_key = 'inventory_category.status.deleted';
+
       // Log the deletion
       if (req.audit) {
         await req.audit.log({
@@ -1038,6 +1121,52 @@ router.patch('/suppliers/:id',
       }
 
       res.json(supplier);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Delete inventory supplier
+router.delete('/suppliers/:id',
+  param('id').isUUID(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+      }
+
+      const supplier = await db
+        .selectFrom('suppliers')
+        .selectAll()
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (!supplier) {
+        return res.status(404).json({ error: 'inventory.error.supplier_not_found' });
+      }
+
+      await db
+        .deleteFrom('suppliers')
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .execute();
+
+      supplier.status_key = 'supplier.status.deleted';
+
+      if (req.audit) {
+        await req.audit.log({
+          action: 'DELETE',
+          entityType: 'suppliers',
+          entityId: req.params.id,
+          tenantId: req.tenantId,
+          oldValues: supplier
+        });
+      }
+
+      res.status(204).end();
     } catch (error) {
       next(error);
     }

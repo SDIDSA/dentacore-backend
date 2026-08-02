@@ -3,6 +3,7 @@ const logger = require('../config/logger');
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 100;
+const MAX_QUEUE_SIZE = 1000;
 let queue = [];
 let processing = false;
 
@@ -40,6 +41,10 @@ async function processQueue() {
 }
 
 function enqueue(entry) {
+  if (queue.length >= MAX_QUEUE_SIZE) {
+    logger.warn('Audit queue full, dropping oldest entry', { queueSize: queue.length });
+    queue.shift();
+  }
   queue.push({ ...entry, _retries: 0 });
   if (!processing) {
     setImmediate(processQueue);

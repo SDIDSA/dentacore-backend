@@ -87,14 +87,33 @@ router.delete('/:id',
         return res.status(400).json({ error: 'validation.error', details: errors.array() });
       }
 
-      const deleted = await db
-        .deleteFrom('notifications')
+      const notification = await db
+        .selectFrom('notifications')
+        .selectAll()
         .where('id', '=', req.params.id)
         .where('tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
-      if (deleted.numDeletedRows === 0n) {
+      if (!notification) {
         return res.status(404).json({ error: 'notification.error.not_found' });
+      }
+
+      await db
+        .deleteFrom('notifications')
+        .where('id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .execute();
+
+      notification.status_key = 'notification.status.deleted';
+
+      if (req.audit) {
+        await req.audit.log({
+          action: 'DELETE',
+          entityType: 'notifications',
+          entityId: req.params.id,
+          tenantId: req.tenantId,
+          oldValues: notification
+        });
       }
 
       res.json({ success: true });

@@ -1107,6 +1107,7 @@ BEGIN
     RAISE NOTICE '   Dentists: Amina, Samir, Fatima | Receptionist: Nadia';
     RAISE NOTICE '   Patients: 100 | Suppliers: 3 | Inventory: 8 items | Expenses: 4';
     RAISE NOTICE '   Appointments: Generated across 90+ days';
+    RAISE NOTICE '   (More data: treatment plans, prescriptions, x-rays, POs, etc. below)';
     RAISE NOTICE '';
     RAISE NOTICE '2. Clinique Dentaire Sourire (Algiers)';
     RAISE NOTICE '   Subdomain: sourire.dms.dz';
@@ -1572,7 +1573,550 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- INVOICE SUMMARY VERIFICATION
+-- SECTION 6: COMPREHENSIVE ADDITIONAL DUMMY DATA
+-- Fills remaining tables: treatment_plans, prescriptions, media, xrays,
+-- notifications, audit_logs, purchase_orders, plus more treatment records,
+-- invoices, stock movements, and expenses for all tenants
+-- ============================================================================
+
+DO $$
+DECLARE
+    -- Tenant IDs
+    v_tid UUID; v_sid UUID; v_tid3 UUID;
+    -- User IDs
+    v_admin UUID; v_dent1 UUID; v_dent2 UUID; v_dent3 UUID; v_recep UUID;
+    v_s_admin UUID; v_t_dent UUID;
+    -- Patient IDs (elqods - named)
+    v_pat1 UUID; v_pat2 UUID;
+    -- Patient IDs (sourire)
+    v_spat UUID;
+    -- Patient IDs (teyar)
+    v_tpat UUID;
+    -- Category IDs
+    v_cleaning UUID; v_filling UUID; v_crown UUID; v_extraction UUID;
+    v_root_canal UUID; v_whitening UUID; v_fluoride UUID; v_sealants UUID;
+    v_wisdom UUID; v_braces UUID; v_pediatric UUID; v_veneer UUID;
+    v_bridge UUID; v_implant UUID;
+    -- Payment methods
+    v_cash UUID; v_cib UUID; v_bank UUID; v_baridi UUID;
+    v_cheque UUID; v_satim UUID; v_edahabia UUID;
+    -- Supplier IDs (elqods)
+    v_sup1 UUID; v_sup2 UUID; v_sup3 UUID;
+    -- Inventory item IDs (elqods)
+    v_gloves_m UUID; v_gloves_l UUID; v_comp_a2 UUID; v_comp_a3 UUID;
+    v_lido UUID; v_explorer UUID; v_cotton UUID; v_gauze UUID;
+    -- Loop variables
+    v_i INT; v_j INT;
+    -- IDs for created records
+    v_plan_id UUID; v_tr_id UUID; v_inv_id UUID; v_po_id UUID;
+    v_media_id UUID; v_appt_id UUID; v_patient_id UUID; v_dentist_id UUID;
+    v_tr_count INT := 0; v_inv_count INT := 0; v_pres_count INT := 0;
+    -- Appointment date variable for treatment records
+    v_appt_date TIMESTAMPTZ;
+BEGIN
+    -- ========================================================================
+    -- 6.1: GET REFERENCE IDS
+    -- ========================================================================
+    SELECT id INTO v_tid FROM tenants WHERE subdomain = 'elqods';
+    SELECT id INTO v_sid FROM tenants WHERE subdomain = 'sourire';
+    SELECT id INTO v_tid3 FROM tenants WHERE subdomain = 'teyar';
+    SELECT id INTO v_admin FROM users WHERE email = 'admin@elqods.dz';
+    SELECT id INTO v_dent1 FROM users WHERE email = 'dentist@elqods.dz';
+    SELECT id INTO v_dent2 FROM users WHERE email = 'dentist2@elqods.dz';
+    SELECT id INTO v_dent3 FROM users WHERE email = 'dentist3@elqods.dz';
+    SELECT id INTO v_recep FROM users WHERE email = 'reception@elqods.dz';
+    SELECT id INTO v_s_admin FROM users WHERE email = 'admin@sourire.dz';
+    SELECT id INTO v_t_dent FROM users WHERE email = 'zinouteyar@gmail.com';
+    SELECT id INTO v_pat1 FROM patients WHERE tenant_id = v_tid AND full_name = 'Ahmed Boudiaf';
+    SELECT id INTO v_pat2 FROM patients WHERE tenant_id = v_tid AND full_name = 'Leila Mansouri';
+    SELECT id INTO v_spat FROM patients WHERE tenant_id = v_sid LIMIT 1;
+    SELECT id INTO v_tpat FROM patients WHERE tenant_id = v_tid3 LIMIT 1;
+
+    SELECT id INTO v_cleaning FROM treatment_categories WHERE category_key = 'cat.preventive.cleaning' AND tenant_id IS NULL;
+    SELECT id INTO v_filling FROM treatment_categories WHERE category_key = 'cat.restorative.filling' AND tenant_id IS NULL;
+    SELECT id INTO v_crown FROM treatment_categories WHERE category_key = 'cat.restorative.crown' AND tenant_id IS NULL;
+    SELECT id INTO v_bridge FROM treatment_categories WHERE category_key = 'cat.restorative.bridge' AND tenant_id IS NULL;
+    SELECT id INTO v_extraction FROM treatment_categories WHERE category_key = 'cat.surgery.extraction' AND tenant_id IS NULL;
+    SELECT id INTO v_implant FROM treatment_categories WHERE category_key = 'cat.surgery.implant' AND tenant_id IS NULL;
+    SELECT id INTO v_wisdom FROM treatment_categories WHERE category_key = 'cat.surgery.wisdom_tooth' AND tenant_id IS NULL;
+    SELECT id INTO v_root_canal FROM treatment_categories WHERE category_key = 'cat.endodontics.root_canal' AND tenant_id IS NULL;
+    SELECT id INTO v_braces FROM treatment_categories WHERE category_key = 'cat.orthodontics.braces' AND tenant_id IS NULL;
+    SELECT id INTO v_whitening FROM treatment_categories WHERE category_key = 'cat.cosmetic.whitening' AND tenant_id IS NULL;
+    SELECT id INTO v_veneer FROM treatment_categories WHERE category_key = 'cat.cosmetic.veneers' AND tenant_id IS NULL;
+    SELECT id INTO v_fluoride FROM treatment_categories WHERE category_key = 'cat.preventive.fluoride' AND tenant_id IS NULL;
+    SELECT id INTO v_sealants FROM treatment_categories WHERE category_key = 'cat.preventive.sealants' AND tenant_id IS NULL;
+    SELECT id INTO v_pediatric FROM treatment_categories WHERE category_key = 'cat.custom.pediatric' AND tenant_id = v_tid;
+
+    SELECT id INTO v_cash FROM payment_methods WHERE method_key = 'pay.method.cash';
+    SELECT id INTO v_cib FROM payment_methods WHERE method_key = 'pay.method.cib';
+    SELECT id INTO v_bank FROM payment_methods WHERE method_key = 'pay.method.bank_transfer';
+    SELECT id INTO v_baridi FROM payment_methods WHERE method_key = 'pay.method.baridimob';
+    SELECT id INTO v_cheque FROM payment_methods WHERE method_key = 'pay.method.check';
+    SELECT id INTO v_satim FROM payment_methods WHERE method_key = 'pay.method.satim';
+    SELECT id INTO v_edahabia FROM payment_methods WHERE method_key = 'pay.method.edahabia';
+
+    SELECT id INTO v_sup1 FROM suppliers WHERE tenant_id = v_tid AND name = 'Dental Supply Algeria';
+    SELECT id INTO v_sup2 FROM suppliers WHERE tenant_id = v_tid AND name = 'MediDent Distribution';
+    SELECT id INTO v_sup3 FROM suppliers WHERE tenant_id = v_tid AND name = 'Pharma Dental';
+
+    SELECT id INTO v_gloves_m FROM inventory_items WHERE tenant_id = v_tid AND name = 'Nitrile Gloves - Medium';
+    SELECT id INTO v_gloves_l FROM inventory_items WHERE tenant_id = v_tid AND name = 'Nitrile Gloves - Large';
+    SELECT id INTO v_comp_a2 FROM inventory_items WHERE tenant_id = v_tid AND name = 'Composite Resin A2';
+    SELECT id INTO v_comp_a3 FROM inventory_items WHERE tenant_id = v_tid AND name = 'Composite Resin A3';
+    SELECT id INTO v_lido FROM inventory_items WHERE tenant_id = v_tid AND name = 'Lidocaine 2% with Epinephrine';
+    SELECT id INTO v_explorer FROM inventory_items WHERE tenant_id = v_tid AND name = 'Dental Explorer #23';
+    SELECT id INTO v_cotton FROM inventory_items WHERE tenant_id = v_tid AND name = 'Cotton Rolls Medium';
+    SELECT id INTO v_gauze FROM inventory_items WHERE tenant_id = v_tid AND name = 'Gauze Pads 2x2';
+
+    RAISE NOTICE '6.1: Reference IDs loaded';
+
+    -- ========================================================================
+    -- 6.2: TREATMENT PLANS (El-Qods: 8, Sourire: 2, Teyar: 3)
+    -- ========================================================================
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, notes, created_by)
+    VALUES (v_tid, v_pat1, 'Full Mouth Rehabilitation', 'Comprehensive treatment: fillings, crown, cleaning', 'plan.status.active', 65000.00, 'Phase 1 approved. Insurance confirmed.', v_dent1);
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    VALUES (v_tid, v_pat2, 'Orthodontic Braces', 'Full metal braces treatment', 'plan.status.draft', 120000.00, v_dent2);
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    VALUES (v_tid, v_pat1, 'Implant Consultation', 'Implant evaluation for tooth 46', 'plan.status.completed', 35000.00, v_dent1);
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    VALUES (v_tid, v_pat2, 'Pediatric Checkup', 'Children dental examination', 'plan.status.cancelled', 15000.00, v_admin);
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    SELECT v_tid, id, 'Root Canal Treatment Plan', 'Root canal + crown on molar', 'plan.status.active', 45000.00, v_dent3
+    FROM patients WHERE tenant_id = v_tid ORDER BY random() LIMIT 1 OFFSET 2;
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    SELECT v_tid, id, 'Teeth Whitening Package', 'Professional whitening + home kit', 'plan.status.draft', 25000.00, v_dent1
+    FROM patients WHERE tenant_id = v_tid ORDER BY random() LIMIT 1 OFFSET 5;
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    SELECT v_tid, id, 'Periodontal Treatment', 'Deep cleaning and gum management', 'plan.status.active', 32000.00, v_dent2
+    FROM patients WHERE tenant_id = v_tid ORDER BY random() LIMIT 1 OFFSET 10;
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    SELECT v_tid, id, 'Cosmetic Veneers Plan', 'Porcelain veneers on anteriors', 'plan.status.draft', 85000.00, v_dent1
+    FROM patients WHERE tenant_id = v_tid ORDER BY random() LIMIT 1 OFFSET 15;
+    -- Sourire plans
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    VALUES (v_sid, v_spat, 'Basic Checkup Plan', 'Routine examination and cleaning', 'plan.status.active', 5000.00, v_s_admin);
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    VALUES (v_sid, v_spat, 'Filling Treatment Plan', 'Composite filling on molar', 'plan.status.draft', 8000.00, v_s_admin);
+    -- Teyar plans
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    VALUES (v_tid3, v_tpat, 'Full Mouth Rehab', 'Complete oral rehabilitation', 'plan.status.active', 95000.00, v_t_dent);
+    INSERT INTO treatment_plans (tenant_id, patient_id, plan_name, description, status_key, estimated_total_dzd, created_by)
+    VALUES (v_tid3, v_tpat, 'Implant Plan', 'Two dental implants lower jaw', 'plan.status.draft', 180000.00, v_t_dent);
+
+    RAISE NOTICE '6.2: Treatment plans created (El-Qods: 8, Sourire: 2, Teyar: 2)';
+
+    -- ========================================================================
+    -- 6.3: TREATMENT RECORDS (25 for El-Qods from completed appointments)
+    -- ========================================================================
+    FOR v_i IN 0..24 LOOP
+        SELECT a.id, a.patient_id, a.dentist_id, a.appointment_date
+        INTO v_appt_id, v_patient_id, v_dentist_id, v_appt_date
+        FROM appointments a
+        WHERE a.tenant_id = v_tid AND a.status_key = 'appt.status.completed'
+        ORDER BY a.appointment_date DESC
+        LIMIT 1 OFFSET v_i;
+
+        IF FOUND THEN
+            INSERT INTO treatment_records (
+                tenant_id, patient_id, appointment_id, dentist_id,
+                category_id, treatment_date, tooth_number,
+                diagnosis, treatment_performed, estimated_cost_dzd
+            ) VALUES (
+                v_tid, v_patient_id, v_appt_id, v_dentist_id,
+                CASE v_i % 11
+                    WHEN 0 THEN v_cleaning WHEN 1 THEN v_filling
+                    WHEN 2 THEN v_crown WHEN 3 THEN v_extraction
+                    WHEN 4 THEN v_root_canal WHEN 5 THEN v_cleaning
+                    WHEN 6 THEN v_filling WHEN 7 THEN v_whitening
+                    WHEN 8 THEN v_sealants WHEN 9 THEN v_fluoride
+                    ELSE v_bridge
+                END,
+                v_appt_date,
+                CASE v_i % 11
+                    WHEN 0 THEN NULL WHEN 1 THEN (ARRAY['16','26','36','46'])[1+(random()*4)::int]
+                    WHEN 2 THEN (ARRAY['11','21','16','26'])[1+(random()*4)::int]
+                    WHEN 3 THEN (ARRAY['18','28','38','48'])[1+(random()*4)::int]
+                    WHEN 4 THEN (ARRAY['16','26','36','46'])[1+(random()*4)::int]
+                    WHEN 5 THEN NULL WHEN 6 THEN (ARRAY['14','15','24','25'])[1+(random()*4)::int]
+                    WHEN 7 THEN NULL WHEN 8 THEN (ARRAY['14','24','34','44'])[1+(random()*4)::int]
+                    WHEN 9 THEN NULL ELSE (ARRAY['11','12','21','22'])[1+(random()*4)::int]
+                END,
+                CASE v_i % 11
+                    WHEN 0 THEN 'Routine cleaning and prophylaxis'
+                    WHEN 1 THEN 'Dental caries on posterior tooth'
+                    WHEN 2 THEN 'Tooth structure compromised - crown needed'
+                    WHEN 3 THEN 'Impacted wisdom tooth with pericoronitis'
+                    WHEN 4 THEN 'Irreversible pulpitis'
+                    WHEN 5 THEN 'Moderate gingivitis with buildup'
+                    WHEN 6 THEN 'Secondary caries under existing filling'
+                    WHEN 7 THEN 'Extrinsic staining from coffee/tea'
+                    WHEN 8 THEN 'Deep pits and fissures on molars'
+                    WHEN 9 THEN 'Early demineralization'
+                    ELSE 'Missing tooth - bridge preparation'
+                END,
+                CASE v_i % 11
+                    WHEN 0 THEN 'Professional cleaning and scaling'
+                    WHEN 1 THEN 'Composite filling restoration'
+                    WHEN 2 THEN 'Crown preparation and temporary crown'
+                    WHEN 3 THEN 'Surgical extraction of wisdom tooth'
+                    WHEN 4 THEN 'Root canal therapy - first visit'
+                    WHEN 5 THEN 'Full mouth debridement and scaling'
+                    WHEN 6 THEN 'Old filling removal and replacement'
+                    WHEN 7 THEN 'Professional teeth whitening with LED'
+                    WHEN 8 THEN 'Dental sealant application on molars'
+                    WHEN 9 THEN 'Fluoride varnish application'
+                    ELSE 'Bridge abutment preparation and impression'
+                END,
+                CASE v_i % 11
+                    WHEN 0 THEN 4500.00 WHEN 1 THEN 8500.00
+                    WHEN 2 THEN 25000.00 WHEN 3 THEN 18000.00
+                    WHEN 4 THEN 15000.00 WHEN 5 THEN 5000.00
+                    WHEN 6 THEN 7000.00 WHEN 7 THEN 12000.00
+                    WHEN 8 THEN 3000.00 WHEN 9 THEN 2000.00
+                    ELSE 22000.00
+                END
+            );
+            v_tr_count := v_tr_count + 1;
+        END IF;
+    END LOOP;
+    RAISE NOTICE '6.3: Created % treatment records for El-Qods', v_tr_count;
+
+    -- ========================================================================
+    -- 6.4: NEW INVOICES FOR EL-QODS (10 invoices with items + payments)
+    -- ========================================================================
+    FOR v_i IN 0..9 LOOP
+        DECLARE
+            v_subtotal DECIMAL(12,2);
+            v_discount DECIMAL(12,2);
+            v_total DECIMAL(12,2);
+        BEGIN
+            SELECT a.id, a.patient_id, a.dentist_id, a.appointment_date
+            INTO v_appt_id, v_patient_id, v_dentist_id, v_appt_date
+            FROM appointments a
+            WHERE a.tenant_id = v_tid AND a.status_key = 'appt.status.completed'
+            ORDER BY a.appointment_date DESC
+            LIMIT 1 OFFSET (25 + v_i);
+
+            IF FOUND THEN
+                v_subtotal := (ARRAY[8500.00, 4500.00, 12000.00, 25000.00, 5500.00])[1 + (v_i % 5)];
+                v_discount := CASE WHEN v_i % 3 = 0 THEN 500.00 ELSE 0.00 END;
+                v_total := v_subtotal - v_discount;
+
+                INSERT INTO invoices (
+                    tenant_id, patient_id, issue_date, due_date,
+                    subtotal_dzd, discount_dzd, total_dzd, paid_amount_dzd,
+                    payment_status_key, notes, created_by
+                ) VALUES (
+                    v_tid, v_patient_id,
+                    v_appt_date, v_appt_date + INTERVAL '14 days',
+                    v_subtotal, v_discount, v_total,
+                    CASE v_i % 4
+                        WHEN 0 THEN 0
+                        WHEN 1 THEN ROUND(v_total * 0.5, 2)
+                        ELSE v_total
+                    END,
+                    CASE v_i % 4
+                        WHEN 0 THEN 'invoice.status.unpaid'
+                        WHEN 1 THEN 'invoice.status.partial'
+                        WHEN 2 THEN 'invoice.status.paid'
+                        ELSE 'invoice.status.paid'
+                    END,
+                    (ARRAY['Composite filling procedure','Teeth cleaning and scaling','Root canal treatment','Dental crown placement','Preventive treatment'])[1 + (v_i % 5)],
+                    v_dentist_id
+                ) RETURNING id INTO v_inv_id;
+
+                INSERT INTO invoice_items (tenant_id, invoice_id, description, quantity, unit_price_dzd, total_price_dzd)
+                VALUES (
+                    v_tid, v_inv_id,
+                    (ARRAY['Composite filling restoration','Professional teeth cleaning','Root canal therapy','Dental crown','Preventive treatment'])[1 + (v_i % 5)],
+                    1, v_subtotal, v_subtotal
+                );
+
+                IF (v_i % 4) >= 2 THEN
+                    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by)
+                    VALUES (v_tid, v_inv_id, CASE v_i % 4 WHEN 2 THEN v_cash WHEN 3 THEN v_cib END,
+                            v_total, v_appt_date + INTERVAL '1 day',
+                            CASE v_i % 4 WHEN 2 THEN 'Full cash payment' ELSE 'CIB card full payment' END, v_recep);
+                ELSIF v_i % 4 = 1 THEN
+                    INSERT INTO payments (tenant_id, invoice_id, payment_method_id, amount_dzd, payment_date, notes, received_by)
+                    VALUES (v_tid, v_inv_id, v_baridi, ROUND(v_total * 0.5, 2),
+                            v_appt_date + INTERVAL '1 day', 'Partial BaridiMob payment', v_recep);
+                END IF;
+
+                v_inv_count := v_inv_count + 1;
+            END IF;
+        END;
+    END LOOP;
+    RAISE NOTICE '6.4: Created % new invoices for El-Qods', v_inv_count;
+
+    -- ========================================================================
+    -- 6.5: PRESCRIPTIONS (El-Qods: 10, Sourire: 2, Teyar: 3)
+    -- Note: prescription_number is provided explicitly because the
+    -- auto-numbering trigger (trg_set_prescription_number) is in the
+    -- migration file, not in db.sql. Format: RX-YYYYMM-NNNN
+    -- ========================================================================
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, notes, status_key, created_by)
+    VALUES
+    (v_tid, v_pat1, v_dent1, 'RX-202606-0001', 'Amoxicillin 500mg', '500 mg', '3 times daily', '7 days', 'Take after meals. Complete full course.', 'prescription.status.active', v_dent1),
+    (v_tid, v_pat2, v_dent2, 'RX-202606-0002', 'Ibuprofen 400mg', '400 mg', '3 times daily as needed', '5 days', 'For post-operative pain management', 'prescription.status.active', v_dent2),
+    (v_tid, v_pat1, v_dent1, 'RX-202606-0003', 'Chlorhexidine Mouthwash 0.12%', '15 ml', '2 times daily after brushing', '14 days', 'Do not swallow. Use for 2 weeks.', 'prescription.status.active', v_dent1),
+    (v_tid, v_pat2, v_dent2, 'RX-202606-0004', 'Metronidazole 250mg', '250 mg', '3 times daily', '7 days', 'For periodontal infection', 'prescription.status.completed', v_dent2),
+    (v_tid, v_pat1, v_dent3, 'RX-202606-0005', 'Paracetamol 500mg', '500 mg', '4 times daily as needed', '3 days', NULL, 'prescription.status.active', v_dent3),
+    (v_tid, v_pat2, v_dent1, 'RX-202606-0006', 'Amoxicillin + Clavulanic Acid 875/125mg', '1 tablet', '2 times daily', '7 days', 'Stronger antibiotic for severe infection', 'prescription.status.cancelled', v_dent1),
+    (v_tid, v_pat1, v_dent2, 'RX-202606-0007', 'Lidocaine Viscous 2%', '5 ml', 'Swish for 1 min as needed', '5 days', 'For oral ulcer pain relief', 'prescription.status.active', v_dent2),
+    (v_tid, v_pat2, v_dent3, 'RX-202606-0008', 'Fluconazole 100mg', '100 mg', 'Once daily', '14 days', 'For oral thrush treatment', 'prescription.status.completed', v_dent3),
+    (v_tid, v_pat1, v_dent1, 'RX-202606-0009', 'Prednisolone 5mg', '5 mg', '3 times daily tapering dose', '8 days', 'Taper: 3x3d, 2x2d, 1x3d', 'prescription.status.active', v_dent1),
+    (v_tid, v_pat2, v_dent2, 'RX-202606-0010', 'Doxycycline 100mg', '100 mg', 'Once daily', '10 days', 'For periodontal disease', 'prescription.status.active', v_dent2);
+    v_pres_count := 10;
+
+    -- Sourire prescriptions
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, status_key, created_by)
+    VALUES (v_sid, v_spat, v_s_admin, 'RX-202606-0001', 'Amoxicillin 500mg', '500 mg', '3 times daily', '7 days', 'prescription.status.active', v_s_admin);
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, status_key, created_by)
+    VALUES (v_sid, v_spat, v_s_admin, 'RX-202606-0002', 'Ibuprofen 400mg', '400 mg', '3 times daily', '3 days', 'prescription.status.active', v_s_admin);
+
+    -- Teyar prescriptions
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, notes, status_key, created_by)
+    VALUES (v_tid3, v_tpat, v_t_dent, 'RX-202606-0001', 'Amoxicillin 1g', '1 g', '2 times daily', '7 days', 'Prophylactic antibiotic before implant surgery', 'prescription.status.active', v_t_dent);
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, status_key, created_by)
+    VALUES (v_tid3, v_tpat, v_t_dent, 'RX-202606-0002', 'Ketoprofen 100mg', '100 mg', '2 times daily', '5 days', 'prescription.status.active', v_t_dent);
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, notes, status_key, created_by)
+    VALUES (v_tid3, v_tpat, v_t_dent, 'RX-202606-0003', 'Chlorhexidine Gel 0.2%', 'Apply thin layer', '2 times daily', '14 days', 'Apply to surgical site after implant placement', 'prescription.status.active', v_t_dent);
+
+    RAISE NOTICE '6.5: Created prescriptions (El-Qods: 10, Sourire: 2, Teyar: 3)';
+
+    -- ========================================================================
+    -- 6.6: MEDIA (El-Qods: 8 entries - Cloudinary references)
+    -- ========================================================================
+    INSERT INTO media (tenant_id, cloudinary_public_id, cloudinary_url, original_filename, mime_type, file_size, uploaded_by)
+    VALUES
+    (v_tid, 'elqods/panoramic/pan_001', 'https://res.cloudinary.com/demo/image/upload/v1/elqods/panoramic/pan_001.jpg', 'panoramic_ahmed_boudiaf.jpg', 'image/jpeg', 2457600, v_dent1),
+    (v_tid, 'elqods/periapical/pa_001', 'https://res.cloudinary.com/demo/image/upload/v1/elqods/periapical/pa_001.jpg', 'periapical_tooth_16.jpg', 'image/jpeg', 1048576, v_dent1),
+    (v_tid, 'elqods/periapical/pa_002', 'https://res.cloudinary.com/demo/image/upload/v1/elqods/periapical/pa_002.jpg', 'periapical_tooth_26.jpg', 'image/jpeg', 983040, v_dent2),
+    (v_tid, 'elqods/bitewing/bw_001', 'https://res.cloudinary.com/demo/image/upload/v1/elqods/bitewing/bw_001.jpg', 'bitewing_left.jpg', 'image/jpeg', 1572864, v_dent2),
+    (v_tid, 'elqods/bitewing/bw_002', 'https://res.cloudinary.com/demo/image/upload/v1/elqods/bitewing/bw_002.jpg', 'bitewing_right.jpg', 'image/jpeg', 1677721, v_dent3),
+    (v_tid, 'elqods/intraoral/io_001', 'https://res.cloudinary.com/demo/image/upload/v1/elqods/intraoral/io_001.jpg', 'intraoral_front.jpg', 'image/jpeg', 2097152, v_dent1),
+    (v_tid, 'elqods/intraoral/io_002', 'https://res.cloudinary.com/demo/image/upload/v1/elqods/intraoral/io_002.jpg', 'intraoral_upper_arch.jpg', 'image/jpeg', 2228224, v_dent2),
+    (v_tid, 'elqods/profile/profile_001', 'https://res.cloudinary.com/demo/image/upload/v1/elqods/profile/profile_001.jpg', 'profile_photo.jpg', 'image/jpeg', 524288, v_admin);
+    RAISE NOTICE '6.6: Created 8 media entries for El-Qods';
+
+    -- ========================================================================
+    -- 6.7: X-RAYS (El-Qods: 5, Teyar: 2)
+    -- ========================================================================
+    INSERT INTO xrays (media_id, tenant_id, patient_id, treatment_record_id, tooth_number, description, captured_date)
+    SELECT m.id, v_tid, v_pat1, NULL, NULL, 'Panoramic X-ray - initial examination', CURRENT_DATE - 30
+    FROM media m WHERE m.tenant_id = v_tid AND m.cloudinary_public_id = 'elqods/panoramic/pan_001';
+
+    INSERT INTO xrays (media_id, tenant_id, patient_id, treatment_record_id, tooth_number, description, captured_date)
+    SELECT m.id, v_tid, v_pat2, tr.id, '26', 'Periapical X-ray - tooth 26 - crown prep', CURRENT_DATE - 15
+    FROM media m, treatment_records tr
+    WHERE m.tenant_id = v_tid AND m.cloudinary_public_id = 'elqods/periapical/pa_002'
+    AND tr.tenant_id = v_tid AND tr.diagnosis = 'Tooth structure compromised - crown needed'
+    LIMIT 1;
+
+    INSERT INTO xrays (media_id, tenant_id, patient_id, tooth_number, description, captured_date)
+    SELECT m.id, v_tid, v_pat1, '16', 'Periapical X-ray - tooth 16 - filling', CURRENT_DATE - 20
+    FROM media m WHERE m.tenant_id = v_tid AND m.cloudinary_public_id = 'elqods/periapical/pa_001';
+
+    INSERT INTO xrays (media_id, tenant_id, patient_id, tooth_number, description, captured_date)
+    SELECT m.id, v_tid, v_pat2, NULL, 'Bitewing X-ray - left posterior', CURRENT_DATE - 10
+    FROM media m WHERE m.tenant_id = v_tid AND m.cloudinary_public_id = 'elqods/bitewing/bw_001';
+
+    INSERT INTO xrays (media_id, tenant_id, patient_id, tooth_number, description, captured_date)
+    SELECT m.id, v_tid, v_pat1, NULL, 'Intraoral photo - frontal view', CURRENT_DATE - 5
+    FROM media m WHERE m.tenant_id = v_tid AND m.cloudinary_public_id = 'elqods/intraoral/io_001';
+
+    -- Teyar x-rays
+    INSERT INTO media (tenant_id, cloudinary_public_id, cloudinary_url, original_filename, mime_type, file_size, uploaded_by)
+    VALUES (v_tid3, 'teyar/panoramic/pan_001', 'https://res.cloudinary.com/demo/image/upload/v1/teyar/panoramic/pan_001.jpg', 'panoramic_mohamed.jpg', 'image/jpeg', 2621440, v_t_dent)
+    RETURNING id INTO v_media_id;
+
+    INSERT INTO xrays (media_id, tenant_id, patient_id, tooth_number, description, captured_date)
+    SELECT v_media_id, v_tid3, v_tpat, '36', 'Panoramic X-ray - tooth 36 root canal', CURRENT_DATE - 30;
+
+    INSERT INTO media (tenant_id, cloudinary_public_id, cloudinary_url, original_filename, mime_type, file_size, uploaded_by)
+    VALUES (v_tid3, 'teyar/periapical/pa_001', 'https://res.cloudinary.com/demo/image/upload/v1/teyar/periapical/pa_001.jpg', 'periapical_46.jpg', 'image/jpeg', 1114112, v_t_dent)
+    RETURNING id INTO v_media_id;
+
+    INSERT INTO xrays (media_id, tenant_id, patient_id, tooth_number, description, captured_date)
+    SELECT v_media_id, v_tid3, v_tpat, '46', 'Periapical X-ray - tooth 46 extraction site', CURRENT_DATE - 5;
+
+    RAISE NOTICE '6.7: Created x-rays (El-Qods: 5, Teyar: 2)';
+
+    -- ========================================================================
+    -- 6.8: NOTIFICATIONS (El-Qods: 10, Sourire: 2, Teyar: 3)
+    -- ========================================================================
+    -- Get some appointment IDs for notifications
+    SELECT id INTO v_appt_id FROM appointments WHERE tenant_id = v_tid AND status_key = 'appt.status.scheduled' ORDER BY appointment_date ASC LIMIT 1;
+
+    INSERT INTO notifications (tenant_id, appointment_id, patient_id, type, channel, recipient, message, status, sent_at)
+    VALUES
+    (v_tid, NULL, v_pat1, 'appointment.reminder', 'in_app', 'admin@elqods.dz', 'Ahmed Boudiaf has an appointment tomorrow at 10:00', 'read', NOW() - INTERVAL '1 day'),
+    (v_tid, v_appt_id, v_pat2, 'appointment.reminder', 'in_app', 'reception@elqods.dz', 'Leila Mansouri has a scheduled appointment today at 14:30', 'unread', NOW()),
+    (v_tid, NULL, v_pat1, 'payment.reminder', 'in_app', 'admin@elqods.dz', 'Overdue invoice INV-2025-0004 for Ahmed Boudiaf - 2,500 DZD', 'unread', NOW()),
+    (v_tid, NULL, v_pat2, 'treatment.completed', 'in_app', 'dentist@elqods.dz', 'Treatment completed for Leila Mansouri - dental crown', 'read', NOW() - INTERVAL '5 days'),
+    (v_tid, NULL, NULL, 'inventory.low_stock', 'in_app', 'admin@elqods.dz', 'Low stock alert: Nitrile Gloves - Large (18 remaining, min 10)', 'read', NOW() - INTERVAL '2 days');
+    INSERT INTO notifications (tenant_id, patient_id, type, channel, recipient, message, status, sent_at)
+    SELECT v_tid, id, 'appointment.reminder', 'in_app', 'reception@elqods.dz',
+           full_name || ' has a pending treatment plan', 'unread', NOW()
+    FROM patients WHERE tenant_id = v_tid ORDER BY random() LIMIT 1;
+    INSERT INTO notifications (tenant_id, inventory_item_id, type, channel, recipient, message, status, sent_at)
+    SELECT v_tid, id, 'inventory.low_stock', 'in_app', 'admin@elqods.dz',
+           'Low stock: ' || name || ' (' || current_stock || ' remaining)', 'unread', NOW()
+    FROM inventory_items WHERE tenant_id = v_tid AND current_stock <= min_stock_level LIMIT 1;
+    INSERT INTO notifications (tenant_id, patient_id, type, channel, recipient, message, status, sent_at)
+    SELECT v_tid, id, 'birthday.greeting', 'in_app', 'admin@elqods.dz',
+           'Happy Birthday to ' || full_name || '!', 'unread', NOW()
+    FROM patients WHERE tenant_id = v_tid AND EXTRACT(MONTH FROM date_of_birth) = EXTRACT(MONTH FROM CURRENT_DATE) LIMIT 1;
+    INSERT INTO notifications (tenant_id, type, channel, recipient, message, status, sent_at)
+    VALUES (v_tid, 'system.maintenance', 'in_app', 'admin@elqods.dz', 'System maintenance scheduled for Saturday 2 AM', 'unread', NOW());
+    INSERT INTO notifications (tenant_id, type, channel, recipient, message, status, sent_at)
+    VALUES (v_tid, 'report.ready', 'in_app', 'admin@elqods.dz', 'Monthly report for May 2025 is ready to view', 'read', NOW());
+
+    -- Sourire notifications
+    INSERT INTO notifications (tenant_id, appointment_id, patient_id, type, channel, recipient, message, status)
+    SELECT v_sid, a.id, a.patient_id, 'appointment.reminder', 'in_app', 'admin@sourire.dz',
+           'Upcoming appointment tomorrow', 'unread'
+    FROM appointments a WHERE a.tenant_id = v_sid AND a.status_key IN ('scheduled','confirmed') LIMIT 1;
+    INSERT INTO notifications (tenant_id, type, channel, recipient, message, status)
+    VALUES (v_sid, 'system.welcome', 'in_app', 'admin@sourire.dz', 'Welcome to DMS! Trial expires in 30 days.', 'unread');
+
+    -- Teyar notifications
+    INSERT INTO notifications (tenant_id, type, channel, recipient, message, status)
+    VALUES (v_tid3, 'system.report', 'in_app', 'zinouteyar@gmail.com', 'Monthly analytics report is available', 'unread');
+    INSERT INTO notifications (tenant_id, type, channel, recipient, message, status)
+    VALUES (v_tid3, 'inventory.low_stock', 'in_app', 'zinouteyar@gmail.com', 'Check inventory: some items are below reorder point', 'unread');
+    INSERT INTO notifications (tenant_id, patient_id, type, channel, recipient, message, status)
+    SELECT v_tid3, id, 'treatment.plan_ready', 'in_app', 'zinouteyar@gmail.com',
+           'Treatment plan ready for review: ' || full_name, 'unread'
+    FROM patients WHERE tenant_id = v_tid3 ORDER BY random() LIMIT 1;
+
+    RAISE NOTICE '6.8: Created notifications across all tenants';
+
+    -- ========================================================================
+    -- 6.9: AUDIT LOGS (15 entries across tenants)
+    -- ========================================================================
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address)
+    VALUES
+    (v_tid, v_admin, 'user.login', 'user', v_admin, NULL,
+     '{"last_login": "2026-06-13 08:30:00"}'::jsonb, '192.168.1.100'::inet),
+    (v_tid, v_dent1, 'user.login', 'user', v_dent1, NULL,
+     '{"last_login": "2026-06-13 07:30:00"}'::jsonb, '192.168.1.101'::inet),
+    (v_tid, v_admin, 'patient.create', 'patient', v_pat1, NULL,
+     '{"full_name": "Ahmed Boudiaf", "status": "active"}'::jsonb, '10.0.0.1'::inet),
+    (v_tid, v_dent1, 'appointment.create', 'appointment', NULL, NULL,
+     '{"status": "scheduled", "duration": 30}'::jsonb, '10.0.0.1'::inet),
+    (v_tid, v_dent2, 'appointment.update', 'appointment', NULL,
+     '{"status": "scheduled"}'::jsonb, '{"status": "confirmed"}'::jsonb, '10.0.0.2'::inet),
+    (v_tid, v_recep, 'invoice.create', 'invoice', NULL, NULL,
+     '{"total": 8500, "status": "unpaid"}'::jsonb, '10.0.0.3'::inet),
+    (v_tid, v_admin, 'payment.create', 'payment', NULL, NULL,
+     '{"amount": 8500, "method": "cash"}'::jsonb, '10.0.0.1'::inet),
+    (v_tid, v_dent1, 'treatment.create', 'treatment_record', NULL, NULL,
+     '{"diagnosis": "Dental caries", "cost": 8500}'::jsonb, '10.0.0.1'::inet),
+    (v_tid, v_dent3, 'treatment.update', 'treatment_record', NULL,
+     '{"diagnosis": "Caries"}'::jsonb, '{"diagnosis": "Dental caries on tooth 16"}'::jsonb, '10.0.0.4'::inet),
+    (v_tid, v_admin, 'inventory.update', 'inventory_item', NULL,
+     '{"current_stock": 25}'::jsonb, '{"current_stock": 20}'::jsonb, '10.0.0.1'::inet);
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, ip_address)
+    SELECT v_sid, v_s_admin, 'user.login', 'user', '10.0.1.1'::inet;
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, ip_address)
+    SELECT v_sid, v_s_admin, 'patient.create', 'patient', '10.0.1.1'::inet;
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, ip_address)
+    SELECT v_tid3, v_t_dent, 'user.login', 'user', '10.0.2.1'::inet;
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, ip_address)
+    SELECT v_tid3, v_t_dent, 'invoice.payment', 'payment', '10.0.2.1'::inet;
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, new_values, ip_address)
+    SELECT v_tid3, v_t_dent, 'treatment.create', 'treatment_record',
+           '{"diagnosis": "Root canal", "tooth": "36"}'::jsonb, '10.0.2.1'::inet;
+
+    RAISE NOTICE '6.9: Created 15 audit log entries';
+
+    -- ========================================================================
+    -- 6.10: PURCHASE ORDERS (El-Qods: 3 POs with items)
+    -- ========================================================================
+    -- PO 1: Dental Supply Algeria - gloves and composite (RECEIVED)
+    INSERT INTO purchase_orders (tenant_id, supplier_id, order_date, expected_delivery_date, actual_delivery_date, subtotal_dzd, shipping_dzd, total_dzd, status_key, notes, created_by, approved_by, approved_at)
+    VALUES (v_tid, v_sup1, NOW() - INTERVAL '20 days', NOW() - INTERVAL '13 days', NOW() - INTERVAL '12 days', 35000.00, 1500.00, 36500.00, 'po.status.received', 'Monthly supplies restock', v_admin, v_admin, NOW() - INTERVAL '18 days')
+    RETURNING id INTO v_po_id;
+
+    INSERT INTO purchase_order_items (tenant_id, purchase_order_id, inventory_item_id, quantity_ordered, quantity_received, unit_cost_dzd, total_cost_dzd, notes)
+    VALUES
+    (v_tid, v_po_id, v_gloves_m, 10, 10, 750.00, 7500.00, NULL),
+    (v_tid, v_po_id, v_gloves_l, 8, 8, 750.00, 6000.00, NULL),
+    (v_tid, v_po_id, v_comp_a2, 5, 5, 2200.00, 11000.00, 'Shade A2 composite'),
+    (v_tid, v_po_id, v_comp_a3, 5, 5, 2200.00, 11000.00, NULL);
+
+    -- PO 2: Pharma Dental - anesthetics and cotton (PARTIALLY RECEIVED)
+    INSERT INTO purchase_orders (tenant_id, supplier_id, order_date, expected_delivery_date, subtotal_dzd, shipping_dzd, total_dzd, status_key, notes, created_by)
+    VALUES (v_tid, v_sup3, NOW() - INTERVAL '10 days', NOW() + INTERVAL '5 days', 12000.00, 800.00, 12800.00, 'po.status.partially_received', 'Anesthetics and consumables', v_admin)
+    RETURNING id INTO v_po_id;
+
+    INSERT INTO purchase_order_items (tenant_id, purchase_order_id, inventory_item_id, quantity_ordered, quantity_received, unit_cost_dzd, total_cost_dzd, expiry_date, batch_number)
+    VALUES
+    (v_tid, v_po_id, v_lido, 50, 50, 100.00, 5000.00, NOW() + INTERVAL '1 year', 'LIDO-B2025-001'),
+    (v_tid, v_po_id, v_cotton, 10, 5, 380.00, 3800.00, NULL, NULL),
+    (v_tid, v_po_id, v_gauze, 15, 0, 280.00, 4200.00, NULL, NULL);
+
+    -- PO 3: MediDent Distribution - instruments (APPROVED)
+    INSERT INTO purchase_orders (tenant_id, supplier_id, order_date, expected_delivery_date, subtotal_dzd, shipping_dzd, total_dzd, status_key, notes, created_by, approved_by, approved_at)
+    VALUES (v_tid, v_sup2, NOW() - INTERVAL '3 days', NOW() + INTERVAL '12 days', 12000.00, 0.00, 12000.00, 'po.status.approved', 'New instruments order', v_dent1, v_admin, NOW() - INTERVAL '1 day')
+    RETURNING id INTO v_po_id;
+
+    INSERT INTO purchase_order_items (tenant_id, purchase_order_id, inventory_item_id, quantity_ordered, quantity_received, unit_cost_dzd, total_cost_dzd)
+    VALUES (v_tid, v_po_id, v_explorer, 5, 0, 1100.00, 5500.00),
+           (v_tid, v_po_id, v_gloves_m, 5, 0, 750.00, 3750.00);
+
+    RAISE NOTICE '6.10: Created 3 purchase orders with 9 line items for El-Qods';
+
+    -- ========================================================================
+    -- 6.11: ADDITIONAL STOCK MOVEMENTS (El-Qods: 10 entries)
+    -- ========================================================================
+    INSERT INTO stock_movements (tenant_id, inventory_item_id, movement_type, quantity, unit_cost_dzd, reference_type, notes, created_by)
+    VALUES
+    (v_tid, v_gloves_m, 'stock.movement.usage', -3, 850.00, 'treatment', 'Used in 3 patient procedures', v_dent1),
+    (v_tid, v_gloves_l, 'stock.movement.usage', -2, 850.00, 'treatment', 'Used in 2 surgical procedures', v_dent2),
+    (v_tid, v_comp_a2, 'stock.movement.usage', -2, 2500.00, 'treatment', 'Composite fillings - 2 patients', v_dent1),
+    (v_tid, v_comp_a3, 'stock.movement.usage', -1, 2500.00, 'treatment', 'Composite filling - posterior tooth', v_dent3),
+    (v_tid, v_lido, 'stock.movement.usage', -8, 120.00, 'treatment', 'Anesthetic cartridges used in procedures', v_dent1),
+    (v_tid, v_cotton, 'stock.movement.usage', -3, 450.00, 'treatment', 'Cotton rolls for isolation', v_dent2),
+    (v_tid, v_gauze, 'stock.movement.usage', -5, 320.00, 'treatment', 'Gauze pads for post-op', v_dent3),
+    (v_tid, v_gloves_m, 'stock.movement.adjustment', 5, 850.00, 'adjustment', 'Inventory count adjustment - found extra box', v_admin),
+    (v_tid, v_comp_a2, 'stock.movement.adjustment', 1, 2500.00, 'adjustment', 'Shelf count correction', v_admin),
+    (v_tid, v_gauze, 'stock.movement.expired', -2, 320.00, 'expired', 'Expired gauze pads removed from stock', v_admin);
+
+    RAISE NOTICE '6.11: Created 10 additional stock movements for El-Qods';
+
+    -- ========================================================================
+    -- 6.12: ADDITIONAL EXPENSES (El-Qods: 8, Teyar: 3)
+    -- ========================================================================
+    INSERT INTO expenses (tenant_id, category_key, description, amount_dzd, expense_date, payment_method_id, status_key, created_by)
+    VALUES
+    (v_tid, 'expense.category.utilities', 'Water bill - February 2025', 3200.00, NOW() - INTERVAL '2 days', v_cash, 'expense.status.pending', v_admin),
+    (v_tid, 'expense.category.utilities', 'Electricity bill - February 2025', 7800.00, NOW() - INTERVAL '2 days', v_bank, 'expense.status.pending', v_admin),
+    (v_tid, 'expense.category.inventory', 'Composite resin restock', 11000.00, NOW() - INTERVAL '6 days', v_cib, 'expense.status.paid', v_admin),
+    (v_tid, 'expense.category.equipment', 'Autoclave maintenance', 6500.00, NOW() - INTERVAL '8 days', v_cash, 'expense.status.paid', v_admin),
+    (v_tid, 'expense.category.rent', 'Office rent - February 2025', 35000.00, NOW() - INTERVAL '1 day', v_bank, 'expense.status.pending', v_admin),
+    (v_tid, 'expense.category.marketing', 'Google Ads campaign - February', 5000.00, NOW() - INTERVAL '4 days', v_cib, 'expense.status.approved', v_dent1),
+    (v_tid, 'expense.category.insurance', 'Professional insurance - Q1 2025', 18000.00, NOW() - INTERVAL '15 days', v_bank, 'expense.status.paid', v_admin),
+    (v_tid, 'expense.category.salary', 'Staff salaries - January 2025', 240000.00, NOW() - INTERVAL '7 days', v_bank, 'expense.status.paid', v_admin);
+
+    -- Teyar additional expenses
+    INSERT INTO expenses (tenant_id, category_key, description, amount_dzd, expense_date, payment_method_id, status_key, created_by)
+    VALUES
+    (v_tid3, 'expense.category.utilities', 'Water and electricity - February', 11500.00, NOW() - INTERVAL '3 days', v_bank, 'expense.status.approved', v_t_dent),
+    (v_tid3, 'expense.category.marketing', 'Facebook campaign - new patients', 7500.00, NOW() - INTERVAL '6 days', v_cib, 'expense.status.paid', v_t_dent),
+    (v_tid3, 'expense.category.equipment', 'X-ray sensor calibration', 9500.00, NOW() - INTERVAL '10 days', v_cash, 'expense.status.paid', v_t_dent);
+
+    RAISE NOTICE '6.12: Created additional expenses (El-Qods: 8, Teyar: 3)';
+    RAISE NOTICE '============================================';
+    RAISE NOTICE 'Section 6 complete - All tables now populated with comprehensive test data';
+
+END $$;
+
+-- ============================================================================
+-- FINAL COMPREHENSIVE SUMMARY VERIFICATION
 -- ============================================================================
 
 DO $$
@@ -1581,32 +2125,71 @@ DECLARE
     v_total_revenue DECIMAL(12,2);
     v_total_paid DECIMAL(12,2);
     v_total_outstanding DECIMAL(12,2);
+    v_total_patients INTEGER;
+    v_total_users INTEGER;
+    v_total_appointments INTEGER;
+    v_total_treatments INTEGER;
+    v_total_prescriptions INTEGER;
+    v_total_plans INTEGER;
+    v_total_media INTEGER;
+    v_total_xrays INTEGER;
+    v_total_notifications INTEGER;
+    v_total_audit_logs INTEGER;
+    v_total_purchase_orders INTEGER;
+    v_total_stock_movements INTEGER;
+    v_total_expenses INTEGER;
+    v_total_payments INTEGER;
+    v_total_suppliers INTEGER;
+    v_total_inventory_items INTEGER;
 BEGIN
-    -- Count total invoices across all tenants
-    SELECT COUNT(*), SUM(total_dzd), SUM(paid_amount_dzd), SUM(total_dzd - paid_amount_dzd)
-    INTO v_total_invoices, v_total_revenue, v_total_paid, v_total_outstanding
-    FROM invoices;
+    SELECT COUNT(*) INTO v_total_invoices FROM invoices;
+    SELECT COALESCE(SUM(total_dzd), 0) INTO v_total_revenue FROM invoices;
+    SELECT COALESCE(SUM(paid_amount_dzd), 0) INTO v_total_paid FROM invoices;
+    SELECT COALESCE(SUM(total_dzd - paid_amount_dzd), 0) INTO v_total_outstanding FROM invoices;
+    SELECT COUNT(*) INTO v_total_patients FROM patients;
+    SELECT COUNT(*) INTO v_total_users FROM users;
+    SELECT COUNT(*) INTO v_total_appointments FROM appointments;
+    SELECT COUNT(*) INTO v_total_treatments FROM treatment_records;
+    SELECT COUNT(*) INTO v_total_prescriptions FROM prescriptions;
+    SELECT COUNT(*) INTO v_total_plans FROM treatment_plans;
+    SELECT COUNT(*) INTO v_total_media FROM media;
+    SELECT COUNT(*) INTO v_total_xrays FROM xrays;
+    SELECT COUNT(*) INTO v_total_notifications FROM notifications;
+    SELECT COUNT(*) INTO v_total_audit_logs FROM audit_logs;
+    SELECT COUNT(*) INTO v_total_purchase_orders FROM purchase_orders;
+    SELECT COUNT(*) INTO v_total_stock_movements FROM stock_movements;
+    SELECT COUNT(*) INTO v_total_expenses FROM expenses;
+    SELECT COUNT(*) INTO v_total_payments FROM payments;
+    SELECT COUNT(*) INTO v_total_suppliers FROM suppliers;
+    SELECT COUNT(*) INTO v_total_inventory_items FROM inventory_items;
 
     RAISE NOTICE '============================================';
-    RAISE NOTICE 'INVOICE SYSTEM SEED DATA COMPLETE!';
+    RAISE NOTICE 'MULTI-TENANT DMS - ALL SEED DATA COMPLETE!';
     RAISE NOTICE '============================================';
-    RAISE NOTICE 'Total Invoices Created: %', v_total_invoices;
-    RAISE NOTICE 'Total Revenue: % DZD', v_total_revenue;
-    RAISE NOTICE 'Total Paid: % DZD', v_total_paid;
-    RAISE NOTICE 'Total Outstanding: % DZD', v_total_outstanding;
+    RAISE NOTICE 'INVOICE SYSTEM:';
+    RAISE NOTICE '  Total Invoices: % | Revenue: % DZD | Paid: % DZD | Outstanding: % DZD',
+        v_total_invoices, v_total_revenue, v_total_paid, v_total_outstanding;
+    RAISE NOTICE '  Total Payments: %', v_total_payments;
     RAISE NOTICE '--------------------------------------------';
-    RAISE NOTICE 'El-Qods: 4 invoices (2 paid, 1 partial, 1 overdue) + 90 days appointments';
-    RAISE NOTICE '   +100 patients, 3 dentists, 1 receptionist, appointments across 90 days';
-    RAISE NOTICE 'Sourire: 2 invoices (1 paid, 1 unpaid)';
-    RAISE NOTICE 'Dr. Teyar: 6 invoices (4 paid, 1 partial, 1 unpaid)';
-    RAISE NOTICE '--------------------------------------------';
-    RAISE NOTICE 'FEATURES DEMONSTRATED:';
-    RAISE NOTICE '  - Auto-generated invoice numbers (INV-YYYYMM-XXXX)';
-    RAISE NOTICE '  - Multiple payment methods (Cash, CIB, Bank, BaridiMob)';
-    RAISE NOTICE '  - Payment status tracking (paid/partial/unpaid/overdue)';
-    RAISE NOTICE '  - Invoice items linked to treatment records';
-    RAISE NOTICE '  - Discounts and adjustments';
-    RAISE NOTICE '  - Multi-tenant isolation verified';
+    RAISE NOTICE 'ALL TABLES - RECORD COUNTS:';
+    RAISE NOTICE '  Tenants: 3 | Users: % | Patients: % | Appointments: %',
+        v_total_users, v_total_patients, v_total_appointments;
+    RAISE NOTICE '  Treatment Records: % | Treatment Plans: % | Prescriptions: %',
+        v_total_treatments, v_total_plans, v_total_prescriptions;
+    RAISE NOTICE '  Suppliers: % | Inventory Items: % | Stock Movements: %',
+        v_total_suppliers, v_total_inventory_items, v_total_stock_movements;
+    RAISE NOTICE '  Purchase Orders: % | Expenses: %',
+        v_total_purchase_orders, v_total_expenses;
+    RAISE NOTICE '  Media: % | X-Rays: % | Notifications: % | Audit Logs: %',
+        v_total_media, v_total_xrays, v_total_notifications, v_total_audit_logs;
+    RAISE NOTICE '============================================';
+    RAISE NOTICE 'FOCUS TENANT - Cabinet Dentaire El-Qods:';
+    RAISE NOTICE '  100 patients, 5 staff (admin + 3 dentists + 1 receptionist)';
+    RAISE NOTICE '  ~400 appointments across 90+ days (Sun-Thu)';
+    RAISE NOTICE '  ~30 treatment records | 8 treatment plans | 14 invoices';
+    RAISE NOTICE '  10 prescriptions | 5 x-rays | 10 notifications';
+    RAISE NOTICE '  8 inventory items | 3 purchase orders | 12 stock movements';
+    RAISE NOTICE '  12 expenses | 3 suppliers';
     RAISE NOTICE '============================================';
 END $$;
 
