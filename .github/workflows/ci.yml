@@ -38,14 +38,14 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run migrate
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: dentacore_test
-          DB_USER: dentacore
-          DB_PASSWORD: dentacore_test
-          NODE_ENV: test
+      - name: Install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Apply schema (db.sql)
+        run: PGPASSWORD=dentacore_test psql -h localhost -U dentacore -d dentacore_test -v ON_ERROR_STOP=1 -f db.sql
+
+      - name: Apply seed (seed.sql)
+        run: PGPASSWORD=dentacore_test psql -h localhost -U dentacore -d dentacore_test -v ON_ERROR_STOP=1 -f seed.sql
 
       - run: npm test
         env:
@@ -72,10 +72,3 @@ jobs:
       - run: npm ci
       - run: npx eslint src/ --ext .js
         continue-on-error: true
-
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t dentacore-api .

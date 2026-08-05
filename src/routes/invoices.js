@@ -210,7 +210,7 @@ router.get('/:id',
         .select([
           'payments.id',
           'payments.amount_dzd',
-          'payment_methods.method_key as payment_method',
+          'payment_methods.method_key as payment_method_key',
           'payments.payment_date',
           'payments.notes'
         ])

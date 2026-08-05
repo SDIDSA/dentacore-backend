@@ -25,10 +25,10 @@ Express route handlers for all 19 API entity types. Each route module defines CR
 - `xrays.js` — X-ray image CRUD
 
 ## Local Contracts
-- All mutation routes have rate limiting applied (mutationLimiter 30/min, apiLimiter 60/min)
-- All 19 entity routes have full CRUD: GET list, GET /:id, POST, PATCH, DELETE, GET /batch
+- All mutation routes have rate limiting applied (mutationLimiter 30/min, apiLimiter 60/min) — limiters are mounted **before** the routers in `src/app.js`; `mutationLimiter` counts mutation methods only (GET/HEAD/OPTIONS skip), and both are bypassed when `NODE_ENV=test`
+- CRUD entity routes implement GET list, GET /:id, POST, PATCH, DELETE, GET /batch; read-only modules (auditLogs, dashboard, reports) expose only retrieval endpoints
 - Search input sanitized on `/search` endpoints via regex `[^a-zA-Z0-9\s\-]`
-- Consistent response shape via `responseFormatter`
+- Responses are bare (`res.json`); `responseFormatter` is not mounted
 - Routes use `express-validator` for input validation
 - `auth.js` routes are the only unauthenticated endpoints (login/refresh)
 - Odontogram uses non-standard routing (patient-scoped, not entity-scoped)

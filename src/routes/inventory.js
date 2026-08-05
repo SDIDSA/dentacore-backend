@@ -121,6 +121,34 @@ router.get('/items/batch', async (req, res, next) => {
   }
 });
 
+// Search inventory items
+router.get('/items/search', async (req, res, next) => {
+  try {
+    const { search: query } = req.query;
+    if (!query || query.trim().length === 0) {
+      return res.json([]);
+    }
+
+    const sanitized = query.replace(/[^a-zA-Z0-9\s-]/g, '');
+    const results = await db
+      .selectFrom('inventory_items')
+      .select('inventory_items.id')
+      .where('inventory_items.tenant_id', '=', req.tenantId)
+      .where((eb) =>
+        eb.or([
+          eb('inventory_items.name', 'ilike', `%${sanitized}%`),
+          eb('inventory_items.item_code', 'ilike', `%${sanitized}%`),
+        ])
+      )
+      .limit(20)
+      .execute();
+
+    res.json(results.map(r => r.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get inventory item by ID
 router.get('/items/:id', async (req, res, next) => {
   try {
@@ -170,34 +198,6 @@ router.get('/items/:id', async (req, res, next) => {
     }
 
     res.json(item);
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Search inventory items
-router.get('/items/search', async (req, res, next) => {
-  try {
-    const { search: query } = req.query;
-    if (!query || query.trim().length === 0) {
-      return res.json([]);
-    }
-
-    const sanitized = query.replace(/[^a-zA-Z0-9\s-]/g, '');
-    const results = await db
-      .selectFrom('inventory_items')
-      .select('inventory_items.id')
-      .where('inventory_items.tenant_id', '=', req.tenantId)
-      .where((eb) =>
-        eb.or([
-          eb('inventory_items.name', 'ilike', `%${sanitized}%`),
-          eb('inventory_items.item_code', 'ilike', `%${sanitized}%`),
-        ])
-      )
-      .limit(20)
-      .execute();
-
-    res.json(results.map(r => r.id));
   } catch (error) {
     next(error);
   }

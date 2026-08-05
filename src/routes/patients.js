@@ -152,6 +152,57 @@ router.get('/batch', async (req, res, next) => {
   }
 });
 
+// Export patients as CSV
+router.get('/export', async (req, res, next) => {
+  try {
+    const patients = await db
+      .selectFrom('patients')
+      .leftJoin('wilayas', 'patients.wilaya_id', 'wilayas.id')
+      .select([
+        'patients.id',
+        'patients.patient_code',
+        'patients.full_name',
+        'patients.date_of_birth',
+        'patients.gender',
+        'patients.phone',
+        'patients.email',
+        'wilayas.name_key as wilaya_name',
+        'patients.status_key',
+        'patients.created_at',
+        (eb) => eb
+          .selectFrom('appointments')
+          .select('appointments.appointment_date')
+          .whereRef('appointments.patient_id', '=', 'patients.id')
+          .whereRef('appointments.tenant_id', '=', 'patients.tenant_id')
+          .where('appointments.appointment_date', '<', sql`NOW()`)
+          .where('appointments.status_key', '=', 'appt.status.completed')
+          .orderBy('appointments.appointment_date', 'desc')
+          .limit(1)
+          .as('last_visit_date'),
+        (eb) => eb
+          .selectFrom('appointments')
+          .select('appointments.appointment_date')
+          .whereRef('appointments.patient_id', '=', 'patients.id')
+          .whereRef('appointments.tenant_id', '=', 'patients.tenant_id')
+          .where('appointments.status_key', 'in', ['appt.status.scheduled', 'appt.status.confirmed'])
+          .where('appointments.appointment_date', '>', sql`NOW()`)
+          .orderBy('appointments.appointment_date', 'asc')
+          .limit(1)
+          .as('next_appointment_date')
+      ])
+      .where('patients.tenant_id', '=', req.tenantId)
+      .orderBy('patients.created_at', 'desc')
+      .limit(10000)
+      .execute();
+
+    const columns = ['id', 'patient_code', 'full_name', 'date_of_birth', 'gender', 'phone', 'email', 'wilaya_name', 'status_key', 'last_visit_date', 'next_appointment_date', 'created_at'];
+    const csv = generateCsv(patients, columns);
+    sendCsv(res, csv, 'patients-export.csv');
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get patient by ID
 router.get('/:id', async (req, res, next) => {
   try {
@@ -608,7 +659,7 @@ router.get('/:id/detail', async (req, res, next) => {
           'payments.amount_dzd',
           'payments.payment_date',
           'payments.notes',
-          'payment_methods.name_key as payment_method_key',
+          'payment_methods.method_key as payment_method_key',
         ])
         .where('payments.invoice_id', 'in', invoiceIds)
         .where('payments.tenant_id', '=', req.tenantId)
@@ -671,29 +722,6 @@ router.get('/:id/detail', async (req, res, next) => {
       invoices: invoicesWithPayments,
       plans: plansWithDetails,
     });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Export patients as CSV
-router.get('/export', async (req, res, next) => {
-  try {
-    const patients = await db
-      .selectFrom('patients')
-      .select([
-        'id', 'patient_code', 'full_name', 'date_of_birth',
-        'gender', 'phone', 'email', 'wilaya_name',
-        'status_key', 'last_visit_date', 'next_appointment_date', 'created_at',
-      ])
-      .where('tenant_id', '=', req.tenantId)
-      .orderBy('created_at', 'desc')
-      .limit(10000)
-      .execute();
-
-    const columns = ['id', 'patient_code', 'full_name', 'date_of_birth', 'gender', 'phone', 'email', 'wilaya_name', 'status_key', 'last_visit_date', 'next_appointment_date', 'created_at'];
-    const csv = generateCsv(patients, columns);
-    sendCsv(res, csv, 'patients-export.csv');
   } catch (error) {
     next(error);
   }

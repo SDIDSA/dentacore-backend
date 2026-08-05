@@ -70,7 +70,9 @@ async function rollbackMigration() {
     return;
   }
 
-  const downFile = last.filename.replace('.sql', '.down.sql');
+  const downFile = last.filename.endsWith('.up.sql')
+    ? last.filename.replace(/\.up\.sql$/, '.down.sql')
+    : last.filename.replace(/\.sql$/, '.down.sql');
   const downPath = path.join(MIGRATIONS_DIR, downFile);
 
   if (!fs.existsSync(downPath)) {

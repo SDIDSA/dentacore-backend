@@ -121,7 +121,21 @@ router.get('/batch',
 
       const plans = await db
         .selectFrom('treatment_plans')
-        .selectAll()
+        .leftJoin('patients', 'treatment_plans.patient_id', 'patients.id')
+        .select([
+          'treatment_plans.id',
+          'treatment_plans.tenant_id',
+          'treatment_plans.patient_id',
+          'treatment_plans.plan_name',
+          'treatment_plans.description',
+          'treatment_plans.status_key',
+          'treatment_plans.estimated_total_dzd',
+          'treatment_plans.notes',
+          'treatment_plans.created_by',
+          'treatment_plans.created_at',
+          'treatment_plans.updated_at',
+          'patients.full_name as patient_name',
+        ])
         .where('treatment_plans.id', 'in', idArray)
         .where('treatment_plans.tenant_id', '=', req.tenantId)
         .execute();
@@ -377,9 +391,23 @@ router.post('/:id/treatments',
 
       const plan = await db
         .selectFrom('treatment_plans')
-        .select('id')
-        .where('id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
+        .leftJoin('patients', 'treatment_plans.patient_id', 'patients.id')
+        .select([
+          'treatment_plans.id',
+          'treatment_plans.tenant_id',
+          'treatment_plans.patient_id',
+          'treatment_plans.plan_name',
+          'treatment_plans.description',
+          'treatment_plans.status_key',
+          'treatment_plans.estimated_total_dzd',
+          'treatment_plans.notes',
+          'treatment_plans.created_by',
+          'treatment_plans.created_at',
+          'treatment_plans.updated_at',
+          'patients.full_name as patient_name',
+        ])
+        .where('treatment_plans.id', '=', req.params.id)
+        .where('treatment_plans.tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (!plan) {

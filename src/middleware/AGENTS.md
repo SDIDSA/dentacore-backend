@@ -8,13 +8,13 @@ Express middleware pipeline — authentication, authorization, audit logging, ra
 - `auditLogger.js` — Request audit logging (capped queue at 1000 entries)
 - `rateLimiter.js` — Configurable rate limiting via express-rate-limit
 - `errorHandler.js` — Global error handler (hides stack traces in production)
-- `responseFormatter.js` — Consistent `{ data, meta }` response envelope
+- `responseFormatter.js` — `{ data, meta }` envelope helper; **not mounted** in `src/app.js` (routes return bare responses today)
 - `conflictResolution.js` — Conflict resolution for offline sync
 
 ## Local Contracts
 - Auth middleware must run before all protected routes
-- `responseFormatter` wraps all successful responses; `errorHandler` wraps all errors
-- Rate limiter configurable per-route via factory function
+- `responseFormatter` is not part of the active pipeline; `errorHandler` wraps all errors
+- Rate limiter configurable per-route via factory function; `mutationLimiter` skips safe methods (GET/HEAD/OPTIONS); all limiters bypassed when `NODE_ENV=test`
 - Audit logger skips non-mutation methods (GET/HEAD/OPTIONS)
 
 ## Work Guidance

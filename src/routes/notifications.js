@@ -21,13 +21,7 @@ router.get('/', async (req, res, next) => {
       .limit(limit)
       .execute();
 
-    const total = await db
-      .selectFrom('notifications')
-      .select(db.fn.count('id').as('count'))
-      .where('tenant_id', '=', req.tenantId)
-      .executeTakeFirst();
-
-    res.json({ data: notifications, total: Number.parseInt(total?.count || '0') });
+    res.json(notifications);
   } catch (error) {
     next(error);
   }
@@ -45,7 +39,7 @@ router.put('/:id/read',
 
       const updated = await db
         .updateTable('notifications')
-        .set({ status: 'read' })
+        .set({ status: 'read', read_at: new Date() })
         .where('id', '=', req.params.id)
         .where('tenant_id', '=', req.tenantId)
         .executeTakeFirst();
@@ -66,7 +60,7 @@ router.put('/read-all', async (req, res, next) => {
   try {
     await db
       .updateTable('notifications')
-      .set({ status: 'read' })
+      .set({ status: 'read', read_at: new Date() })
       .where('tenant_id', '=', req.tenantId)
       .where('status', '!=', 'read')
       .execute();

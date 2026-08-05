@@ -1415,9 +1415,11 @@ CREATE TABLE IF NOT EXISTS notifications (
     type VARCHAR(50) NOT NULL,
     channel VARCHAR(20) NOT NULL,
     recipient VARCHAR(255),
+    title TEXT,
     message TEXT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'unread',
     sent_at TIMESTAMPTZ,
+    read_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

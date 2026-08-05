@@ -3,6 +3,7 @@ module.exports = {
   testTimeout: 30000,
   verbose: true,
   testMatch: ['**/__tests__/**/*.test.js'],
+  setupFiles: ['<rootDir>/jest.setup.js'],
   forceExit: true,
   detectOpenHandles: true,
 };
