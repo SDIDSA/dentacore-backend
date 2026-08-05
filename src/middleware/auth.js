@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 const jwt = require('jsonwebtoken');
 const { sql } = require('kysely');
 const db = require('../config/database');
@@ -65,7 +65,7 @@ const authenticate = async (req, res, next) => {
         const result = await sql`SELECT * FROM get_user_by_email(${decodedRefresh.email})`.execute(db);
         const user = result.rows[0];
 
-        if (!user || user.status_key !== 'user.status.active') {
+        if (user?.status_key !== 'user.status.active') {
           return res.status(401).json({ error: 'auth.error.account_inactive' });
         }
 

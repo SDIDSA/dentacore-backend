@@ -9,19 +9,19 @@ router.use(authenticate);
 const MAX_LIMIT = 1000;
 
 function parseLimit(req) {
-  const limit = parseInt(req.query.limit);
-  if (isNaN(limit) || limit < 1) return 100;
+  const limit = Number.parseInt(req.query.limit);
+  if (Number.isNaN(limit) || limit < 1) return 100;
   return Math.min(limit, MAX_LIMIT);
 }
 
 function parseDays(req) {
-  const days = parseInt(req.query.days);
-  if (isNaN(days) || days < 1) return 7;
+  const days = Number.parseInt(req.query.days);
+  if (Number.isNaN(days) || days < 1) return 7;
   return Math.min(days, 365);
 }
 
 function toEndOfDay(dateStr) {
-  if (!dateStr || isNaN(Date.parse(dateStr))) return dateStr;
+  if (!dateStr || Number.isNaN(Date.parse(dateStr))) return dateStr;
   return dateStr + 'T23:59:59Z';
 }
 

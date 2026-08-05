@@ -98,7 +98,7 @@ router.get('/', async (req, res, next) => {
 
     if (pag.paginate) {
       const countResult = await countQuery.executeTakeFirst();
-      res.json(wrapPaginatedResponse(users.map(u => u.id), parseInt(countResult.count), pag.limit, pag.offset));
+      res.json(wrapPaginatedResponse(users.map(u => u.id), Number.parseInt(countResult.count), pag.limit, pag.offset));
     } else {
       res.json(users.map(u => u.id));
     }
@@ -152,7 +152,7 @@ router.get('/batch', async (req, res, next) => {
 // Get user by ID
 router.get('/:id', async (req, res, next) => {
   try {
-    const user = await db
+    let user = await db
       .selectFrom('users')
       .innerJoin('roles', 'users.role_id', 'roles.id')
       .leftJoin('wilayas', 'users.wilaya_id', 'wilayas.id')
@@ -201,7 +201,7 @@ router.post('/', createUserLimiter,
   body('email').isEmail().normalizeEmail(),
   body('password').isLength({ min: 8 }),
   body('full_name').trim().notEmpty(),
-  body('phone').matches(/^\+213[0-9]{9}$/),
+  body('phone').matches(/^\+213\d{9}$/),
   body('role_id').isInt({ min: 1 }),
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -270,21 +270,18 @@ router.post('/', createUserLimiter,
         .executeTakeFirst();
 
       // Audit log: User Created
-      const { password_hash: _ph, ...safeNewUser } = newUser;
+      delete newUser.password_hash;
       if (req.audit) {
         await req.audit.log({
           action: 'CREATE',
           entityType: 'users',
           entityId: newUser.id,
           tenantId: req.tenantId,
-          newValues: safeNewUser
+          newValues: newUser
         }, db);
       }
 
-      // Remove password hash from response
-      const { password_hash: _, ...userResponse } = newUser;
-
-      res.status(201).json(userResponse);
+      res.status(201).json(newUser);
     } catch (err) {
       next(err);
     }
@@ -295,7 +292,7 @@ router.post('/', createUserLimiter,
 router.patch('/:id',
   body('email').optional().isEmail().normalizeEmail(),
   body('full_name').optional().trim().notEmpty(),
-  body('phone').optional().matches(/^\+213[0-9]{9}$/),
+  body('phone').optional().matches(/^\+213\d{9}$/),
   body('role_id').optional().isInt({ min: 1 }),
   body('status_key').optional().isIn(['user.status.active', 'user.status.inactive', 'user.status.deleted']),
   async (req, res, next) => {
@@ -389,23 +386,20 @@ router.patch('/:id',
         .executeTakeFirst();
 
       // Audit log: User Updated
-      const { password_hash: _oldPh, ...safeOldUser } = existingUser;
-      const { password_hash: _newPh, ...safeNewUserUpdate } = updatedUser;
+      delete existingUser.password_hash;
+      delete updatedUser.password_hash;
       if (req.audit) {
         await req.audit.log({
           action: 'UPDATE',
           entityType: 'users',
           entityId: userId,
           tenantId: req.tenantId,
-          oldValues: safeOldUser,
-          newValues: safeNewUserUpdate
+          oldValues: existingUser,
+          newValues: updatedUser
         }, db);
       }
 
-      // Remove password hash from response
-      const { password_hash: _, ...userResponse } = updatedUser;
-
-      res.json(userResponse);
+      res.json(updatedUser);
     } catch (err) {
       next(err);
     }
@@ -485,8 +479,8 @@ router.patch('/:id/status',
         return res.status(400).json({ error: 'user.error.cannot_change_own_status' });
       }
 
-      const user = await db
-        .selectFrom('users')
+    let user = await db
+      .selectFrom('users')
         .select(['id', 'status_key'])
         .where('id', '=', userId)
         .where('tenant_id', '=', req.tenantId)
@@ -517,9 +511,8 @@ router.patch('/:id/status',
       }
 
       // Remove password hash from response
-      const { password_hash: _, ...userResponse } = updatedUser;
-
-      res.json(userResponse);
+      delete updatedUser.password_hash;
+      res.json(updatedUser);
     } catch (err) {
       next(err);
     }
@@ -554,19 +547,19 @@ router.delete('/:id', async (req, res, next) => {
       .execute();
 
     // Audit log: User Deleted
-    const { password_hash: _delPh, ...safeDeletedUser } = user;
-    safeDeletedUser.status_key = 'user.status.deleted';
+    delete user.password_hash;
+    user.status_key = 'user.status.deleted';
     if (req.audit) {
       await req.audit.log({
         action: 'DELETE',
         entityType: 'users',
         entityId: userId,
         tenantId: req.tenantId,
-        oldValues: safeDeletedUser
+        oldValues: user
       }, db);
     }
 
-    res.status(200).json(safeDeletedUser);
+    res.status(200).json(user);
   } catch (err) {
     next(err);
   }

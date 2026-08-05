@@ -12,7 +12,7 @@ const MAX_LIMIT = 500;
 
 router.get('/', async (req, res, next) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 50, MAX_LIMIT);
+    const limit = Math.min(Number.parseInt(req.query.limit) || 50, MAX_LIMIT);
     const notifications = await db
       .selectFrom('notifications')
       .selectAll()
@@ -27,7 +27,7 @@ router.get('/', async (req, res, next) => {
       .where('tenant_id', '=', req.tenantId)
       .executeTakeFirst();
 
-    res.json({ data: notifications, total: parseInt(total?.count || '0') });
+    res.json({ data: notifications, total: Number.parseInt(total?.count || '0') });
   } catch (error) {
     next(error);
   }
@@ -153,7 +153,7 @@ router.get('/unread-count', async (req, res, next) => {
       .where('status', '=', 'unread')
       .executeTakeFirst();
 
-    res.json({ count: parseInt(result?.count || '0') });
+    res.json({ count: Number.parseInt(result?.count || '0') });
   } catch (error) {
     next(error);
   }

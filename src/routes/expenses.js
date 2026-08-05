@@ -19,7 +19,7 @@ router.get('/search', async (req, res, next) => {
       return res.json([]);
     }
 
-    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const sanitized = query.replace(/[^a-zA-Z0-9\s-]/g, '');
     const results = await db
       .selectFrom('expenses')
       .select('expenses.id')

@@ -183,7 +183,7 @@ router.get('/items/search', async (req, res, next) => {
       return res.json([]);
     }
 
-    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const sanitized = query.replace(/[^a-zA-Z0-9\s-]/g, '');
     const results = await db
       .selectFrom('inventory_items')
       .select('inventory_items.id')
@@ -523,8 +523,8 @@ router.get('/items/:id/movements', async (req, res, next) => {
       .where('stock_movements.inventory_item_id', '=', req.params.id)
       .where('stock_movements.tenant_id', '=', req.tenantId)
       .orderBy('stock_movements.created_at', 'desc')
-      .limit(parseInt(limit))
-      .offset(parseInt(offset))
+      .limit(Number.parseInt(limit))
+      .offset(Number.parseInt(offset))
       .execute();
 
     const movementIds = movements.map(movement => movement.id);
@@ -1015,7 +1015,7 @@ router.get('/suppliers/:id', async (req, res, next) => {
 // Create supplier
 router.post('/suppliers',
   body('name').trim().notEmpty(),
-  body('phone').optional().matches(/^\+213[0-9]{9}$/),
+  body('phone').optional().matches(/^\+213\d{9}$/),
   body('email').optional().isEmail(),
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -1066,7 +1066,7 @@ router.post('/suppliers',
 // Update supplier
 router.patch('/suppliers/:id',
   body('name').optional().trim().notEmpty(),
-  body('phone').optional().matches(/^\+213[0-9]{9}$/),
+  body('phone').optional().matches(/^\+213\d{9}$/),
   body('email').optional().isEmail(),
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -1201,7 +1201,7 @@ router.get('/reports/valuation', async (req, res, next) => {
       .where('tenant_id', '=', req.tenantId)
       .execute();
 
-    const totalValue = valuation.reduce((sum, item) => sum + parseFloat(item.total_value_dzd || 0), 0);
+    const totalValue = valuation.reduce((sum, item) => sum + Number.parseFloat(item.total_value_dzd || 0), 0);
 
     res.json({
       items: valuation,

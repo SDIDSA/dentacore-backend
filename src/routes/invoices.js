@@ -19,7 +19,7 @@ router.get('/search', async (req, res, next) => {
       return res.json([]);
     }
 
-    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const sanitized = query.replace(/[^a-zA-Z0-9\s-]/g, '');
     const results = await db
       .selectFrom('invoices')
       .select('invoices.id')
@@ -396,7 +396,7 @@ router.patch('/:id/payment',
       if (res.conflictCheck(currentInvoice)) return;
 
       // Determine new status based on payment
-      let newStatus = currentInvoice.payment_status_key;
+      let newStatus;
       if (paid_amount_dzd >= currentInvoice.total_dzd) {
         newStatus = 'invoice.status.paid';
       } else if (paid_amount_dzd > 0) {

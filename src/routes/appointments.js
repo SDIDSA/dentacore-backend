@@ -15,7 +15,7 @@ router.use(conflictResolution);
 // Helper function to validate ISO8601 date
 function isValidISO8601(dateString) {
   const date = new Date(dateString);
-  return date instanceof Date && !isNaN(date.getTime());
+  return date instanceof Date && !Number.isNaN(date.getTime());
 }
 
 router.use(authenticate);
@@ -28,7 +28,7 @@ router.get('/search', async (req, res, next) => {
       return res.json([]);
     }
 
-    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const sanitized = query.replace(/[^a-zA-Z0-9\s-]/g, '');
     const results = await db
       .selectFrom('appointments')
       .select('appointments.id')

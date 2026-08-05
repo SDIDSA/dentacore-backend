@@ -3,13 +3,13 @@ function parsePagination(req) {
   if (!hasLimit) {
     return { paginate: false };
   }
-  const limit = parseInt(req.query.limit);
-  const offset = parseInt(req.query.offset) || 0;
+  const limit = Number.parseInt(req.query.limit);
+  const offset = Number.parseInt(req.query.offset) || 0;
 
-  if (isNaN(limit) || limit < 0) {
+  if (Number.isNaN(limit) || limit < 0) {
     throw Object.assign(new Error('pagination.error.invalid_limit'), { status: 400 });
   }
-  if (isNaN(offset) || offset < 0) {
+  if (Number.isNaN(offset) || offset < 0) {
     throw Object.assign(new Error('pagination.error.invalid_offset'), { status: 400 });
   }
 

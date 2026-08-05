@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+const crypto = require('node:crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
@@ -7,12 +7,13 @@ const { body, validationResult } = require('express-validator');
 const db = require('../config/database');
 const { sql } = require('kysely');
 const { authenticate } = require('../middleware/auth');
+const logger = require('../config/logger');
 
 const router = express.Router();
 
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
+  windowMs: 5 * 60 * 1000,
+  max: 20,
   message: { error: 'auth.error.too_many_attempts' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -89,7 +90,7 @@ router.post('/login', loginLimiter,
       if (oldRefreshToken) {
         try {
           const oldDecoded = jwt.decode(oldRefreshToken);
-          if (oldDecoded && oldDecoded.jti && oldDecoded.exp) {
+          if (oldDecoded?.jti && oldDecoded.exp) {
             const existing = await db
               .selectFrom('token_blacklist')
               .select('id')
@@ -179,6 +180,7 @@ router.get('/validate', authenticate, async (req, res, next) => {
       tenantId: user.tenant_id
     });
   } catch (e) {
+    logger.error('token validation failed', { error: e.message });
     return error(res, 401, 'auth.error.invalid_token');
   }
 });
@@ -188,13 +190,12 @@ router.post('/logout', authenticate, async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
     const refreshToken = req.headers['x-refresh-token'];
-    const now = new Date();
 
     const tokens = [];
     if (authHeader) {
       const accessToken = authHeader.split(' ')[1];
       const decoded = jwt.decode(accessToken);
-      if (decoded && decoded.jti && decoded.exp) {
+      if (decoded?.jti && decoded.exp) {
         tokens.push({
           jti: decoded.jti,
           token_type: 'access',
@@ -207,7 +208,7 @@ router.post('/logout', authenticate, async (req, res, next) => {
 
     if (refreshToken) {
       const decodedRefresh = jwt.decode(refreshToken);
-      if (decodedRefresh && decodedRefresh.jti && decodedRefresh.exp) {
+      if (decodedRefresh?.jti && decodedRefresh.exp) {
         tokens.push({
           jti: decodedRefresh.jti,
           token_type: 'refresh',

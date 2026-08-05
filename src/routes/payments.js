@@ -19,7 +19,7 @@ router.get('/search', async (req, res, next) => {
       return res.json([]);
     }
 
-    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const sanitized = query.replace(/[^a-zA-Z0-9\s-]/g, '');
     const results = await db
       .selectFrom('payments')
       .select('payments.id')
@@ -61,10 +61,10 @@ router.get('/', async (req, res, next) => {
     const { invoice_id, start_date, end_date, payment_method_key } = req.query;
 
     // Validate date parameters if provided
-    if (start_date && isNaN(Date.parse(start_date))) {
+    if (start_date && Number.isNaN(Date.parse(start_date))) {
       return res.status(400).json({ error: 'validation.error', details: 'start_date must be a valid ISO date' });
     }
-    if (end_date && isNaN(Date.parse(end_date))) {
+    if (end_date && Number.isNaN(Date.parse(end_date))) {
       return res.status(400).json({ error: 'validation.error', details: 'end_date must be a valid ISO date' });
     }
 

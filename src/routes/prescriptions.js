@@ -27,7 +27,7 @@ router.get('/search', async (req, res, next) => {
       return res.json([]);
     }
 
-    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const sanitized = query.replace(/[^a-zA-Z0-9\s-]/g, '');
     const results = await db
       .selectFrom('prescriptions')
       .select('prescriptions.id')
@@ -239,8 +239,8 @@ router.post('/',
 
       let seq = 1;
       if (lastRow) {
-        const lastSeq = parseInt(lastRow.prescription_number.substring(prefix.length), 10);
-        if (!isNaN(lastSeq)) seq = lastSeq + 1;
+        const lastSeq = Number.parseInt(lastRow.prescription_number.substring(prefix.length), 10);
+        if (!Number.isNaN(lastSeq)) seq = lastSeq + 1;
       }
       const prescriptionNumber = prefix + String(seq).padStart(4, '0');
 

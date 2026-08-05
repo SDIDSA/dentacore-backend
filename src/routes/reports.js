@@ -19,8 +19,9 @@ function queryTimeout(req, res, next) {
 router.use(queryTimeout);
 
 function safeNumber(value, decimals = 2) {
-  if (value === null || value === undefined || !isFinite(value)) return 0;
-  return parseFloat(Number(value).toFixed(decimals));
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Number.parseFloat(n.toFixed(decimals));
 }
 
 function applyDateFilter(query, tableAndCol, req) {
@@ -38,7 +39,7 @@ function applyDateFilter(query, tableAndCol, req) {
     query = query.where(`${table}.${dateColumn}`, '<=', end_date + 'T23:59:59Z');
   }
   if (months && !start_date && !end_date) {
-    const validMonths = Math.max(1, Math.min(parseInt(months) || 12, 60));
+    const validMonths = Math.max(1, Math.min(Number.parseInt(months) || 12, 60));
     query = query.where(`${table}.${dateColumn}`, '>=', sql`NOW() - INTERVAL '1 month' * ${validMonths}`);
   }
   return query;
@@ -50,7 +51,7 @@ function toCsvRow(obj, columns) {
     if (val === null || val === undefined) return '';
     const str = String(val);
     return str.includes(',') || str.includes('"') || str.includes('\n')
-      ? `"${str.replace(/"/g, '""')}"`
+      ? `"${str.replaceAll('"', '""')}"`
       : str;
   }).join(',');
 }
@@ -58,12 +59,12 @@ function toCsvRow(obj, columns) {
 // Monthly revenue report
 router.get('/revenue/monthly', async (req, res, next) => {
   try {
-    const months = Math.max(1, Math.min(parseInt(req.query.months) || 12, 60));
+    const months = Math.max(1, Math.min(Number.parseInt(req.query.months) || 12, 60));
 
     const data = await db
       .selectFrom('payments')
       .select([
-        sql`DATE_TRUNC('month', payment_date)`.as('month'),
+        sql`to_char(DATE_TRUNC('month', payment_date), 'YYYY-MM')`.as('month'),
         db.fn.count('id').as('transaction_count'),
         db.fn.sum('amount_dzd').as('total_revenue_dzd'),
       ])
@@ -85,7 +86,7 @@ router.get('/revenue/monthly', async (req, res, next) => {
 // Procedure frequency report
 router.get('/procedures/frequency', async (req, res, next) => {
   try {
-    const months = Math.max(1, Math.min(parseInt(req.query.months) || 12, 60));
+    const months = Math.max(1, Math.min(Number.parseInt(req.query.months) || 12, 60));
 
     const data = await db
       .selectFrom('treatment_records')
@@ -102,15 +103,15 @@ router.get('/procedures/frequency', async (req, res, next) => {
       .orderBy('procedure_count', 'desc')
       .execute();
 
-    const totalProcedures = data.reduce((sum, row) => sum + parseInt(row.procedure_count), 0);
+    const totalProcedures = data.reduce((sum, row) => sum + Number.parseInt(row.procedure_count), 0);
 
     res.json({
       data: data.map(row => ({
         category_id: row.category_id,
         category_key: row.category_key || 'uncategorized',
-        procedure_count: parseInt(row.procedure_count),
+        procedure_count: Number.parseInt(row.procedure_count),
         total_estimated_dzd: safeNumber(row.total_estimated_dzd),
-        percentage: totalProcedures > 0 ? safeNumber((parseInt(row.procedure_count) / totalProcedures) * 100) : 0,
+        percentage: totalProcedures > 0 ? safeNumber((Number.parseInt(row.procedure_count) / totalProcedures) * 100) : 0,
       })),
       summary: { total_procedures: totalProcedures },
     });
@@ -122,12 +123,12 @@ router.get('/procedures/frequency', async (req, res, next) => {
 // New patients report
 router.get('/patients/new', async (req, res, next) => {
   try {
-    const months = Math.max(1, Math.min(parseInt(req.query.months) || 12, 60));
+    const months = Math.max(1, Math.min(Number.parseInt(req.query.months) || 12, 60));
 
     const data = await db
       .selectFrom('patients')
       .select([
-        sql`DATE_TRUNC('month', created_at)`.as('month'),
+        sql`to_char(DATE_TRUNC('month', created_at), 'YYYY-MM')`.as('month'),
         db.fn.count('id').as('new_patients'),
       ])
       .where('tenant_id', '=', req.tenantId)
@@ -136,7 +137,7 @@ router.get('/patients/new', async (req, res, next) => {
       .orderBy('month', 'desc')
       .execute();
 
-    const total = data.reduce((sum, row) => sum + parseInt(row.new_patients), 0);
+    const total = data.reduce((sum, row) => sum + Number.parseInt(row.new_patients), 0);
 
     res.json({ data, summary: { total_new_patients: total, months_covered: data.length } });
   } catch (error) {
@@ -147,12 +148,12 @@ router.get('/patients/new', async (req, res, next) => {
 // Appointment statistics report
 router.get('/appointments/stats', async (req, res, next) => {
   try {
-    const months = Math.max(1, Math.min(parseInt(req.query.months) || 12, 60));
+    const months = Math.max(1, Math.min(Number.parseInt(req.query.months) || 12, 60));
 
     const data = await db
       .selectFrom('appointments')
       .select([
-        sql`DATE_TRUNC('month', appointment_date)`.as('month'),
+        sql`to_char(DATE_TRUNC('month', appointment_date), 'YYYY-MM')`.as('month'),
         'status_key',
         db.fn.count('id').as('appointment_count'),
       ])
@@ -162,14 +163,14 @@ router.get('/appointments/stats', async (req, res, next) => {
       .orderBy('month', 'desc')
       .execute();
 
-    const total = data.reduce((sum, row) => sum + parseInt(row.appointment_count), 0);
+    const total = data.reduce((sum, row) => sum + Number.parseInt(row.appointment_count), 0);
 
     const byStatus = {};
     for (const row of data) {
       if (!byStatus[row.status_key]) {
         byStatus[row.status_key] = 0;
       }
-      byStatus[row.status_key] += parseInt(row.appointment_count);
+      byStatus[row.status_key] += Number.parseInt(row.appointment_count);
     }
 
     res.json({
@@ -202,14 +203,14 @@ router.get('/plans/summary', async (req, res, next) => {
       .groupBy('status_key')
       .execute();
 
-    const total = data.reduce((sum, row) => sum + parseInt(row.plan_count), 0);
+    const total = data.reduce((sum, row) => sum + Number.parseInt(row.plan_count), 0);
 
     res.json({
       data: data.map(row => ({
         status_key: row.status_key,
-        plan_count: parseInt(row.plan_count),
+        plan_count: Number.parseInt(row.plan_count),
         total_estimated_dzd: safeNumber(row.total_estimated_dzd),
-        percentage: total > 0 ? safeNumber((parseInt(row.plan_count) / total) * 100) : 0,
+        percentage: total > 0 ? safeNumber((Number.parseInt(row.plan_count) / total) * 100) : 0,
       })),
       summary: { total_plans: total },
     });
@@ -244,7 +245,7 @@ router.get('/revenue/by-method', async (req, res, next) => {
     res.json({
       data: data.map(row => ({
         payment_method: row.payment_method,
-        transaction_count: parseInt(row.transaction_count),
+        transaction_count: Number.parseInt(row.transaction_count),
         total_dzd: safeNumber(row.total_dzd),
         percentage: grandTotal > 0 ? safeNumber((safeNumber(row.total_dzd) / grandTotal) * 100) : 0,
       })),
@@ -277,15 +278,15 @@ router.get('/dentist/stats', async (req, res, next) => {
       .orderBy('treatment_count', 'desc')
       .execute();
 
-    const grandTotal = data.reduce((sum, row) => sum + parseInt(row.treatment_count), 0);
+    const grandTotal = data.reduce((sum, row) => sum + Number.parseInt(row.treatment_count), 0);
 
     res.json({
       data: data.map(row => ({
         dentist_id: row.dentist_id,
         dentist_name: row.dentist_name,
-        treatment_count: parseInt(row.treatment_count),
+        treatment_count: Number.parseInt(row.treatment_count),
         total_estimated_dzd: safeNumber(row.total_estimated_dzd),
-        percentage: grandTotal > 0 ? safeNumber((parseInt(row.treatment_count) / grandTotal) * 100) : 0,
+        percentage: grandTotal > 0 ? safeNumber((Number.parseInt(row.treatment_count) / grandTotal) * 100) : 0,
       })),
       summary: { total_treatments: grandTotal },
     });

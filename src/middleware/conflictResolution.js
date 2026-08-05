@@ -21,15 +21,15 @@ function conflictCheck(req, res, next) {
       }
 
       let candidate = value.trim();
-      if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(candidate)) {
+      if (!/(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(candidate)) {
         candidate = candidate.replace(' ', 'T') + 'Z';
       }
 
       const parsed = Date.parse(candidate);
-      return Number.isNaN(parsed) ? NaN : parsed;
+      return Number.isNaN(parsed) ? Number.NaN : parsed;
     }
 
-    return NaN;
+    return Number.NaN;
   };
 
   const rawClientTimestamp = req.headers['x-client-timestamp'] ?? req.body?.clientTimestamp;
@@ -40,12 +40,12 @@ function conflictCheck(req, res, next) {
 
   req.clientTimestamp = clientTimestamp;
 
-  if (req.body && req.body.clientTimestamp !== undefined) {
+  if (req.body?.clientTimestamp !== undefined) {
     delete req.body.clientTimestamp;
   }
 
   res.conflictCheck = (record) => {
-    if (!record || !record.updated_at) return false;
+    if (!record?.updated_at) return false;
 
     const serverTime = parseTimestamp(record.updated_at);
     if (Number.isNaN(serverTime)) return false;

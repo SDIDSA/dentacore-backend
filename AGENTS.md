@@ -30,8 +30,9 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 ## Work Guidance
 
 ## Verification
-- `npm test` runs Jest suite (supertest-based API tests)
+- `npm test` runs Jest suite (supertest-based API tests) — 123/123 pass
 - `npm run migrate` and `npm run migrate:down` for migration verification
+- SonarQube real-scan (projectVersion 1.3): bugs 0, vulnerabilities 0, code_smells 14, reliability_rating 1.0
 
 ## Child DOX Index
 - `config/` — Database, Cloudinary, Swagger, migrations, error, and logger configuration

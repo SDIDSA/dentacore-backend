@@ -28,7 +28,7 @@ router.get('/search', async (req, res, next) => {
       return res.json([]);
     }
 
-    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const sanitized = query.replace(/[^a-zA-Z0-9\s-]/g, '');
     const results = await db
       .selectFrom('treatment_plans')
       .select('treatment_plans.id')
@@ -150,7 +150,7 @@ router.get('/batch',
       const plansWithCosts = plans.map(plan => ({
         ...plan,
         actual_total_dzd: aggMap[plan.id]?.actual_total || 0,
-        treatment_count: parseInt(aggMap[plan.id]?.treatment_count || '0'),
+        treatment_count: Number.parseInt(aggMap[plan.id]?.treatment_count || '0'),
       }));
 
       res.json(plansWithCosts);

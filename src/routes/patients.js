@@ -29,7 +29,7 @@ router.get('/', async (req, res, next) => {
       .where('patients.tenant_id', '=', req.tenantId)
 
     if (search) {
-      const sanitized = search.replace(/[^a-zA-Z0-9\s\-]/g, '');
+      const sanitized = search.replace(/[^a-zA-Z0-9\s-]/g, '');
       const searchFilter = (eb) =>
         eb.or([
           eb(sql`to_tsvector('simple', patients.full_name)`, '@@', sql`to_tsquery('simple', ${sanitized})`),
@@ -48,7 +48,7 @@ router.get('/', async (req, res, next) => {
     const patientIds = patients.map(p => p.id);
     if (pag.paginate) {
       const countResult = await countQuery.executeTakeFirst();
-      res.json(wrapPaginatedResponse(patientIds, parseInt(countResult.count), pag.limit, pag.offset));
+      res.json(wrapPaginatedResponse(patientIds, Number.parseInt(countResult.count), pag.limit, pag.offset));
     } else {
       res.json(patientIds);
     }
@@ -65,7 +65,7 @@ router.get('/search', async (req, res, next) => {
       return res.json([]);
     }
 
-    const sanitized = query.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const sanitized = query.replace(/[^a-zA-Z0-9\s-]/g, '');
     const results = await db
       .selectFrom('patients')
       .select(['patients.id'])
@@ -229,7 +229,7 @@ router.post('/',
   body('full_name').trim().notEmpty(),
   body('date_of_birth').isDate(),
   body('gender').isIn(['patient.gender.male', 'patient.gender.female']),
-  body('phone').matches(/^\+213[0-9]{9}$/),
+  body('phone').matches(/^\+213\d{9}$/),
   body('blood_type').optional().isString(),
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -262,7 +262,7 @@ router.post('/',
         if (highestCodeResult) {
           const match = highestCodeResult.patient_code.match(/PAT-\d{4}-(\d{4})$/);
           if (match) {
-            nextNum = parseInt(match[1]) + 1;
+            nextNum = Number.parseInt(match[1]) + 1;
           }
         }
 
@@ -313,7 +313,7 @@ router.patch('/:id',
   body('full_name').optional().trim().notEmpty(),
   body('date_of_birth').optional().isDate(),
   body('gender').optional().isIn(['patient.gender.male', 'patient.gender.female']),
-  body('phone').optional().matches(/^\+213[0-9]{9}$/),
+  body('phone').optional().matches(/^\+213\d{9}$/),
   body('status_key').optional().isIn([
     'patient.status.active',
     'patient.status.new',
@@ -661,7 +661,7 @@ router.get('/:id/detail', async (req, res, next) => {
     const plansWithDetails = plans.map(plan => ({
       ...plan,
       actual_total_dzd: aggMap[plan.id]?.actual_total || 0,
-      treatment_count: parseInt(aggMap[plan.id]?.treatment_count || '0'),
+      treatment_count: Number.parseInt(aggMap[plan.id]?.treatment_count || '0'),
     }));
 
     res.json({

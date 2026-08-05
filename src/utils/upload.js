@@ -1,6 +1,6 @@
 const cloudinary = require('../config/cloudinary');
 
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE);
+const MAX_FILE_SIZE = Number.parseInt(process.env.MAX_FILE_SIZE);
 if (!MAX_FILE_SIZE || MAX_FILE_SIZE < 1) {
   console.warn('WARN: MAX_FILE_SIZE env var is missing or invalid, defaulting to 20MB');
 }

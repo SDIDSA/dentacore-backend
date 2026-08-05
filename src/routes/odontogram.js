@@ -24,10 +24,10 @@ const QUADRANTS = {
 
 function getToothInfo(fdiNumber) {
   const quadrant = fdiNumber[0];
-  const position = parseInt(fdiNumber[1]);
+  const position = Number.parseInt(fdiNumber[1]);
   return {
     fdi: fdiNumber,
-    quadrant: parseInt(quadrant),
+    quadrant: Number.parseInt(quadrant),
     quadrant_label: QUADRANTS[quadrant]?.label || 'Unknown',
     region: QUADRANTS[quadrant]?.region || 'unknown',
     position,

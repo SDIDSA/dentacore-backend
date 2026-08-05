@@ -18,8 +18,8 @@
     "management",
     "algeria"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "SDIDSA",
+  "license": "proprietary",
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.10.0",
