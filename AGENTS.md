@@ -28,6 +28,7 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 - Database access via Kysely query builder with PostgreSQL
 - All migration scripts read `DB_PASSWORD` from `.env`; no hardcoded credentials
 - **No Docker path**: `Dockerfile`/`docker-compose.yml`/`.dockerignore` are removed — the backend runs natively (bundled Node + PostgreSQL via `setup-backend.ps1`, or `recreate-db.*` for dev)
+- **Default ports (durable)**: API HTTP `4000` (`PORT`; fallback in `server.js`), PostgreSQL `5434` (`DB_PORT`; installer default in `setup-backend.ps1`, dev fallback in `recreate-db.*` and `test-db-connection.js`). Frontend base URL defaults to `http://localhost:4000/` (`Service.java`, overridable via `-Ddentacore.api.url`). Dev CORS fallback includes `http://localhost:4000`
 
 ## Work Guidance
 

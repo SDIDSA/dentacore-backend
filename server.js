@@ -5,7 +5,7 @@ const logger = require('./src/config/logger');
 const { initSocket } = require('./src/socket');
 const { checkUpcomingAppointments } = require('./src/services/notificationService');
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 const REMINDER_INTERVAL_MS = parseInt(process.env.REMINDER_INTERVAL_MS) || 15 * 60 * 1000;
 
 const server = app.listen(PORT, () => {

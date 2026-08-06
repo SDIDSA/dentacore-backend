@@ -42,7 +42,7 @@ function defaultAllowedOrigins() {
     console.warn('CORS_ORIGIN not set in production — all cross-origin requests will be blocked. Set CORS_ORIGIN to your frontend URL.');
     return [];
   }
-  return ['http://localhost:3000', 'http://localhost:5173'];
+  return ['http://localhost:4000', 'http://localhost:5173'];
 }
 
 const allowedOrigins = process.env.CORS_ORIGIN

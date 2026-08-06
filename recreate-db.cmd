@@ -5,8 +5,10 @@ REM Load DB_PASSWORD from .env if available
 if exist ".env" (
     for /f "usebackq tokens=1,* delims==" %%a in (".env") do (
         if "%%a"=="DB_PASSWORD" set "DB_PASSWORD=%%b"
+        if "%%a"=="DB_PORT" set "DB_PORT=%%b"
     )
 )
+if "%DB_PORT%"=="" set "DB_PORT=5434"
 
 echo DB_PASSWORD loaded from .env: %DB_PASSWORD%
 
@@ -55,13 +57,14 @@ echo ============================================
 echo Recreating DentaCore Database
 echo ============================================
 echo Using PostgreSQL at: %PSQL_PATH%
+echo Using port: %DB_PORT%
 echo Using hardcoded passwords for development
 echo.
 
 echo.
 echo [1/6] Dropping existing database...
 set PGPASSWORD=%POSTGRES_PASSWORD%
-%PSQL_PATH% -U postgres -c "DROP DATABASE IF EXISTS dentacore;"
+%PSQL_PATH% -U postgres -p %DB_PORT% -c "DROP DATABASE IF EXISTS dentacore;"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to drop database
     pause
@@ -70,8 +73,8 @@ if %errorlevel% neq 0 (
 
 echo [2/6] recreating dentacore user (if not exists)...
 set PGPASSWORD=%POSTGRES_PASSWORD%
-%PSQL_PATH% -U postgres -c "DROP USER IF EXISTS dentacore;" 2>nul
-%PSQL_PATH% -U postgres -c "CREATE USER dentacore WITH PASSWORD '%DENTACORE_PASSWORD%';" 2>nul
+%PSQL_PATH% -U postgres -p %DB_PORT% -c "DROP USER IF EXISTS dentacore;" 2>nul
+%PSQL_PATH% -U postgres -p %DB_PORT% -c "CREATE USER dentacore WITH PASSWORD '%DENTACORE_PASSWORD%';" 2>nul
 if %errorlevel% equ 0 (
     echo User 'dentacore' recreated successfully
 ) else (
@@ -81,7 +84,7 @@ if %errorlevel% equ 0 (
 echo.
 echo [3/6] Creating new database...
 set PGPASSWORD=%POSTGRES_PASSWORD%
-%PSQL_PATH% -U postgres -c "CREATE DATABASE dentacore OWNER dentacore;"
+%PSQL_PATH% -U postgres -p %DB_PORT% -c "CREATE DATABASE dentacore OWNER dentacore;"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to create database
     pause
@@ -91,7 +94,7 @@ if %errorlevel% neq 0 (
 echo.
 echo [4/6] Granting privileges to dentacore user...
 set PGPASSWORD=%POSTGRES_PASSWORD%
-%PSQL_PATH% -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE dentacore TO dentacore;"
+%PSQL_PATH% -U postgres -p %DB_PORT% -c "GRANT ALL PRIVILEGES ON DATABASE dentacore TO dentacore;"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to grant privileges
     pause
@@ -101,7 +104,7 @@ if %errorlevel% neq 0 (
 echo.
 echo [5/6] Executing database schema...
 set PGPASSWORD=%DENTACORE_PASSWORD%
-%PSQL_PATH% -U dentacore -d dentacore -f db.sql
+%PSQL_PATH% -U dentacore -d dentacore -p %DB_PORT% -f db.sql
 if %errorlevel% neq 0 (
     echo ERROR: Failed to execute database schema
     echo Check if db.sql file exists and is readable
@@ -112,7 +115,7 @@ if %errorlevel% neq 0 (
 echo.
 echo [6/6] Executing seed data...
 set PGPASSWORD=%DENTACORE_PASSWORD%
-%PSQL_PATH% -U dentacore -d dentacore -f seed.sql
+%PSQL_PATH% -U dentacore -d dentacore -p %DB_PORT% -f seed.sql
 if %errorlevel% neq 0 (
     echo ERROR: Failed to execute seed data
     echo Check if seed.sql file exists and is readable
@@ -137,8 +140,9 @@ echo Schema: Applied from db.sql
 echo Seed Data: Applied from seed.sql
 echo.
 echo Default Admin Credentials:
-echo Email: admin@dental-clinic.dz
-echo Password: Admin@123456
+echo Email: admin@elqods.dz
+echo Password: Admin@2025!
+echo (Second clinic: admin@sourire.dz / Sourire@2025!)
 echo *** CHANGE THIS PASSWORD IMMEDIATELY! ***
 echo.
 echo You can now start your application.

@@ -10,10 +10,10 @@ const jwt = require('jsonwebtoken'); // Assuming user has this locally, or we us
 // This one tests Middleware, so it needs a RUNNING SERVER or we mock it.
 // Simulating middleware logic is easier than starting server.
 // But better to test end-to-end if possible.
-// The user has `npm run dev` running. We can try to hit localhost:3000.
-// Let's assume server is running on 3000.
+// The user has `npm run dev` running. We can try to hit localhost:4000.
+// Let's assume server is running on 4000.
 
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'http://localhost:4000/api';
 
 async function verifyJWTFlow() {
     console.log('🧪 Starting JWT Tenant Verification...');

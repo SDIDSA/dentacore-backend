@@ -23,7 +23,7 @@ console.log(`  2. Recreate the 'dentacore' user and database`);
 console.log(`  3. Run db.sql (schema)`);
 console.log(`  4. Run seed.sql (demo data for 3 clinics)`);
 console.log(``);
-console.log(`Default demo admin: admin@dental-clinic.dz / Admin@123456`);
+console.log(`Default demo admin: admin@elqods.dz / Admin@2025! (also admin@sourire.dz / Sourire@2025!)`);
 console.log(`============================================`);
 
 try {

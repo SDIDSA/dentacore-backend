@@ -4,7 +4,7 @@ const { Pool } = require('pg');
 
 const pool = new Pool({
     host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '5432'),
+    port: parseInt(process.env.DB_PORT || '5434'),
     database: process.env.DB_NAME || 'dentacore',
     user: process.env.DB_USER || 'dentacore',
     password: process.env.DB_PASSWORD,
