@@ -4,7 +4,7 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'DentaCore API',
+      title: 'Sera API',
       version: '1.0.0',
       description: 'Multi-tenant Algerian Dental Management System REST API',
     },

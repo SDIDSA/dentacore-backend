@@ -1,10 +1,14 @@
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const db = require('../config/database');
 
 const router = express.Router();
 
 router.use(authenticate);
+
+function escapeIlike(str) {
+  return String(str).replace(/([\\%_])/g, '\\$1');
+}
 
 const MAX_LIMIT = 1000;
 
@@ -46,9 +50,9 @@ router.get('/patients/raw', async (req, res, next) => {
     }
     if (search) {
       query = query.where((qb) => qb
-        .where('patients.full_name', 'ilike', `%${search}%`)
-        .orWhere('patients.phone', 'ilike', `%${search}%`)
-        .orWhere('patients.patient_code', 'ilike', `%${search}%`)
+        .where('patients.full_name', 'ilike', `%${escapeIlike(search)}%`)
+        .orWhere('patients.phone', 'ilike', `%${escapeIlike(search)}%`)
+        .orWhere('patients.patient_code', 'ilike', `%${escapeIlike(search)}%`)
       );
     }
 
@@ -228,6 +232,7 @@ router.get('/appointments/today', async (req, res, next) => {
       ])
       .where('appointments.appointment_date', '>=', today.toISOString())
       .where('appointments.appointment_date', '<', tomorrow.toISOString())
+      .where('appointments.tenant_id', '=', req.tenantId)
       .orderBy('appointments.appointment_date', 'asc')
       .execute();
 
@@ -241,7 +246,7 @@ router.get('/appointments/today', async (req, res, next) => {
 
 
 // Get recent activity for dashboard
-router.get('/recent-activity', async (req, res, next) => {
+router.get('/recent-activity', authorize('auth.role.admin'), async (req, res, next) => {
 
   try {
     const limit = parseLimit(req);

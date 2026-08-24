@@ -10,8 +10,6 @@ if exist ".env" (
 )
 if "%DB_PORT%"=="" set "DB_PORT=5434"
 
-echo DB_PASSWORD loaded from .env: %DB_PASSWORD%
-
 REM DENTACORE_PASSWORD: fall back to DB_PASSWORD from .env, then prompt
 if "%DENTACORE_PASSWORD%"=="" (
     if not "%DB_PASSWORD%"=="" (
@@ -54,11 +52,11 @@ if %PSQL_PATH%=="" (
 )
 
 echo ============================================
-echo Recreating DentaCore Database
+echo Recreating dentacore database
 echo ============================================
 echo Using PostgreSQL at: %PSQL_PATH%
 echo Using port: %DB_PORT%
-echo Using hardcoded passwords for development
+echo Using passwords from .env or interactive prompt (never logged)
 echo.
 
 echo.
@@ -73,8 +71,10 @@ if %errorlevel% neq 0 (
 
 echo [2/6] recreating dentacore user (if not exists)...
 set PGPASSWORD=%POSTGRES_PASSWORD%
+REM SQL-escape single quotes in the password ('' doubling)
+set "DENTACORE_PW_SQL=!DENTACORE_PASSWORD:'=''!"
 %PSQL_PATH% -U postgres -p %DB_PORT% -c "DROP USER IF EXISTS dentacore;" 2>nul
-%PSQL_PATH% -U postgres -p %DB_PORT% -c "CREATE USER dentacore WITH PASSWORD '%DENTACORE_PASSWORD%';" 2>nul
+%PSQL_PATH% -U postgres -p %DB_PORT% -c "CREATE USER dentacore WITH PASSWORD '!DENTACORE_PW_SQL!';" 2>nul
 if %errorlevel% equ 0 (
     echo User 'dentacore' recreated successfully
 ) else (

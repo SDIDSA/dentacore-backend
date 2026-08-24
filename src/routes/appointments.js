@@ -18,7 +18,15 @@ function isValidISO8601(dateString) {
   return date instanceof Date && !Number.isNaN(date.getTime());
 }
 
-router.use(authenticate);
+async function tenantRefExists(tenantId, table, id) {
+  const row = await db
+    .selectFrom(table)
+    .select('id')
+    .where('id', '=', id)
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+  return !!row;
+}
 
 // Search appointments by patient or dentist name
 router.get('/search', async (req, res, next) => {
@@ -259,6 +267,12 @@ router.post('/',
     try {
       const { patient_id, dentist_id, appointment_date, duration_minutes, reason, notes } = req.body;
 
+      for (const [field, table] of [['patient_id', 'patients'], ['dentist_id', 'users']]) {
+        if (!(await tenantRefExists(req.tenantId, table, req.body[field]))) {
+          return res.status(400).json({ error: 'validation.error', details: `${field} is invalid` });
+        }
+      }
+
       // Use transaction with SERIALIZABLE isolation to prevent race conditions
       const appointment = await db.transaction().execute(async (trx) => {
         await sql`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`.execute(trx);
@@ -357,6 +371,12 @@ router.patch('/:id',
       if (res.conflictCheck(currentAppointment)) return;
 
       const { patient_id, dentist_id, appointment_date, duration_minutes, status_key, reason, notes } = req.body;
+
+      for (const [field, table] of [['patient_id', 'patients'], ['dentist_id', 'users']]) {
+        if (req.body[field] !== undefined && !(await tenantRefExists(req.tenantId, table, req.body[field]))) {
+          return res.status(400).json({ error: 'validation.error', details: `${field} is invalid` });
+        }
+      }
 
       // Build update object with only provided fields
       const updateData = {};
@@ -526,7 +546,7 @@ router.delete('/:id',
         .where('tenant_id', '=', req.tenantId)
         .execute();
 
-      appointment.status_key = 'appointment.status.deleted';
+      appointment.status_key = 'appt.status.deleted';
 
       if (req.audit) {
         await req.audit.log({
@@ -541,7 +561,7 @@ router.delete('/:id',
 
       emitToTenant(req.tenantId, 'appointment:deleted', { id: appointment.id });
 
-      res.json({ message: 'appointment.deleted' });
+      res.status(204).end();
     } catch (error) {
       next(error);
     }

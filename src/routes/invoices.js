@@ -11,6 +11,18 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+const VALID_PAYMENT_STATUS_KEYS = ['invoice.status.unpaid', 'invoice.status.partial', 'invoice.status.paid', 'invoice.status.overdue', 'invoice.status.cancelled'];
+
+async function tenantRefExists(tenantId, table, id) {
+  const row = await db
+    .selectFrom(table)
+    .select('id')
+    .where('id', '=', id)
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+  return !!row;
+}
+
 // Search invoices
 router.get('/search', async (req, res, next) => {
   try {
@@ -250,6 +262,24 @@ router.post('/',
     try {
       const { patient_id, issue_date, due_date, line_items, notes, discount_dzd = 0 } = req.body;
 
+      // Validate the patient belongs to this tenant
+      const patient = await db
+        .selectFrom('patients')
+        .select('id')
+        .where('id', '=', patient_id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+      if (!patient) {
+        return res.status(400).json({ error: 'validation.error', details: 'patient_id is invalid' });
+      }
+
+      // Validate line-item treatment references belong to this tenant
+      for (const item of line_items) {
+        if (item.treatment_record_id && !(await tenantRefExists(req.tenantId, 'treatment_records', item.treatment_record_id))) {
+          return res.status(400).json({ error: 'validation.error', details: 'line_items.treatment_record_id is invalid' });
+        }
+      }
+
       // Calculate subtotal
       const subtotal_dzd = line_items.reduce((sum, item) => {
         return sum + (item.quantity * item.unit_price_dzd);
@@ -258,53 +288,56 @@ router.post('/',
       // Calculate total
       const total_dzd = subtotal_dzd - discount_dzd;
 
-      // Create invoice
-      const invoice = await db
-        .insertInto('invoices')
-        .values({
-          patient_id,
-          issue_date,
-          due_date: due_date || null,
-          subtotal_dzd,
-          discount_dzd,
-          total_dzd,
-          paid_amount_dzd: 0,
-          payment_status_key: 'invoice.status.unpaid',
-          notes: notes || null,
-          created_by: req.user.id,
-          tenant_id: req.tenantId
-        })
-        .returningAll()
-        .executeTakeFirst();
+      // Create invoice + line items atomically
+      const invoice = await db.transaction().execute(async (trx) => {
+        const created = await trx
+          .insertInto('invoices')
+          .values({
+            patient_id,
+            issue_date,
+            due_date: due_date || null,
+            subtotal_dzd,
+            discount_dzd,
+            total_dzd,
+            paid_amount_dzd: 0,
+            payment_status_key: 'invoice.status.unpaid',
+            notes: notes || null,
+            created_by: req.user.id,
+            tenant_id: req.tenantId
+          })
+          .returningAll()
+          .executeTakeFirst();
 
-      // Create line items
-      const lineItemsWithInvoiceId = line_items.map(item => ({
-        tenant_id: req.tenantId,
-        invoice_id: invoice.id,
-        treatment_record_id: item.treatment_record_id || null,
-        description: item.description,
-        quantity: item.quantity,
-        unit_price_dzd: item.unit_price_dzd,
-        total_price_dzd: item.quantity * item.unit_price_dzd
-      }));
+        const lineItemsWithInvoiceId = line_items.map(item => ({
+          tenant_id: req.tenantId,
+          invoice_id: created.id,
+          treatment_record_id: item.treatment_record_id || null,
+          description: item.description,
+          quantity: item.quantity,
+          unit_price_dzd: item.unit_price_dzd,
+          total_price_dzd: item.quantity * item.unit_price_dzd
+        }));
 
-      await db
-        .insertInto('invoice_items')
-        .values(lineItemsWithInvoiceId)
-        .execute();
+        await trx
+          .insertInto('invoice_items')
+          .values(lineItemsWithInvoiceId)
+          .execute();
+
+        return { invoice: created, lineItems: lineItemsWithInvoiceId };
+      });
 
       // Log the invoice creation
       if (req.audit) {
         await req.audit.log({
           action: 'CREATE',
           entityType: 'invoices',
-          entityId: invoice.id,
+          entityId: invoice.invoice.id,
           tenantId: req.tenantId,
-          newValues: { ...invoice, line_items: lineItemsWithInvoiceId }
+          newValues: { ...invoice.invoice, line_items: invoice.lineItems }
         }, db);
       }
 
-      res.status(201).json(invoice);
+      res.status(201).json(invoice.invoice);
     } catch (error) {
       next(error);
     }
@@ -314,7 +347,7 @@ router.post('/',
 // Update invoice status
 router.patch('/:id/status',
   param('id').isUUID(),
-  body('payment_status_key').isIn(['invoice.status.unpaid', 'invoice.status.partial', 'invoice.status.paid', 'invoice.status.overdue', 'invoice.status.cancelled']),
+   body('payment_status_key').isIn(VALID_PAYMENT_STATUS_KEYS),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -395,6 +428,15 @@ router.patch('/:id/payment',
 
       if (res.conflictCheck(currentInvoice)) return;
 
+      // money integrity: same overpayment guard as payments.js — a direct
+      // PATCH must not set paid above the invoice total
+      if (paid_amount_dzd > currentInvoice.total_dzd) {
+        return res.status(400).json({
+          error: 'validation.error',
+          details: `paid_amount_dzd (${paid_amount_dzd}) exceeds invoice total (${currentInvoice.total_dzd})`
+        });
+      }
+
       // Determine new status based on payment
       let newStatus;
       if (paid_amount_dzd >= currentInvoice.total_dzd) {
@@ -474,7 +516,18 @@ const updateInvoice = [
       const { patient_id, issue_date, due_date, discount_dzd, paid_amount_dzd, payment_status_key, notes } = req.body;
 
       const updateData = {};
-      if (patient_id !== undefined) updateData.patient_id = patient_id;
+      if (patient_id !== undefined) {
+        const patient = await db
+          .selectFrom('patients')
+          .select('id')
+          .where('id', '=', patient_id)
+          .where('tenant_id', '=', req.tenantId)
+          .executeTakeFirst();
+        if (!patient) {
+          return res.status(400).json({ error: 'validation.error', details: 'patient_id is invalid' });
+        }
+        updateData.patient_id = patient_id;
+      }
       if (issue_date !== undefined) updateData.issue_date = issue_date;
       if (due_date !== undefined) updateData.due_date = due_date;
       if (discount_dzd !== undefined) updateData.discount_dzd = discount_dzd;
@@ -547,6 +600,15 @@ router.delete('/:id',
         return res.status(404).json({ error: 'invoice.error.not_found' });
       }
 
+      // payments cascade via FK — record how much payment history dies with
+      // the invoice so the audit trail reflects the full destruction
+      const paymentCount = (await db
+        .selectFrom('payments')
+        .select(sql`COUNT(*)`.as('count'))
+        .where('invoice_id', '=', req.params.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst())?.count ?? 0;
+
       await db
         .deleteFrom('invoices')
         .where('id', '=', req.params.id)
@@ -561,7 +623,7 @@ router.delete('/:id',
           entityType: 'invoices',
           entityId: req.params.id,
           tenantId: req.tenantId,
-          oldValues: invoice
+          oldValues: { ...invoice, cascaded_payments: Number(paymentCount) }
         });
       }
 

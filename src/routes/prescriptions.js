@@ -11,6 +11,20 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+async function tenantRefExists(tenantId, table, id) {
+  const row = await db
+    .selectFrom(table)
+    .select('id')
+    .where('id', '=', id)
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+  return !!row;
+}
+
+function escapeIlike(str) {
+  return String(str).replace(/([\\%_])/g, '\\$1');
+}
+
 const SORT_FIELDS_MAP = {
   created_at: 'prescriptions.created_at',
   medication_name: 'prescriptions.medication_name',
@@ -89,7 +103,7 @@ router.get('/',
       if (search) {
         query = query.where((eb) =>
           eb.or([
-            eb('prescriptions.medication_name', 'ilike', `%${search}%`),
+            eb('prescriptions.medication_name', 'ilike', `%${escapeIlike(search)}%`),
           ])
         );
       }
@@ -223,62 +237,77 @@ router.post('/',
     try {
       const { patient_id, medication_name, dosage, frequency, duration, notes } = req.body;
 
-      // Generate prescription number (RX-YYYYMM-NNNN)
-      const now = new Date();
-      const yearStr = now.getFullYear().toString();
-      const monthStr = String(now.getMonth() + 1).padStart(2, '0');
-      const prefix = 'RX-' + yearStr + monthStr + '-';
+      const item = await db.transaction().execute(async (trx) => {
+        const patient = await trx
+          .selectFrom('patients')
+          .select('full_name')
+          .where('id', '=', patient_id)
+          .where('tenant_id', '=', req.tenantId)
+          .executeTakeFirst();
 
-      const lastRow = await db
-        .selectFrom('prescriptions')
-        .select('prescription_number')
-        .where('tenant_id', '=', req.tenantId)
-        .where('prescription_number', 'like', prefix + '%')
-        .orderBy('prescription_number', 'desc')
-        .executeTakeFirst();
+        if (!patient) {
+          const err = new Error('INVALID_PATIENT');
+          err.statusCode = 400;
+          throw err;
+        }
 
-      let seq = 1;
-      if (lastRow) {
-        const lastSeq = Number.parseInt(lastRow.prescription_number.substring(prefix.length), 10);
-        if (!Number.isNaN(lastSeq)) seq = lastSeq + 1;
-      }
-      const prescriptionNumber = prefix + String(seq).padStart(4, '0');
+        await sql`SELECT pg_advisory_xact_lock(hashtext(${req.tenantId}))`.execute(trx);
 
-      const item = await db
-        .insertInto('prescriptions')
-        .values({
-          tenant_id: req.tenantId,
-          patient_id,
-          dentist_id: req.user.id,
-          medication_name,
-          dosage,
-          frequency,
-          prescription_number: prescriptionNumber,
-          duration: duration || null,
-          notes: notes || null,
-          created_by: req.user.id,
-        })
-        .returningAll()
-        .executeTakeFirst();
+        // Generate prescription number (RX-YYYYMM-NNNN)
+        const now = new Date();
+        const yearStr = now.getFullYear().toString();
+        const monthStr = String(now.getMonth() + 1).padStart(2, '0');
+        const prefix = 'RX-' + yearStr + monthStr + '-';
+
+        const lastRow = await trx
+          .selectFrom('prescriptions')
+          .select('prescription_number')
+          .where('tenant_id', '=', req.tenantId)
+          .where('prescription_number', 'like', prefix + '%')
+          .orderBy('prescription_number', 'desc')
+          .executeTakeFirst();
+
+        let seq = 1;
+        if (lastRow) {
+          const lastSeq = Number.parseInt(lastRow.prescription_number.substring(prefix.length), 10);
+          if (!Number.isNaN(lastSeq)) seq = lastSeq + 1;
+        }
+        const prescriptionNumber = prefix + String(seq).padStart(4, '0');
+
+        return await trx
+          .insertInto('prescriptions')
+          .values({
+            tenant_id: req.tenantId,
+            patient_id,
+            dentist_id: req.user.id,
+            medication_name,
+            dosage,
+            frequency,
+            prescription_number: prescriptionNumber,
+            duration: duration || null,
+            notes: notes || null,
+            created_by: req.user.id,
+          })
+          .returningAll()
+          .executeTakeFirst()
+          .then((created) => ({ created, patientName: patient.full_name }));
+      });
 
       if (req.audit) {
         await req.audit.log({
           action: 'CREATE',
           entityType: 'prescriptions',
-          entityId: item.id,
+          entityId: item.created.id,
           tenantId: req.tenantId,
-          newValues: item,
+          newValues: item.created,
         });
       }
 
-      const patient = await db
-        .selectFrom('patients')
-        .select('full_name')
-        .where('id', '=', patient_id)
-        .executeTakeFirst();
-
-      res.status(201).json({ ...item, patient_name: patient?.full_name || null });
+      res.status(201).json({ ...item.created, patient_name: item.patientName });
     } catch (error) {
+      if (error.statusCode === 400) {
+        return res.status(400).json({ error: 'validation.error', details: 'patient_id is invalid' });
+      }
       next(error);
     }
   }
@@ -392,7 +421,7 @@ router.delete('/:id',
         });
       }
 
-      res.json(item);
+      res.status(204).end();
     } catch (error) {
       next(error);
     }

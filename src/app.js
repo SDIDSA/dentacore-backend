@@ -4,7 +4,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const errorHandler = require('./middleware/errorHandler');
 const auditLogger = require('./middleware/auditLogger');
-const conflictResolution = require('./middleware/conflictResolution');
 const logger = require('./config/logger');
 
 const authRoutes = require('./routes/auth');
@@ -145,13 +144,29 @@ if (process.env.NODE_ENV !== 'production') {
 const path = require('node:path');
 const fs = require('node:fs');
 const updatesDir = path.join(__dirname, '..', 'updates');
+const SAFE_UPDATE_FILENAME = /^[\w][\w .()-]*\.(exe|zip|json)$/i;
 app.use('/api/v1/updates', (req, res, next) => {
   if (req.path === '/version') {
-    const ver = JSON.parse(fs.readFileSync(path.join(updatesDir, 'version.json'), 'utf8'));
-    res.json(ver);
+    const versionFile = path.join(updatesDir, 'version.json');
+    if (!fs.existsSync(versionFile)) {
+      return res.status(404).json({ error: 'update.not_found' });
+    }
+    try {
+      const ver = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
+      res.json(ver);
+    } catch {
+      res.status(500).json({ error: 'error.internal_server' });
+    }
   } else if (req.path.startsWith('/download/')) {
-    const filename = req.path.slice('/download/'.length);
-    res.download(path.join(updatesDir, filename), filename);
+    const filename = path.basename(req.path.slice('/download/'.length));
+    if (!SAFE_UPDATE_FILENAME.test(filename)) {
+      return res.status(400).json({ error: 'validation.error' });
+    }
+    const filePath = path.join(updatesDir, filename);
+    if (!path.resolve(filePath).startsWith(path.resolve(updatesDir) + path.sep)) {
+      return res.status(400).json({ error: 'validation.error' });
+    }
+    res.download(filePath, filename);
   } else {
     next();
   }

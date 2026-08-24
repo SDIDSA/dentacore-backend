@@ -13,9 +13,10 @@ Express middleware pipeline — authentication, authorization, audit logging, ra
 
 ## Local Contracts
 - Auth middleware must run before all protected routes
-- `responseFormatter` is not part of the active pipeline; `errorHandler` wraps all errors
+- `responseFormatter` is not part of the active pipeline; `errorHandler` wraps all errors — in production, statuses ≥ 500 return the generic `error.internal_server` key, never the raw `err.message` (dev keeps real messages), and POST a non-blocking alert to `ERROR_WEBHOOK_URL` when set
 - Rate limiter configurable per-route via factory function; `mutationLimiter` skips safe methods (GET/HEAD/OPTIONS); all limiters bypassed when `NODE_ENV=test`
 - Audit logger skips non-mutation methods (GET/HEAD/OPTIONS)
+- Socket.IO patient rooms are tenant-scoped (`patient:<tenantId>:<patientId>`; `emitToPatient(tenantId, patientId, …)`), and the `/api/v1/updates/download/:filename` endpoint in `app.js` serves only allowlisted filenames resolved strictly inside `updates/`
 
 ## Work Guidance
 

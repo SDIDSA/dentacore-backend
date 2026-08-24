@@ -5,12 +5,16 @@ const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
-const { generateCsv, sendCsv } = require('../utils/csv');
+const { generateCsv, sendCsv, sanitizeCsvValue } = require('../utils/csv');
 
 const router = express.Router();
 
 router.use(authenticate);
 router.use(conflictResolution);
+
+function escapeIlike(str) {
+  return String(str).replace(/([\\%_])/g, '\\$1');
+}
 
 // Get all patients
 router.get('/', async (req, res, next) => {
@@ -32,8 +36,8 @@ router.get('/', async (req, res, next) => {
       const sanitized = search.replace(/[^a-zA-Z0-9\s-]/g, '');
       const searchFilter = (eb) =>
         eb.or([
-          eb(sql`to_tsvector('simple', patients.full_name)`, '@@', sql`to_tsquery('simple', ${sanitized})`),
-          eb('patients.patient_code', 'ilike', `%${sanitized}%`)
+          eb(sql`to_tsvector('simple', patients.full_name)`, '@@', sql`plainto_tsquery('simple', ${sanitized})`),
+          eb('patients.patient_code', 'ilike', `%${escapeIlike(sanitized)}%`)
         ]);
       query = query.where(searchFilter);
       countQuery = countQuery.where(searchFilter);
@@ -72,10 +76,10 @@ router.get('/search', async (req, res, next) => {
       .where('patients.tenant_id', '=', req.tenantId)
       .where((eb) =>
         eb.or([
-          eb(sql`to_tsvector('simple', patients.full_name)`, '@@', sql`to_tsquery('simple', ${sanitized})`),
-          eb('patients.patient_code', 'ilike', `%${sanitized}%`),
-          eb('patients.phone', 'ilike', `%${sanitized}%`),
-          eb('patients.email', 'ilike', `%${sanitized}%`),
+          eb(sql`to_tsvector('simple', patients.full_name)`, '@@', sql`plainto_tsquery('simple', ${sanitized})`),
+          eb('patients.patient_code', 'ilike', `%${escapeIlike(sanitized)}%`),
+          eb('patients.phone', 'ilike', `%${escapeIlike(sanitized)}%`),
+          eb('patients.email', 'ilike', `%${escapeIlike(sanitized)}%`),
         ])
       )
       .limit(20)
@@ -196,7 +200,14 @@ router.get('/export', async (req, res, next) => {
       .execute();
 
     const columns = ['id', 'patient_code', 'full_name', 'date_of_birth', 'gender', 'phone', 'email', 'wilaya_name', 'status_key', 'last_visit_date', 'next_appointment_date', 'created_at'];
-    const csv = generateCsv(patients, columns);
+    const sanitized = patients.map(p => ({
+      ...p,
+      full_name: sanitizeCsvValue(p.full_name),
+      phone: sanitizeCsvValue(p.phone),
+      email: sanitizeCsvValue(p.email),
+      patient_code: sanitizeCsvValue(p.patient_code),
+    }));
+    const csv = generateCsv(sanitized, columns);
     sendCsv(res, csv, 'patients-export.csv');
   } catch (error) {
     next(error);
@@ -300,22 +311,17 @@ router.post('/',
         await sql`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`.execute(trx);
 
         const year = new Date().getFullYear();
+        // numeric max over the trailing sequence (not string ordering) —
+        // lexicographic sort puts PAT-YYYY-9999 above PAT-YYYY-10000 and
+        // would reset numbering to 1, colliding with the UNIQUE constraint
         const highestCodeResult = await trx
           .selectFrom('patients')
-          .select('patient_code')
+          .select(sql`MAX(CAST(SUBSTRING(patient_code FROM '[0-9]+$') AS INTEGER))`.as('maxnum'))
           .where('patient_code', 'like', `PAT-${year}-%`)
           .where('tenant_id', '=', req.tenantId)
-          .orderBy('patient_code', 'desc')
-          .limit(1)
           .executeTakeFirst();
 
-        let nextNum = 1;
-        if (highestCodeResult) {
-          const match = highestCodeResult.patient_code.match(/PAT-\d{4}-(\d{4})$/);
-          if (match) {
-            nextNum = Number.parseInt(match[1]) + 1;
-          }
-        }
+        let nextNum = Number(highestCodeResult?.maxnum ?? 0) + 1;
 
         const patient_code = `PAT-${year}-${String(nextNum).padStart(4, '0')}`;
         return await trx
@@ -782,7 +788,14 @@ router.post('/import',
 
           created.push(result.id);
         } catch (err) {
-          errors.push({ row: i + 1, error: err.message });
+          // map driver errors to stable keys — raw err.message can leak
+          // column names/constraint names to clients
+          const mapped = err.code === '23505'
+            ? 'error.duplicate_entry'
+            : err.code === '23503'
+              ? 'error.foreign_key_violation'
+              : 'validation.error';
+          errors.push({ row: i + 1, error: mapped });
         }
       }
 

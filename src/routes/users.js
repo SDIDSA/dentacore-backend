@@ -17,6 +17,10 @@ router.use(conflictResolution);
 // Apply admin authorization to all routes
 router.use(authorize('auth.role.admin'));
 
+function escapeIlike(str) {
+  return String(str).replace(/([\\%_])/g, '\\$1');
+}
+
 // Search users by query
 router.get('/search', async (req, res, next) => {
   try {
@@ -79,8 +83,8 @@ router.get('/', async (req, res, next) => {
     if (search) {
       const searchFilter = (eb) =>
         eb.or([
-          eb('users.full_name', 'ilike', `%${search}%`),
-          eb('users.email', 'ilike', `%${search}%`)
+          eb('users.full_name', 'ilike', `%${escapeIlike(search)}%`),
+          eb('users.email', 'ilike', `%${escapeIlike(search)}%`)
         ]);
       query = query.where(searchFilter);
       countQuery = countQuery.where(searchFilter);
@@ -146,6 +150,21 @@ router.get('/batch', async (req, res, next) => {
     res.json(users);
   } catch (error) {
     next(error);
+  }
+});
+
+// Get available roles (must precede GET /:id so "meta" is not treated as an id)
+router.get('/meta/roles', async (req, res, next) => {
+  try {
+    const roles = await db
+      .selectFrom('roles')
+      .select(['id', 'role_key', 'description'])
+      .orderBy('role_key')
+      .execute();
+
+    res.json(roles);
+  } catch (err) {
+    next(err);
   }
 });
 
@@ -454,7 +473,7 @@ router.patch('/:id/password', changePasswordLimiter,
         }, db);
       }
 
-      res.json({ message: 'user.password.updated' });
+      res.status(204).end();
     } catch (err) {
       next(err);
     }
@@ -559,22 +578,7 @@ router.delete('/:id', async (req, res, next) => {
       }, db);
     }
 
-    res.status(200).json(user);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// Get available roles
-router.get('/meta/roles', async (req, res, next) => {
-  try {
-    const roles = await db
-      .selectFrom('roles')
-      .select(['id', 'role_key', 'description'])
-      .orderBy('role_key')
-      .execute();
-
-    res.json(roles);
+    res.status(204).end();
   } catch (err) {
     next(err);
   }

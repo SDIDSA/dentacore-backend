@@ -1,3 +1,14 @@
+const FORMULA_PREFIXES = ['=', '+', '-', '@', '\t', '\r'];
+
+function sanitizeCsvValue(val) {
+  if (val === null || val === undefined) return val;
+  const str = String(val);
+  if (str.length > 0 && FORMULA_PREFIXES.includes(str[0])) {
+    return "'" + str;
+  }
+  return str;
+}
+
 function escapeCsv(val) {
   if (val === null || val === undefined) return '';
   const str = String(val);
@@ -23,4 +34,4 @@ function sendCsv(res, csv, filename) {
   res.send(csv);
 }
 
-module.exports = { escapeCsv, toCsvRow, generateCsv, sendCsv };
+module.exports = { escapeCsv, sanitizeCsvValue, toCsvRow, generateCsv, sendCsv };

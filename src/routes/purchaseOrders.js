@@ -11,6 +11,33 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+async function tenantRefExists(tenantId, table, id) {
+  if (!id) return true;
+  const row = await db
+    .selectFrom(table)
+    .select('id')
+    .where('id', '=', id)
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+  return !!row;
+}
+
+async function validateOrderRefs(req, res) {
+  if (!(await tenantRefExists(req.tenantId, 'suppliers', req.body.supplier_id))) {
+    res.status(400).json({ error: 'validation.error', details: 'supplier_id is invalid' });
+    return false;
+  }
+  if (Array.isArray(req.body.items)) {
+    for (const item of req.body.items) {
+      if (!(await tenantRefExists(req.tenantId, 'inventory_items', item.inventory_item_id))) {
+        res.status(400).json({ error: 'validation.error', details: 'items.inventory_item_id is invalid' });
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // Search purchase orders
 router.get('/search', async (req, res, next) => {
   try {
@@ -258,41 +285,48 @@ router.post('/',
       const shipping = shipping_dzd || 0;
       const total = subtotal + shipping;
 
-      const order = await db
-        .insertInto('purchase_orders')
-        .values({
-          supplier_id,
-          expected_delivery_date: expected_delivery_date || null,
-          subtotal_dzd: subtotal,
-          shipping_dzd: shipping,
-          total_dzd: total,
-          notes: notes || null,
-          created_by: req.user.id,
-          tenant_id: req.tenantId
-        })
-        .returningAll()
-        .executeTakeFirst();
+      if (!(await validateOrderRefs(req, res))) return;
 
-      const orderItems = [];
-      for (const item of items) {
-        const totalCost = item.quantity_ordered * item.unit_cost_dzd;
-        const inserted = await db
-          .insertInto('purchase_order_items')
+      // Create order + items atomically
+      const order = await db.transaction().execute(async (trx) => {
+        const created = await trx
+          .insertInto('purchase_orders')
           .values({
-            purchase_order_id: order.id,
-            inventory_item_id: item.inventory_item_id,
-            quantity_ordered: item.quantity_ordered,
-            unit_cost_dzd: item.unit_cost_dzd,
-            total_cost_dzd: totalCost,
-            expiry_date: item.expiry_date || null,
-            batch_number: item.batch_number || null,
-            notes: item.notes || null,
+            supplier_id,
+            expected_delivery_date: expected_delivery_date || null,
+            subtotal_dzd: subtotal,
+            shipping_dzd: shipping,
+            total_dzd: total,
+            notes: notes || null,
+            created_by: req.user.id,
             tenant_id: req.tenantId
           })
           .returningAll()
           .executeTakeFirst();
-        orderItems.push(inserted);
-      }
+
+        const orderItems = [];
+        for (const item of items) {
+          const totalCost = item.quantity_ordered * item.unit_cost_dzd;
+          const inserted = await trx
+            .insertInto('purchase_order_items')
+            .values({
+              purchase_order_id: created.id,
+              inventory_item_id: item.inventory_item_id,
+              quantity_ordered: item.quantity_ordered,
+              unit_cost_dzd: item.unit_cost_dzd,
+              total_cost_dzd: totalCost,
+              expiry_date: item.expiry_date || null,
+              batch_number: item.batch_number || null,
+              notes: item.notes || null,
+              tenant_id: req.tenantId
+            })
+            .returningAll()
+            .executeTakeFirst();
+          orderItems.push(inserted);
+        }
+
+        return { ...created, items: orderItems };
+      });
 
       if (req.audit) {
         await req.audit.log({
@@ -300,11 +334,11 @@ router.post('/',
           entityType: 'purchase_orders',
           entityId: order.id,
           tenantId: req.tenantId,
-          newValues: { ...order, items: orderItems }
+          newValues: order
         }, db);
       }
 
-      res.status(201).json({ ...order, items: orderItems });
+      res.status(201).json(order);
     } catch (error) {
       next(error);
     }
@@ -339,6 +373,11 @@ router.patch('/:id',
       if (res.conflictCheck(current)) return;
 
       const { notes, expected_delivery_date, shipping_dzd, supplier_id } = req.body;
+
+      if (supplier_id !== undefined && !(await tenantRefExists(req.tenantId, 'suppliers', supplier_id))) {
+        return res.status(400).json({ error: 'validation.error', details: 'supplier_id is invalid' });
+      }
+
       const updateData = { updated_at: new Date() };
       if (notes !== undefined) updateData.notes = notes;
       if (expected_delivery_date !== undefined) updateData.expected_delivery_date = expected_delivery_date;
@@ -465,95 +504,100 @@ router.patch('/:id/receive',
 
       const { items, actual_delivery_date } = req.body;
 
-      for (const incoming of items) {
-        const existing = await db
+      // Receive atomically: lock each item row so concurrent receives
+      // cannot both pass the quantity guard (mirrors payments.js pattern)
+      await db.transaction().execute(async (trx) => {
+        for (const incoming of items) {
+          const existing = await trx
+            .selectFrom('purchase_order_items')
+            .selectAll()
+            .where('id', '=', incoming.item_id)
+            .where('purchase_order_id', '=', order.id)
+            .where('tenant_id', '=', req.tenantId)
+            .forUpdate()
+            .executeTakeFirst();
+
+          if (!existing) {
+            const err = new Error('po.error.item_not_found');
+            err.statusCode = 404;
+            err.details = `Item ${incoming.item_id} not found on this order`;
+            throw err;
+          }
+
+          if (incoming.quantity_received > existing.quantity_ordered - existing.quantity_received) {
+            const err = new Error('po.error.quantity_exceeds');
+            err.statusCode = 400;
+            err.details = `Cannot receive more than ordered for item ${incoming.item_id}`;
+            throw err;
+          }
+
+          const newReceived = existing.quantity_received + incoming.quantity_received;
+          await trx
+            .updateTable('purchase_order_items')
+            .set({
+              quantity_received: newReceived,
+              total_cost_dzd: newReceived * existing.unit_cost_dzd
+            })
+            .where('id', '=', existing.id)
+            .where('tenant_id', '=', req.tenantId)
+            .execute();
+
+          // Create stock movement for received items
+          await trx
+            .insertInto('stock_movements')
+            .values({
+              inventory_item_id: existing.inventory_item_id,
+              movement_type: 'stock.movement.purchase',
+              quantity: incoming.quantity_received,
+              unit_cost_dzd: existing.unit_cost_dzd,
+              reference_type: 'purchase_order',
+              reference_id: order.id,
+              batch_number: existing.batch_number,
+              expiry_date: existing.expiry_date,
+              notes: `Received from PO ${order.po_number}`,
+              created_by: req.user.id,
+              tenant_id: req.tenantId
+            })
+            .execute();
+        }
+
+        // Check if all items are fully received to update PO status
+        const remainingItems = await trx
           .selectFrom('purchase_order_items')
-          .selectAll()
-          .where('id', '=', incoming.item_id)
-          .where('purchase_order_id', '=', order.id)
-          .where('tenant_id', '=', req.tenantId)
-          .executeTakeFirst();
-
-        if (!existing) {
-          return res.status(404).json({
-            error: 'po.error.item_not_found',
-            details: `Item ${incoming.item_id} not found on this order`
-          });
-        }
-
-        if (incoming.quantity_received > existing.quantity_ordered - existing.quantity_received) {
-          return res.status(400).json({
-            error: 'po.error.quantity_exceeds',
-            details: `Cannot receive more than ordered for item ${incoming.item_id}`
-          });
-        }
-
-        const newReceived = existing.quantity_received + incoming.quantity_received;
-        await db
-          .updateTable('purchase_order_items')
-          .set({
-            quantity_received: newReceived,
-            total_cost_dzd: newReceived * existing.unit_cost_dzd
-          })
-          .where('id', '=', existing.id)
-          .where('tenant_id', '=', req.tenantId)
+          .select([
+            'purchase_order_items.id',
+            'purchase_order_items.quantity_ordered',
+            'purchase_order_items.quantity_received'
+          ])
+          .where('purchase_order_items.purchase_order_id', '=', order.id)
+          .where('purchase_order_items.tenant_id', '=', req.tenantId)
           .execute();
 
-        // Create stock movement for received items
-        await db
-          .insertInto('stock_movements')
-          .values({
-            inventory_item_id: existing.inventory_item_id,
-            movement_type: 'stock.movement.purchase',
-            quantity: incoming.quantity_received,
-            unit_cost_dzd: existing.unit_cost_dzd,
-            reference_type: 'purchase_order',
-            reference_id: order.id,
-            batch_number: existing.batch_number,
-            expiry_date: existing.expiry_date,
-            notes: `Received from PO ${order.po_number}`,
-            created_by: req.user.id,
-            tenant_id: req.tenantId
-          })
+        const allReceived = remainingItems.every(
+          item => item.quantity_received >= item.quantity_ordered
+        );
+        const anyReceived = remainingItems.some(
+          item => item.quantity_received > 0
+        );
+
+        const receiveUpdate = { updated_at: new Date() };
+        if (actual_delivery_date) {
+          receiveUpdate.actual_delivery_date = actual_delivery_date;
+        }
+
+        if (allReceived) {
+          receiveUpdate.status_key = 'po.status.received';
+        } else if (anyReceived) {
+          receiveUpdate.status_key = 'po.status.partially_received';
+        }
+
+        await trx
+          .updateTable('purchase_orders')
+          .set(receiveUpdate)
+          .where('id', '=', order.id)
+          .where('tenant_id', '=', req.tenantId)
           .execute();
-      }
-
-      // Check if all items are fully received to update PO status
-      const remainingItems = await db
-        .selectFrom('purchase_order_items')
-        .select([
-          'purchase_order_items.id',
-          'purchase_order_items.quantity_ordered',
-          'purchase_order_items.quantity_received'
-        ])
-        .where('purchase_order_items.purchase_order_id', '=', order.id)
-        .where('purchase_order_items.tenant_id', '=', req.tenantId)
-        .execute();
-
-      const allReceived = remainingItems.every(
-        item => item.quantity_received >= item.quantity_ordered
-      );
-      const anyReceived = remainingItems.some(
-        item => item.quantity_received > 0
-      );
-
-      const updateData = { updated_at: new Date() };
-      if (actual_delivery_date) {
-        updateData.actual_delivery_date = actual_delivery_date;
-      }
-
-      if (allReceived) {
-        updateData.status_key = 'po.status.received';
-      } else if (anyReceived) {
-        updateData.status_key = 'po.status.partially_received';
-      }
-
-      await db
-        .updateTable('purchase_orders')
-        .set(updateData)
-        .where('id', '=', order.id)
-        .where('tenant_id', '=', req.tenantId)
-        .execute();
+      });
 
       const updated = await db
         .selectFrom('purchase_orders')

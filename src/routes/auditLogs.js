@@ -1,6 +1,6 @@
 const express = require('express');
 const { param, query, validationResult } = require('express-validator');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
@@ -8,6 +8,7 @@ const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 const router = express.Router();
 
 router.use(authenticate);
+router.use(authorize('auth.role.admin'));
 
 // Get audit log IDs with optional filters
 router.get('/', async (req, res, next) => {

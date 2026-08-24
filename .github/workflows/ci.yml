@@ -47,7 +47,18 @@ jobs:
       - name: Apply seed (seed.sql)
         run: PGPASSWORD=dentacore_test psql -h localhost -U dentacore -d dentacore_test -v ON_ERROR_STOP=1 -f seed.sql
 
-      - run: npm test
+      - name: Run migrations
+        run: npm run migrate
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: dentacore_test
+          DB_USER: dentacore
+          DB_PASSWORD: dentacore_test
+          NODE_ENV: test
+
+      - name: Run tests
+        run: npm test
         env:
           DB_HOST: localhost
           DB_PORT: 5432

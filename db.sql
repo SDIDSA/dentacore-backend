@@ -1211,34 +1211,55 @@ GROUP BY e.tenant_id, e.category_key, DATE_TRUNC('month', e.expense_date)
 ORDER BY expense_month DESC, total_amount_dzd DESC;
 
 CREATE OR REPLACE VIEW v_financial_overview AS
+WITH monthly_revenue AS (
+    SELECT
+        tenant_id,
+        SUM(total_dzd) AS total_revenue_dzd,
+        SUM(paid_amount_dzd) AS collected_revenue_dzd
+    FROM invoices
+    WHERE DATE_TRUNC('month', issue_date) = DATE_TRUNC('month', CURRENT_DATE)
+    GROUP BY tenant_id
+),
+monthly_expenses AS (
+    SELECT
+        tenant_id,
+        SUM(amount_dzd) AS total_expenses_dzd
+    FROM expenses
+    WHERE DATE_TRUNC('month', expense_date) = DATE_TRUNC('month', CURRENT_DATE)
+      AND status_key IN ('expense.status.approved', 'expense.status.paid')
+    GROUP BY tenant_id
+),
+inventory_value AS (
+    SELECT
+        tenant_id,
+        SUM(current_stock * unit_cost_dzd) AS inventory_value_dzd
+    FROM inventory_items
+    WHERE status_key = 'item.status.active'
+    GROUP BY tenant_id
+)
 SELECT 
     t.id AS tenant_id,
     t.name AS tenant_name,
     DATE_TRUNC('month', CURRENT_DATE) AS period_month,
     
-    -- Revenue metrics
-    COALESCE(SUM(i.total_dzd), 0) AS total_revenue_dzd,
-    COALESCE(SUM(i.paid_amount_dzd), 0) AS collected_revenue_dzd,
-    COALESCE(SUM(i.total_dzd - i.paid_amount_dzd), 0) AS outstanding_revenue_dzd,
+    -- Revenue metrics (pre-aggregated to avoid cross-product fan-out)
+    COALESCE(r.total_revenue_dzd, 0) AS total_revenue_dzd,
+    COALESCE(r.collected_revenue_dzd, 0) AS collected_revenue_dzd,
+    COALESCE(r.total_revenue_dzd - r.collected_revenue_dzd, 0) AS outstanding_revenue_dzd,
     
     -- Expense metrics
-    COALESCE(SUM(e.amount_dzd), 0) AS total_expenses_dzd,
+    COALESCE(e.total_expenses_dzd, 0) AS total_expenses_dzd,
     
     -- Profit calculation
-    (COALESCE(SUM(i.paid_amount_dzd), 0) - COALESCE(SUM(e.amount_dzd), 0)) AS net_profit_dzd,
+    (COALESCE(r.collected_revenue_dzd, 0) - COALESCE(e.total_expenses_dzd, 0)) AS net_profit_dzd,
     
     -- Inventory value
-    COALESCE(SUM(ii.current_stock * ii.unit_cost_dzd), 0) AS inventory_value_dzd
+    COALESCE(v.inventory_value_dzd, 0) AS inventory_value_dzd
     
 FROM tenants t
-LEFT JOIN invoices i ON t.id = i.tenant_id 
-    AND DATE_TRUNC('month', i.issue_date) = DATE_TRUNC('month', CURRENT_DATE)
-LEFT JOIN expenses e ON t.id = e.tenant_id 
-    AND DATE_TRUNC('month', e.expense_date) = DATE_TRUNC('month', CURRENT_DATE)
-    AND e.status_key IN ('expense.status.approved', 'expense.status.paid')
-LEFT JOIN inventory_items ii ON t.id = ii.tenant_id 
-    AND ii.status_key = 'item.status.active'
-GROUP BY t.id, t.name;
+LEFT JOIN monthly_revenue r ON r.tenant_id = t.id
+LEFT JOIN monthly_expenses e ON e.tenant_id = t.id
+LEFT JOIN inventory_value v ON v.tenant_id = t.id;
 
 -- ============================================================================
 -- HELPER FUNCTIONS: Get Categories (Global + Tenant-Specific)
@@ -1482,7 +1503,8 @@ CREATE TABLE IF NOT EXISTS prescriptions (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT chk_prescription_status CHECK (status_key IN (
         'prescription.status.active', 'prescription.status.completed', 'prescription.status.cancelled'
-    ))
+    )),
+    CONSTRAINT uq_prescriptions_tenant_number UNIQUE (tenant_id, prescription_number)
 );
 
 CREATE INDEX IF NOT EXISTS idx_prescriptions_tenant ON prescriptions(tenant_id, patient_id);
@@ -1569,7 +1591,7 @@ BEGIN
     RAISE NOTICE 'Database schema created successfully!';
     RAISE NOTICE '============================================';
     RAISE NOTICE 'Architecture: Single Database, Shared Schema';
-    RAISE NOTICE 'Isolation: tenant_id discriminator + RLS';
+    RAISE NOTICE 'Isolation: app-level tenant_id discriminator (RLS reserved, no policies installed)';
     RAISE NOTICE 'Global Tables: roles, wilayas, payment_methods';
     RAISE NOTICE 'Tenant Tables: users, patients, appointments, etc.';
     RAISE NOTICE 'Hybrid Tables: treatment_categories';

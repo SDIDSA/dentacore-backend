@@ -33,11 +33,11 @@ function initSocket(server) {
     logger.info('WS client connected', { userId: socket.userId, tenantId: socket.tenantId });
 
     socket.on('subscribe:patient', (patientId) => {
-      if (patientId) socket.join(`patient:${patientId}`);
+      if (patientId) socket.join(`patient:${socket.tenantId}:${patientId}`);
     });
 
     socket.on('unsubscribe:patient', (patientId) => {
-      if (patientId) socket.leave(`patient:${patientId}`);
+      if (patientId) socket.leave(`patient:${socket.tenantId}:${patientId}`);
     });
 
     socket.on('disconnect', () => {
@@ -59,9 +59,9 @@ function emitToTenant(tenantId, event, data) {
   }
 }
 
-function emitToPatient(patientId, event, data) {
+function emitToPatient(tenantId, patientId, event, data) {
   if (io) {
-    io.to(`patient:${patientId}`).emit(event, data);
+    io.to(`patient:${tenantId}:${patientId}`).emit(event, data);
   }
 }
 

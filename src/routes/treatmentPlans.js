@@ -11,6 +11,20 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+async function tenantRefExists(tenantId, table, id) {
+  const row = await db
+    .selectFrom(table)
+    .select('id')
+    .where('id', '=', id)
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+  return !!row;
+}
+
+function escapeIlike(str) {
+  return String(str).replace(/([\\%_])/g, '\\$1');
+}
+
 const SORT_FIELDS_MAP = {
   created_at: 'treatment_plans.created_at',
   plan_name: 'treatment_plans.plan_name',
@@ -74,7 +88,7 @@ router.get('/',
       }
 
       if (search) {
-        query = query.where('treatment_plans.plan_name', 'ilike', `%${search}%`);
+        query = query.where('treatment_plans.plan_name', 'ilike', `%${escapeIlike(search)}%`);
       }
 
       if (pag.paginate) {
@@ -234,6 +248,10 @@ router.post('/',
     try {
       const { patient_id, plan_name, description, estimated_total_dzd } = req.body;
 
+      if (!(await tenantRefExists(req.tenantId, 'patients', patient_id))) {
+        return res.status(400).json({ error: 'validation.error', details: 'patient_id is invalid' });
+      }
+
       const plan = await db
         .insertInto('treatment_plans')
         .values({
@@ -371,7 +389,7 @@ router.delete('/:id',
         });
       }
 
-      res.json(plan);
+      res.status(204).end();
     } catch (error) {
       next(error);
     }

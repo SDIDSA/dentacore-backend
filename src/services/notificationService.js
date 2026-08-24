@@ -129,7 +129,8 @@ async function checkLowStockAndNotify(tenantId, itemId) {
 
     if (existing) continue;
 
-    const message = `Low stock alert: "${item.name}" (${item.item_code}) — current stock: ${item.current_stock}, minimum: ${item.min_stock_level}. Shortage: ${item.shortage_quantity} ${item.unit_of_measure || 'units'}.`;
+    const unit = item.unit_of_measure || 'unités';
+    const message = `Alerte stock faible : "${item.name}" (${item.item_code}) — stock actuel : ${item.current_stock}, minimum : ${item.min_stock_level}. Manque : ${item.shortage_quantity} ${unit}.`;
 
     await db
       .insertInto('notifications')

@@ -17,11 +17,9 @@ const loginLimiter = rateLimit({
   message: { error: 'auth.error.too_many_attempts' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
 });
 
-const success = (res, message) => {
-  return res.json({ data: { message: message } })
-}
 const error = (res, code, err) => {
   return res.status(code).json({ error: err })
 }

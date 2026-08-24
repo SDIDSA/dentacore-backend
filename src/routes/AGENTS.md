@@ -32,6 +32,12 @@ Express route handlers for all 19 API entity types. Each route module defines CR
 - Routes use `express-validator` for input validation
 - `auth.js` routes are the only unauthenticated endpoints (login/refresh)
 - Odontogram uses non-standard routing (patient-scoped, not entity-scoped)
+- **DELETE returns 204 no-content uniformly** (including users delete and changePassword) — clients declare `Call<Void>`
+- **Admin-gated modules**: `auditLogs.js` and `reports.js` wholesale via `authorize('auth.role.admin')`; dashboard `/recent-activity` per-route; `users.js` wholesale
+- **FK tenancy validation**: POST/PATCH handlers verify every accepted entity reference (`patient_id`, etc.) belongs to `req.tenantId` before writing; cross-tenant references get a generic validation error (no existence leak)
+- **Money integrity**: payment create/PATCH/DELETE recompute invoice `paid_amount_dzd`/`payment_status_key` inside a transaction with row locks; PATCH enforces the same overpayment guard as POST; the direct `PATCH invoices/:id/payment` endpoint rejects `paid_amount_dzd > total_dzd` (same invariant); RX numbers generated inside a transaction under `pg_advisory_xact_lock` (+ UNIQUE `(tenant_id, prescription_number)` backstop)
+- **Search hygiene**: full-text search uses `plainto_tsquery('simple', …)`; non-search `ilike` filters escape `%`, `_`, `\` from user input
+- CSV exports neutralize formula injection via `sanitizeCsvValue` (`utils/csv.js`) on user-entered fields
 
 ## Work Guidance
 

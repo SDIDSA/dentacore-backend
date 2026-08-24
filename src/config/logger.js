@@ -1,5 +1,11 @@
 const LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
 const CURRENT_LEVEL = LEVELS[process.env.LOG_LEVEL] !== undefined ? LEVELS[process.env.LOG_LEVEL] : LEVELS.info;
+const FILE_LOGGING = process.env.LOG_FILE !== 'false';
+
+let sink = null;
+if (FILE_LOGGING) {
+  sink = require('../utils/fileSink');
+}
 
 function formatMessage(level, message, meta) {
   const entry = {
@@ -25,5 +31,15 @@ const logger = {
     if (CURRENT_LEVEL >= LEVELS.debug) console.log(formatMessage('debug', message, meta));
   },
 };
+
+if (sink) {
+  for (const level of ['error', 'warn', 'info', 'debug']) {
+    const original = logger[level].bind(logger);
+    logger[level] = (message, meta) => {
+      original(message, meta);
+      if (CURRENT_LEVEL >= LEVELS[level]) sink.write(formatMessage(level, message, meta));
+    };
+  }
+}
 
 module.exports = logger;

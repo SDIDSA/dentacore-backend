@@ -6,7 +6,7 @@ const script = isWindows ? 'recreate-db.cmd' : 'recreate-db.sh';
 const scriptPath = path.resolve(__dirname, '..', script);
 
 console.log(`============================================`);
-console.log(` DentaCore Database Seed`);
+console.log(` Sera Database Seed`);
 console.log(`============================================`);
 console.log(``);
 console.log(`This project uses ${script} to create and seed the database.`);

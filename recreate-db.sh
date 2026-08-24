@@ -45,19 +45,28 @@ else
 fi
 
 echo "============================================"
-echo "Recreating DentaCore Database"
+echo "Recreating dentacore database"
 echo "============================================"
 echo "Using PostgreSQL at: $(which psql)"
 echo "Using port: $DB_PORT"
-echo "Using hardcoded passwords for development"
+echo "Using passwords from .env or interactive prompt (never logged)"
 echo
 
 echo "[1/6] Creating dentacore user (if not exists)..."
 export PGPASSWORD="$POSTGRES_PASSWORD"
-if $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "CREATE USER dentacore WITH PASSWORD '$DENTACORE_PASSWORD';" 2>/dev/null; then
+# SQL-escape single quotes in the password ('' doubling)
+DENTACORE_PW_SQL="${DENTACORE_PASSWORD//\'/\'\'}"
+if $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "CREATE USER dentacore WITH PASSWORD '$DENTACORE_PW_SQL';" 2>/dev/null; then
     echo "User 'dentacore' created successfully"
 else
-    echo "User 'dentacore' already exists or creation failed - continuing..."
+    # user already exists — rotate its password so a changed DB_PASSWORD
+    # in .env actually wins on re-run (matching recreate-db.cmd behavior)
+    if $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "ALTER USER dentacore WITH PASSWORD '$DENTACORE_PW_SQL';"; then
+        echo "User 'dentacore' already exists - password rotated to match .env"
+    else
+        echo "ERROR: Failed to create or update user 'dentacore'"
+        exit 1
+    fi
 fi
 
 echo

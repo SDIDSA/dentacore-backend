@@ -11,6 +11,17 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+async function tenantRefExists(tenantId, table, id) {
+  if (!id) return false;
+  const row = await db
+    .selectFrom(table)
+    .select('id')
+    .where('id', '=', id)
+    .where('tenant_id', '=', tenantId)
+    .executeTakeFirst();
+  return !!row;
+}
+
 // Search expenses
 router.get('/search', async (req, res, next) => {
   try {
@@ -249,6 +260,10 @@ router.post('/',
 
       const paymentMethodId = await resolvePaymentMethodId(payment_method_key);
 
+      if (supplier_id && !(await tenantRefExists(req.tenantId, 'suppliers', supplier_id))) {
+        return res.status(400).json({ error: 'validation.error', details: 'supplier_id is invalid' });
+      }
+
       const expense = await db
         .insertInto('expenses')
         .values({
@@ -331,6 +346,10 @@ router.patch('/:id',
         payment_method_key, supplier_id, receipt_number,
         is_recurring, recurring_frequency, status_key, notes
       } = req.body;
+
+      if (supplier_id && !(await tenantRefExists(req.tenantId, 'suppliers', supplier_id))) {
+        return res.status(400).json({ error: 'validation.error', details: 'supplier_id is invalid' });
+      }
 
       const updateData = {};
       if (category_key !== undefined) updateData.category_key = category_key;

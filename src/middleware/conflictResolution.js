@@ -50,8 +50,6 @@ function conflictCheck(req, res, next) {
     const serverTime = parseTimestamp(record.updated_at);
     if (Number.isNaN(serverTime)) return false;
 
-    console.log('Conflict Check - Server Time:', serverTime, 'Client Time:', req.clientTimestamp);
-
     if (serverTime > req.clientTimestamp) {
       res.status(409).json({
         error: 'conflict.detected',

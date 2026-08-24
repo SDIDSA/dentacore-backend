@@ -1,13 +1,13 @@
 const express = require('express');
 const { sql } = require('kysely');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 const db = require('../config/database');
-
-const MAX_MONTHS = 24;
+const { sanitizeCsvValue } = require('../utils/csv');
 
 const router = express.Router();
 
 router.use(authenticate);
+router.use(authorize('auth.role.admin'));
 
 function queryTimeout(req, res, next) {
   res.setTimeout(30000, () => {
@@ -323,8 +323,14 @@ router.get('/revenue/export', async (req, res, next) => {
       .execute();
 
     const columns = ['id', 'payment_date', 'amount_dzd', 'payment_method', 'transaction_reference', 'patient_name', 'patient_code'];
+    const sanitized = payments.map(p => ({
+      ...p,
+      transaction_reference: sanitizeCsvValue(p.transaction_reference),
+      patient_name: sanitizeCsvValue(p.patient_name),
+      patient_code: sanitizeCsvValue(p.patient_code),
+    }));
     const header = columns.join(',');
-    const rows = payments.map(p => toCsvRow(p, columns));
+    const rows = sanitized.map(p => toCsvRow(p, columns));
     const csv = header + '\n' + rows.join('\n');
 
     res.setHeader('Content-Type', 'text/csv');

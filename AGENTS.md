@@ -15,7 +15,7 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 - `src/__tests__/` — Jest test suite (runs against a seeded local DB; `jest.setup.js` forces `NODE_ENV=test` to bypass rate limiting)
 - `migrations/` — Kysely SQL migrations (incremental changes on top of `db.sql`)
 - `scripts/` — DB recreate, seed, migrate utilities
-- `.github/workflows/ci.yml` — CI pipeline (bootstraps the DB from `db.sql` + `seed.sql`, runs tests; no Docker image build)
+- `.github/workflows/ci.yml` — CI pipeline (bootstraps the DB from `db.sql` + `seed.sql` via psql, then runs `npm run migrate` and `npm test`; no Docker image build)
 - `db.sql` — Full schema source of truth (applied via `recreate-db.*` and CI)
 
 ## Local Contracts
@@ -23,7 +23,8 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 - Auth via JWT bearer tokens, middleware in `auth.js`; access/refresh expiry defaults to `24h`/`7d` when `JWT_EXPIRES_IN`/`JWT_REFRESH_EXPIRES_IN` are unset
 - Rate limiting applied to all mutation routes via `rateLimiter.js` — `apiLimiter` (60/min) and `mutationLimiter` (30/min) are mounted **before** the routers in `src/app.js`; `mutationLimiter` counts mutation methods only (GET/HEAD/OPTIONS skip); both are bypassed when `NODE_ENV=test`
 - Audit logging via `auditLogger.js` middleware (capped at 1000 entries)
-- Stack traces hidden in production (`NODE_ENV=production`)
+- Stack traces hidden in production (`NODE_ENV=production`); production 500s also return the generic `error.internal_server` key and fire an optional `ERROR_WEBHOOK_URL` alert
+- Logs mirror to `logs/backend.log` with size rotation (`LOG_FILE=false` disables); server applies pending migrations at boot when `AUTO_MIGRATE=true`; unhandled rejections are logged and uncaught exceptions trigger graceful shutdown
 - Swagger docs production-guarded (disabled when `NODE_ENV=production`)
 - Database access via Kysely query builder with PostgreSQL
 - All migration scripts read `DB_PASSWORD` from `.env`; no hardcoded credentials
@@ -33,8 +34,8 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 ## Work Guidance
 
 ## Verification
-- `npm test` runs Jest suite (supertest-based API tests) — 123/123 pass
-- `npm run migrate` and `npm run migrate:down` for migration verification
+- `npm test` runs Jest suite (supertest-based API tests) — 160 pass
+- `npm run migrate` and `npm run migrate:down` for migration verification (`migrate:down` reverts exactly one migration per invocation)
 - SonarQube real-scan (projectVersion 1.3): bugs 0, vulnerabilities 0, code_smells 14, reliability_rating 1.0
 
 ## Child DOX Index
@@ -43,7 +44,7 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 - `src/routes/` — API route definitions for all 19 entity types
 - `src/services/` — Business logic services (notifications, reminder scheduling)
 - `src/utils/` — Shared utilities: CSV, logger, pagination, file upload
-- `src/__tests__/` — Jest test suite with 7 test files
+- `src/__tests__/` — Jest test suite with 13 test files
 - `migrations/` — Kysely SQL migration files
 - `scripts/` — Database recreate, seed, and migration scripts
 - `.github/` — CI workflow

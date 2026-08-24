@@ -53,6 +53,25 @@ async function resolvePaymentMethodId(key) {
   return row ? row.id : null;
 }
 
+async function syncInvoicePaidAmount(client, invoiceId, tenantId) {
+  await sql`
+    UPDATE invoices SET
+      paid_amount_dzd = sub.total,
+      payment_status_key = CASE
+        WHEN sub.total >= invoices.total_dzd THEN 'invoice.status.paid'
+        WHEN sub.total > 0 THEN 'invoice.status.partial'
+        ELSE 'invoice.status.unpaid'
+      END,
+      updated_at = NOW()
+    FROM (
+      SELECT COALESCE(SUM(amount_dzd), 0) AS total
+      FROM payments
+      WHERE invoice_id = ${invoiceId} AND tenant_id = ${tenantId}
+    ) AS sub
+    WHERE invoices.id = ${invoiceId} AND invoices.tenant_id = ${tenantId}
+  `.execute(client);
+}
+
 
 // Get payment IDs with optional filters
 router.get('/', async (req, res, next) => {
@@ -318,9 +337,18 @@ router.patch('/:id',
     try {
       const currentPayment = await db
         .selectFrom('payments')
-        .selectAll()
-        .where('id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
+        .innerJoin('payment_methods', 'payments.payment_method_id', 'payment_methods.id')
+        .select([
+          'payments.id',
+          'payments.invoice_id',
+          'payments.amount_dzd',
+          'payments.payment_date',
+          'payments.notes',
+          'payments.payment_method_id',
+          'payment_methods.method_key as payment_method_key'
+        ])
+        .where('payments.id', '=', req.params.id)
+        .where('payments.tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (!currentPayment) {
@@ -330,6 +358,7 @@ router.patch('/:id',
       const { amount_dzd, payment_method_key, payment_date, notes } = req.body;
 
       const updateData = {};
+      let responseMethodKey = currentPayment.payment_method_key;
       if (amount_dzd !== undefined) updateData.amount_dzd = amount_dzd;
       if (payment_method_key !== undefined) {
         const methodId = await resolvePaymentMethodId(payment_method_key);
@@ -337,17 +366,51 @@ router.patch('/:id',
           return res.status(400).json({ error: 'validation.error', details: 'Invalid payment method key' });
         }
         updateData.payment_method_id = methodId;
+        responseMethodKey = payment_method_key;
       }
       if (payment_date !== undefined) updateData.payment_date = payment_date;
       if (notes !== undefined) updateData.notes = notes;
 
-      const payment = await db
-        .updateTable('payments')
-        .set(updateData)
-        .where('id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
-        .returningAll()
-        .executeTakeFirst();
+      const payment = await db.transaction().execute(async (trx) => {
+        const invoice = await trx
+          .selectFrom('invoices')
+          .select(['id', 'total_dzd', 'paid_amount_dzd'])
+          .where('id', '=', currentPayment.invoice_id)
+          .where('tenant_id', '=', req.tenantId)
+          .forUpdate()
+          .executeTakeFirst();
+
+        if (!invoice) {
+          const err = new Error('INVOICE_NOT_FOUND');
+          err.statusCode = 404;
+          err.errorKey = 'payment.error.invoice_not_found';
+          throw err;
+        }
+
+        if (amount_dzd !== undefined) {
+          const otherPayments = Number(invoice.paid_amount_dzd) - Number(currentPayment.amount_dzd);
+          const balanceDue = Number(invoice.total_dzd) - otherPayments;
+          if (Number(amount_dzd) > balanceDue) {
+            const err = new Error('OVERPAYMENT');
+            err.statusCode = 400;
+            err.errorKey = 'validation.error';
+            err.details = `Payment amount (${amount_dzd}) exceeds remaining balance (${balanceDue})`;
+            throw err;
+          }
+        }
+
+        const updated = await trx
+          .updateTable('payments')
+          .set(updateData)
+          .where('id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .returningAll()
+          .executeTakeFirst();
+
+        await syncInvoicePaidAmount(trx, currentPayment.invoice_id, req.tenantId);
+
+        return updated;
+      });
 
       if (req.audit) {
         await req.audit.log({
@@ -362,13 +425,19 @@ router.patch('/:id',
 
       const result = {
         ...payment,
-        payment_method_key: payment_method_key || currentPayment.payment_method_key
+        payment_method_key: responseMethodKey
       };
       delete result.payment_method_id;
 
 
       res.json(result);
     } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          error: error.errorKey || 'validation.error',
+          details: error.details || error.message
+        });
+      }
       next(error);
     }
   }
@@ -395,13 +464,15 @@ router.delete('/:id',
         return res.status(404).json({ error: 'payment.error.not_found' });
       }
 
-      await db
-        .deleteFrom('payments')
-        .where('id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
-        .execute();
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .deleteFrom('payments')
+          .where('id', '=', req.params.id)
+          .where('tenant_id', '=', req.tenantId)
+          .execute();
 
-      payment.status_key = 'payment.status.deleted';
+        await syncInvoicePaidAmount(trx, payment.invoice_id, req.tenantId);
+      });
 
       if (req.audit) {
         await req.audit.log({

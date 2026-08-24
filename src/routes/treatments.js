@@ -11,6 +11,44 @@ const router = express.Router();
 router.use(authenticate);
 router.use(conflictResolution);
 
+async function tenantRefExists(tenantId, table, id) {
+  if (!id) return true;
+  let query = db
+    .selectFrom(table)
+    .select('id')
+    .where('id', '=', id);
+  // treatment_categories is hybrid: NULL tenant_id = global defaults
+  if (table === 'treatment_categories') {
+    query = query.where((eb) =>
+      eb.or([
+        eb('tenant_id', '=', tenantId),
+        eb('tenant_id', 'is', null)
+      ])
+    );
+  } else {
+    query = query.where('tenant_id', '=', tenantId);
+  }
+  const row = await query.executeTakeFirst();
+  return !!row;
+}
+
+async function validateTreatmentRefs(req, res) {
+  const refs = [
+    ['patient_id', 'patients'],
+    ['dentist_id', 'users'],
+    ['appointment_id', 'appointments'],
+    ['plan_id', 'treatment_plans'],
+    ['category_id', 'treatment_categories']
+  ];
+  for (const [field, table] of refs) {
+    if (req.body[field] !== undefined && !(await tenantRefExists(req.tenantId, table, req.body[field]))) {
+      res.status(400).json({ error: 'validation.error', details: `${field} is invalid` });
+      return false;
+    }
+  }
+  return true;
+}
+
 const VALID_TOOTH_NUMBERS = [
   '11', '12', '13', '14', '15', '16', '17', '18',
   '21', '22', '23', '24', '25', '26', '27', '28',
@@ -252,6 +290,8 @@ router.post('/',
     }
 
     try {
+      if (!(await validateTreatmentRefs(req, res))) return;
+
       const { patient_id, dentist_id, treatment_date, appointment_id, plan_id, category_id, tooth_number, diagnosis, treatment_performed, notes, estimated_cost_dzd } = req.body;
 
       const treatment = await db
@@ -322,6 +362,8 @@ router.patch('/:id',
       if (!currentTreatment) {
         return res.status(404).json({ error: 'treatment.error.not_found' });
       }
+
+      if (!(await validateTreatmentRefs(req, res))) return;
 
       if (res.conflictCheck(currentTreatment)) return;
 
