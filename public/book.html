@@ -10,28 +10,62 @@
 <link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 <script src="book.js"></script>
 <style>
-  /* Instrument-datasheet tokens — mirrors website/style.css light theme */
-  :root {
+  /* Instrument-datasheet tokens — light mirrors website/style.css light,
+     dark mirrors the app/site night palette */
+  :root, [data-theme="light"] {
+    --page: #f8fafc;
+    --card: #ffffff;
     --ink: #0f172a;
     --muted: #64748b;
     --line: #e2e8f0;
     --line-strong: #cbd5e1;
     --primary: #2563eb;
-    --paper: #ffffff;
-    --panel: #f8fafc;
+    --primary-strong: #1d4ed8;
+  }
+  [data-theme="dark"] {
+    --page: #0f172a;
+    --card: #1e293b;
+    --ink: #f1f5f9;
+    --muted: #94a3b8;
+    --line: #273245;
+    --line-strong: #3b4a63;
+    --primary: #3b82f6;
+    --primary-strong: #60a5fa;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: 'Readex Pro', system-ui, sans-serif;
-    background: var(--panel); color: var(--ink);
+    background: var(--page); color: var(--ink);
     line-height: 1.6; min-height: 100vh;
     display: flex; justify-content: center; padding: 40px 16px;
     -webkit-font-smoothing: antialiased;
+    transition: background .2s ease, color .2s ease;
   }
   .sheet { width: min(720px, 100%); }
   .mono { font-family: 'Fira Code', monospace; }
 
-  .head { border-bottom: 1px solid var(--line-strong); padding-bottom: 18px; margin-bottom: 26px; }
+  .head { border-bottom: 1px solid var(--line-strong); padding-bottom: 18px; margin-bottom: 26px;
+          display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+  .controls { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .lang-group { display: flex; border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+  .lang-btn {
+    border: none; background: transparent; color: var(--muted);
+    font-family: 'Fira Code', monospace; font-size: .68rem; letter-spacing: .08em;
+    padding: 8px 11px; cursor: pointer; transition: background .12s, color .12s;
+  }
+  [dir="rtl"] .lang-btn { font-family: 'Readex Pro', sans-serif; font-size: .78rem; }
+  .lang-btn:hover { color: var(--primary); }
+  .lang-btn.on { background: var(--primary); color: #fff; }
+  .theme-btn {
+    display: grid; place-items: center; width: 34px; height: 34px;
+    border: 1px solid var(--line-strong); border-radius: 4px;
+    background: transparent; color: var(--muted); cursor: pointer;
+    transition: color .12s, border-color .12s;
+  }
+  .theme-btn:hover { color: var(--primary); border-color: var(--primary); }
+  .theme-btn svg { width: 16px; height: 16px; }
+  [data-theme="dark"] .theme-btn .icon-sun { display: none; }
+  [data-theme="light"] .theme-btn .icon-moon { display: none; }
   .kicker { font-family:'Fira Code',monospace; font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
   .kicker::before { content:'[ '; color: var(--primary); } .kicker::after { content:' ]'; color: var(--primary); }
   h1 { font-size: clamp(1.5rem, 4vw, 2rem); font-weight: 700; letter-spacing: -.02em; }
@@ -42,7 +76,7 @@
 
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip {
-    border:1px solid var(--line-strong); background:var(--paper); color:var(--ink);
+    border:1px solid var(--line-strong); background:var(--card); color:var(--ink);
     padding:9px 14px; border-radius:4px; cursor:pointer; font:inherit; font-size:.9rem;
     transition: border-color .12s, background .12s, color .12s;
   }
@@ -53,7 +87,7 @@
   .slots { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:8px; }
   .slot {
     font-family:'Fira Code',monospace; font-size:.85rem; text-align:center;
-    border:1px solid var(--line-strong); background:var(--paper);
+    border:1px solid var(--line-strong); background:var(--card);
     padding:9px 4px; border-radius:4px; cursor:pointer; font-weight:500;
   }
   .slot:hover { border-color:var(--primary); color:var(--primary); }
@@ -62,7 +96,7 @@
   label { display:block; font-size:.82rem; color:var(--muted); margin:14px 0 5px; }
   input, textarea {
     width:100%; border:1px solid var(--line-strong); border-radius:4px;
-    padding:11px 13px; font:inherit; font-size:.95rem; color:var(--ink); background:var(--paper);
+    padding:11px 13px; font:inherit; font-size:.95rem; color:var(--ink); background:var(--card);
   }
   input:focus, textarea:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.15); }
 
@@ -75,12 +109,13 @@
   .btn[disabled] { opacity:.55; cursor:not-allowed; }
   .note { font-family:'Fira Code',monospace; font-size:.7rem; color:var(--muted); letter-spacing:.06em; }
 
-  .card { background:var(--paper); border:1px solid var(--line); border-radius:6px; padding:26px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:26px; }
   .hidden { display:none !important; }
 
-  .msg { border:1px solid var(--line-strong); border-start-start-radius:2px; background:var(--paper);
+  .msg { border:1px solid var(--line-strong); border-start-start-radius:2px; background:var(--card);
          padding:12px 15px; border-radius:4px; font-size:.92rem; margin-top:18px; }
   .msg.err { color:#b91c1c; border-color:#fecaca; background:#fef2f2; }
+  [data-theme="dark"] .msg.err { color:#fca5a5; border-color:#7f1d1d; background:#450a0a; }
 
   .done-num { font-family:'Fira Code',monospace; font-size:1.9rem; font-weight:500; color:var(--primary); letter-spacing:.02em; }
   dl { display:grid; grid-template-columns:auto 1fr; gap:6px 18px; margin-top:16px; font-size:.95rem; }
@@ -98,8 +133,21 @@
 <div class="sheet">
 
   <header class="head">
-    <p class="kicker" data-i="kicker">Book online</p>
-    <h1><span class="clinic-name" id="clinicName">…</span></h1>
+    <div>
+      <p class="kicker" data-i="kicker">Book online</p>
+      <h1><span class="clinic-name" id="clinicName">…</span></h1>
+    </div>
+    <div class="controls">
+      <div class="lang-group" role="group" aria-label="Language">
+        <button type="button" class="lang-btn" data-l="en">EN</button>
+        <button type="button" class="lang-btn" data-l="fr">FR</button>
+        <button type="button" class="lang-btn" data-l="ar">ع</button>
+      </div>
+      <button type="button" class="theme-btn" id="themeBtn" aria-label="Switch color theme">
+        <svg class="icon-sun" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 18C8.68629 18 6 15.3137 6 12C6 8.68629 8.68629 6 12 6C15.3137 6 18 8.68629 18 12C18 15.3137 15.3137 18 12 18ZM12 16C14.2091 16 16 14.2091 16 12C16 9.79086 14.2091 8 12 8C9.79086 8 8 9.79086 8 12C8 14.2091 9.79086 16 12 16ZM11 1H13V4H11V1ZM11 20H13V23H11V20ZM3.51472 4.92893L4.92893 3.51472L7.05025 5.63604L5.63604 7.05025L3.51472 4.92893ZM16.9497 18.364L18.364 16.9497L20.4853 19.0711L19.0711 20.4853L16.9497 18.364ZM19.0711 3.51472L20.4853 4.92893L18.364 7.05025L16.9497 5.63604L19.0711 3.51472ZM5.63604 16.9497L7.05025 18.364L4.92893 20.4853L3.51472 19.0711L5.63604 16.9497ZM23 11V13H20V11H23ZM4 11V13H1V11H4Z"/></svg>
+        <svg class="icon-moon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6C10 10.4183 13.5817 14 18 14C19.4386 14 20.7885 13.6203 21.9549 12.9556C21.4738 18.0302 17.2005 22 12 22C6.47715 22 2 17.5228 2 12C2 6.79948 5.9698 2.52616 11.0444 2.04507C10.3797 3.21152 10 4.56142 10 6Z"/></svg>
+      </button>
+    </div>
   </header>
 
   <!-- loading / not found -->
