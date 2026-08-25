@@ -88,6 +88,9 @@
   .slot {
     font-family:'Fira Code',monospace; font-size:.85rem; text-align:center;
     border:1px solid var(--line-strong); background:var(--card);
+    /* buttons do NOT inherit body color — without this, slot labels render
+       UA-black and vanish against the dark-theme card */
+    color:var(--ink);
     padding:9px 4px; border-radius:4px; cursor:pointer; font-weight:500;
   }
   .slot:hover { border-color:var(--primary); color:var(--primary); }
