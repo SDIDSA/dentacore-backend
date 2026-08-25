@@ -5,6 +5,8 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 
 ## Ownership
 - `server.js` — Entry point (starts Express + Socket.IO + appointment reminder scheduler)
+- `package-backend.ps1` — Windows packaging script producing `dist/sera-backend-<version>.zip` for hosting: whitelist stage, generated LF-only Linux deploy assets (`deploy/setup.sh` bootstrap, systemd unit, nginx sample), per-file `node --check` gate, .NET ZipArchive with `/` separators (Windows Compress-Archive writes `\`, which breaks Linux unzip)
+- `public/book.html` + `public/book.js` — Public booking portal page (served by express.static; script externalized for CSP)
 - `src/app.js` — Express app factory
 - `src/socket.js` — Socket.IO real-time event bus
 - `src/config/` — Database, Swagger, Cloudinary, migration, error, and logger config
@@ -28,7 +30,7 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 - Swagger docs production-guarded (disabled when `NODE_ENV=production`)
 - Database access via Kysely query builder with PostgreSQL
 - All migration scripts read `DB_PASSWORD` from `.env`; no hardcoded credentials
-- **No Docker path**: `Dockerfile`/`docker-compose.yml`/`.dockerignore` are removed — the backend runs natively (bundled Node + PostgreSQL via `setup-backend.ps1`, or `recreate-db.*` for dev)
+- **No Docker path**: `Dockerfile`/`docker-compose.yml`/`.dockerignore` are removed — production deploys are zip-upload to a Linux host (see `package-backend.ps1` + `docs/HOSTING.md`); local dev runs natively (`recreate-db.*`, or `setup-backend.ps1` for a full local Windows topology)
 - **Public booking surface (prototype)**: `/api/v1/public/:clinic/*` (see `routes/AGENTS.md`) + `public/book.html` portal page (client script externalized to `public/book.js` — helmet's default CSP `script-src 'self'` blocks inline scripts) served by `express.static('public')`; clinic = tenant `subdomain` slug; availability driven by the `working_hours` table (in `db.sql`); demo data via `node scripts/seed-demo-clinic.js` then open `/book.html?clinic=clinic-demo`. Prototype schema changes go straight into `db.sql` — no migration ledger entries while prototyping
 - **Default ports (durable)**: API HTTP `4000` (`PORT`; fallback in `server.js`), PostgreSQL `5434` (`DB_PORT`; installer default in `setup-backend.ps1`, dev fallback in `recreate-db.*` and `test-db-connection.js`). Frontend base URL defaults to `http://localhost:4000/` (`Service.java`, overridable via `-Ddentacore.api.url`). Dev CORS fallback includes `http://localhost:4000`
 - Internet deployment runbook: `docs/HOSTING.md`
