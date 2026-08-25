@@ -900,7 +900,7 @@ BEGIN
     ) VALUES (
         v_tenant_id,
         v_dentist_role_id,
-        'zinouteyar@gmail.com',
+        'dentist@teyar.dz',
         crypt('A1b2-A1b2', gen_salt('bf')),
         'Zinelabidine Teyar',
         '+213549468120',
@@ -909,7 +909,7 @@ BEGIN
     )
     RETURNING id INTO v_dentist_user_id;
 
-    RAISE NOTICE 'Created Dentist: zinouteyar@gmail.com (Password: A1b2-A1b2)';
+    RAISE NOTICE 'Created Dentist: dentist@teyar.dz (Password: A1b2-A1b2)';
 
     -- Get payment method IDs
     SELECT id INTO v_payment_method_cash FROM payment_methods WHERE method_key = 'pay.method.cash';
@@ -1118,7 +1118,7 @@ BEGIN
     RAISE NOTICE '3. Cabinet Dr. Teyar (Blida)';
     RAISE NOTICE '   Subdomain: teyar.dms.dz';
     RAISE NOTICE '   Status: Active (Enterprise Plan)';
-    RAISE NOTICE '   Dentist: zinouteyar@gmail.com / A1b2-A1b2';
+    RAISE NOTICE '   Dentist: dentist@teyar.dz / A1b2-A1b2';
     RAISE NOTICE '   Patients: 1 | Suppliers: 3 | Inventory: 14 items | Expenses: 7';
     RAISE NOTICE '   Custom Categories: 1 (Implants)';
     RAISE NOTICE '============================================';
@@ -1401,7 +1401,7 @@ DECLARE
 BEGIN
     -- Get tenant and user IDs
     SELECT id INTO v_tenant_id FROM tenants WHERE subdomain = 'teyar';
-    SELECT id INTO v_dentist_user_id FROM users WHERE email = 'zinouteyar@gmail.com';
+    SELECT id INTO v_dentist_user_id FROM users WHERE email = 'dentist@teyar.dz';
     SELECT id INTO v_patient_id FROM patients WHERE tenant_id = v_tenant_id AND full_name = 'Mohamed Cherif';
     
     -- Get payment method IDs
@@ -1626,7 +1626,7 @@ BEGIN
     SELECT id INTO v_dent3 FROM users WHERE email = 'dentist3@elqods.dz';
     SELECT id INTO v_recep FROM users WHERE email = 'reception@elqods.dz';
     SELECT id INTO v_s_admin FROM users WHERE email = 'admin@sourire.dz';
-    SELECT id INTO v_t_dent FROM users WHERE email = 'zinouteyar@gmail.com';
+    SELECT id INTO v_t_dent FROM users WHERE email = 'dentist@teyar.dz';
     SELECT id INTO v_pat1 FROM patients WHERE tenant_id = v_tid AND full_name = 'Ahmed Boudiaf';
     SELECT id INTO v_pat2 FROM patients WHERE tenant_id = v_tid AND full_name = 'Leila Mansouri';
     SELECT id INTO v_spat FROM patients WHERE tenant_id = v_sid LIMIT 1;
@@ -1984,11 +1984,11 @@ BEGIN
 
     -- Teyar notifications
     INSERT INTO notifications (tenant_id, type, channel, recipient, message, status)
-    VALUES (v_tid3, 'system.report', 'in_app', 'zinouteyar@gmail.com', 'Monthly analytics report is available', 'unread');
+    VALUES (v_tid3, 'system.report', 'in_app', 'dentist@teyar.dz', 'Monthly analytics report is available', 'unread');
     INSERT INTO notifications (tenant_id, type, channel, recipient, message, status)
-    VALUES (v_tid3, 'inventory.low_stock', 'in_app', 'zinouteyar@gmail.com', 'Check inventory: some items are below reorder point', 'unread');
+    VALUES (v_tid3, 'inventory.low_stock', 'in_app', 'dentist@teyar.dz', 'Check inventory: some items are below reorder point', 'unread');
     INSERT INTO notifications (tenant_id, patient_id, type, channel, recipient, message, status)
-    SELECT v_tid3, id, 'treatment.plan_ready', 'in_app', 'zinouteyar@gmail.com',
+    SELECT v_tid3, id, 'treatment.plan_ready', 'in_app', 'dentist@teyar.dz',
            'Treatment plan ready for review: ' || full_name, 'unread'
     FROM patients WHERE tenant_id = v_tid3 ORDER BY random() LIMIT 1;
 

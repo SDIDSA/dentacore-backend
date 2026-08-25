@@ -5,6 +5,7 @@
 set -euo pipefail
 
 PORT="${PORT:-4000}"
+PORT_SET=no
 WITH_SYSTEMD=no
 WITH_SEED=no
 WITH_BACKUP_CRON=no
@@ -12,7 +13,7 @@ OFFSITE_REMOTE="${OFFSITE_REMOTE:-}"
 while [ $# -gt 0 ]; do
   case "$1" in
     --systemd) WITH_SYSTEMD=yes ;;
-    --port) PORT="$2"; shift ;;
+    --port) PORT="$2"; PORT_SET=yes; shift ;;
     --seed) WITH_SEED=yes ;;
     --backup-cron)
       WITH_BACKUP_CRON=yes
@@ -106,6 +107,17 @@ else
   echo "-- .env already exists, skipping creation --"
 fi
 
+# ── apply explicit --port to .env ──────────────────────────────
+# (always, so re-deploys with an existing .env honor the flag too)
+if [ "$PORT_SET" = "yes" ]; then
+  if grep -qE '^PORT=' .env; then
+    sed -i "s/^PORT=.*/PORT=${PORT}/" .env
+  else
+    printf 'PORT=%s\n' "${PORT}" >> .env
+  fi
+  echo "   PORT=${PORT} written to .env"
+fi
+
 # ── PostgreSQL setup ───────────────────────────────────────────
 get_env() { grep -E "^${1}=" .env | tail -1 | cut -d= -f2-; }
 sql_escape() { printf '%s' "$1" | sed "s/'/''/g"; }
@@ -190,7 +202,6 @@ if [ "$WITH_SYSTEMD" = "yes" ]; then
   chown -R "$SVC_USER":"$SVC_USER" "$APP_DIR"
   sed -e "s|__APP_DIR__|${APP_DIR}|g" \
       -e "s|__SVC_USER__|${SVC_USER}|g" \
-      -e "s|PORT=.*|PORT=${PORT}|" \
       deploy/sera.service > /etc/systemd/system/sera.service
   systemctl daemon-reload
   systemctl enable --now sera

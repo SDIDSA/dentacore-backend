@@ -14,7 +14,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- 1. TENANTS (Multi-Tenant Core)
 -- ============================================================================
 
-CREATE TABLE tenants (
+CREATE TABLE IF NOT EXISTS tenants (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     subdomain VARCHAR(100) NOT NULL UNIQUE,
@@ -45,15 +45,15 @@ COMMENT ON COLUMN tenants.subdomain IS 'Unique subdomain for clinic access (e.g.
 
 COMMENT ON COLUMN tenants.settings IS 'JSONB for branding, features, and custom configurations';
 
-CREATE INDEX idx_tenants_subdomain ON tenants(subdomain);
-CREATE INDEX idx_tenants_status ON tenants(subscription_status);
-CREATE INDEX idx_tenants_active ON tenants(is_active);
+CREATE INDEX IF NOT EXISTS idx_tenants_subdomain ON tenants(subdomain);
+CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(subscription_status);
+CREATE INDEX IF NOT EXISTS idx_tenants_active ON tenants(is_active);
 
 -- ============================================================================
 -- 2. RBAC - ROLE MANAGEMENT (Global)
 -- ============================================================================
 
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
     id SERIAL PRIMARY KEY,
     role_key VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
@@ -64,13 +64,13 @@ CREATE TABLE roles (
 COMMENT ON TABLE roles IS 'System roles using translation keys (e.g., auth.role.admin)';
 COMMENT ON COLUMN roles.role_key IS 'Unique translation key for frontend mapping';
 
-CREATE INDEX idx_roles_key ON roles(role_key);
+CREATE INDEX IF NOT EXISTS idx_roles_key ON roles(role_key);
 
 -- ============================================================================
 -- 3. GEOGRAPHIC DATA - ALGERIA (Global)
 -- ============================================================================
 
-CREATE TABLE wilayas (
+CREATE TABLE IF NOT EXISTS wilayas (
     id SMALLINT PRIMARY KEY,
     code VARCHAR(2) NOT NULL UNIQUE,
     name_key VARCHAR(100) NOT NULL UNIQUE,
@@ -81,13 +81,13 @@ COMMENT ON TABLE wilayas IS '58 Algerian provinces with translation keys';
 COMMENT ON COLUMN wilayas.code IS 'Official wilaya code (01-58)';
 COMMENT ON COLUMN wilayas.name_key IS 'Translation key (e.g., geo.wilaya.16)';
 
-CREATE INDEX idx_wilayas_code ON wilayas(code);
+CREATE INDEX IF NOT EXISTS idx_wilayas_code ON wilayas(code);
 
 -- ============================================================================
 -- 4. PAYMENT METHODS (Global)
 -- ============================================================================
 
-CREATE TABLE payment_methods (
+CREATE TABLE IF NOT EXISTS payment_methods (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     method_key VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
@@ -97,14 +97,14 @@ CREATE TABLE payment_methods (
 
 COMMENT ON TABLE payment_methods IS 'Available payment methods in Algeria';
 
-CREATE INDEX idx_payment_methods_key ON payment_methods(method_key);
-CREATE INDEX idx_payment_methods_active ON payment_methods(is_active);
+CREATE INDEX IF NOT EXISTS idx_payment_methods_key ON payment_methods(method_key);
+CREATE INDEX IF NOT EXISTS idx_payment_methods_active ON payment_methods(is_active);
 
 -- ============================================================================
 -- 5. USER MANAGEMENT (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
@@ -128,10 +128,10 @@ COMMENT ON TABLE users IS 'Tenant-scoped users (Admins, Dentists, Receptionists)
 COMMENT ON COLUMN users.tenant_id IS 'Isolates users per tenant';
 COMMENT ON COLUMN users.phone IS 'Algerian format: +213XXXXXXXXX';
 
-CREATE INDEX idx_users_tenant ON users(tenant_id);
-CREATE INDEX idx_users_role ON users(role_id);
-CREATE INDEX idx_users_email ON users(tenant_id, email);
-CREATE INDEX idx_users_status ON users(tenant_id, status_key);
+CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(tenant_id, email);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users(tenant_id, status_key);
 
 
 
@@ -139,7 +139,7 @@ CREATE INDEX idx_users_status ON users(tenant_id, status_key);
 -- 6. PATIENT MANAGEMENT (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE patients (
+CREATE TABLE IF NOT EXISTS patients (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     patient_code VARCHAR(20) NOT NULL,
@@ -179,12 +179,12 @@ COMMENT ON TABLE patients IS 'Tenant-scoped patient records';
 COMMENT ON COLUMN patients.tenant_id IS 'Isolates patients per tenant';
 COMMENT ON COLUMN patients.patient_code IS 'Auto-generated, tenant-scoped (e.g., PAT-2024-0001)';
 
-CREATE INDEX idx_patients_tenant ON patients(tenant_id);
-CREATE INDEX idx_patients_code ON patients(tenant_id, patient_code);
-CREATE INDEX idx_patients_name ON patients(tenant_id, full_name);
-CREATE INDEX idx_patients_phone ON patients(tenant_id, phone);
-CREATE INDEX idx_patients_status ON patients(tenant_id, status_key);
-CREATE INDEX idx_patients_dob ON patients(date_of_birth);
+CREATE INDEX IF NOT EXISTS idx_patients_tenant ON patients(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_patients_code ON patients(tenant_id, patient_code);
+CREATE INDEX IF NOT EXISTS idx_patients_name ON patients(tenant_id, full_name);
+CREATE INDEX IF NOT EXISTS idx_patients_phone ON patients(tenant_id, phone);
+CREATE INDEX IF NOT EXISTS idx_patients_status ON patients(tenant_id, status_key);
+CREATE INDEX IF NOT EXISTS idx_patients_dob ON patients(date_of_birth);
 
 
 
@@ -192,7 +192,7 @@ CREATE INDEX idx_patients_dob ON patients(date_of_birth);
 -- 7. TREATMENT CATEGORIES (Hybrid: Global + Tenant-Specific)
 -- ============================================================================
 
-CREATE TABLE treatment_categories (
+CREATE TABLE IF NOT EXISTS treatment_categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     category_key VARCHAR(100) NOT NULL,
@@ -208,16 +208,16 @@ CREATE TABLE treatment_categories (
 COMMENT ON TABLE treatment_categories IS 'Hybrid: NULL tenant_id = Global defaults, SET tenant_id = Custom categories';
 COMMENT ON COLUMN treatment_categories.tenant_id IS 'NULL for system defaults, UUID for tenant-specific';
 
-CREATE INDEX idx_treatment_cat_tenant ON treatment_categories(tenant_id);
-CREATE INDEX idx_treatment_cat_key ON treatment_categories(tenant_id, category_key);
-CREATE INDEX idx_treatment_cat_parent ON treatment_categories(parent_id);
-CREATE INDEX idx_treatment_cat_global ON treatment_categories(tenant_id) WHERE tenant_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treatment_cat_tenant ON treatment_categories(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_treatment_cat_key ON treatment_categories(tenant_id, category_key);
+CREATE INDEX IF NOT EXISTS idx_treatment_cat_parent ON treatment_categories(parent_id);
+CREATE INDEX IF NOT EXISTS idx_treatment_cat_global ON treatment_categories(tenant_id) WHERE tenant_id IS NULL;
 
 -- ============================================================================
 -- 8. APPOINTMENTS (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE appointments (
+CREATE TABLE IF NOT EXISTS appointments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
@@ -244,12 +244,12 @@ CREATE TABLE appointments (
 
 COMMENT ON TABLE appointments IS 'Tenant-scoped patient appointments';
 
-CREATE INDEX idx_appt_tenant ON appointments(tenant_id);
-CREATE INDEX idx_appt_patient ON appointments(tenant_id, patient_id);
-CREATE INDEX idx_appt_dentist ON appointments(tenant_id, dentist_id);
-CREATE INDEX idx_appt_date ON appointments(tenant_id, appointment_date);
-CREATE INDEX idx_appt_status ON appointments(tenant_id, status_key);
-CREATE INDEX idx_appt_dentist_date ON appointments(tenant_id, dentist_id, appointment_date);
+CREATE INDEX IF NOT EXISTS idx_appt_tenant ON appointments(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_appt_patient ON appointments(tenant_id, patient_id);
+CREATE INDEX IF NOT EXISTS idx_appt_dentist ON appointments(tenant_id, dentist_id);
+CREATE INDEX IF NOT EXISTS idx_appt_date ON appointments(tenant_id, appointment_date);
+CREATE INDEX IF NOT EXISTS idx_appt_status ON appointments(tenant_id, status_key);
+CREATE INDEX IF NOT EXISTS idx_appt_dentist_date ON appointments(tenant_id, dentist_id, appointment_date);
 
 -- One active appointment per dentist per exact start time (public portal race guard).
 -- Cancelled / no-show / soft-deleted rows free the slot again.
@@ -264,7 +264,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_appt_active_slot
 -- getDay() convention: 0 = Sunday ... 6 = Saturday. Slot granularity is
 -- per-row so a clinic can run 20-minute hygiene slots alongside 60-minute
 -- consultations by declaring two ranges for the same day.
-CREATE TABLE working_hours (
+CREATE TABLE IF NOT EXISTS working_hours (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     dentist_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -283,8 +283,8 @@ CREATE TABLE working_hours (
 COMMENT ON TABLE working_hours IS 'Weekly bookable availability per dentist; drives /public/:clinic/slots';
 COMMENT ON COLUMN working_hours.day_of_week IS 'JS getDay() convention: 0=Sunday .. 6=Saturday';
 
-CREATE INDEX idx_wh_tenant_day ON working_hours(tenant_id, day_of_week);
-CREATE INDEX idx_wh_dentist ON working_hours(dentist_id);
+CREATE INDEX IF NOT EXISTS idx_wh_tenant_day ON working_hours(tenant_id, day_of_week);
+CREATE INDEX IF NOT EXISTS idx_wh_dentist ON working_hours(dentist_id);
 
 
 
@@ -292,7 +292,7 @@ CREATE INDEX idx_wh_dentist ON working_hours(dentist_id);
 -- 9. TREATMENT RECORDS (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE treatment_records (
+CREATE TABLE IF NOT EXISTS treatment_records (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
@@ -320,11 +320,11 @@ CREATE TABLE treatment_records (
 
 COMMENT ON TABLE treatment_records IS 'Tenant-scoped clinical treatment records';
 
-CREATE INDEX idx_treatment_tenant ON treatment_records(tenant_id);
-CREATE INDEX idx_treatment_patient ON treatment_records(tenant_id, patient_id);
-CREATE INDEX idx_treatment_dentist ON treatment_records(tenant_id, dentist_id);
-CREATE INDEX idx_treatment_date ON treatment_records(tenant_id, treatment_date);
-CREATE INDEX idx_treatment_category ON treatment_records(category_id);
+CREATE INDEX IF NOT EXISTS idx_treatment_tenant ON treatment_records(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_treatment_patient ON treatment_records(tenant_id, patient_id);
+CREATE INDEX IF NOT EXISTS idx_treatment_dentist ON treatment_records(tenant_id, dentist_id);
+CREATE INDEX IF NOT EXISTS idx_treatment_date ON treatment_records(tenant_id, treatment_date);
+CREATE INDEX IF NOT EXISTS idx_treatment_category ON treatment_records(category_id);
 
 
 
@@ -332,7 +332,7 @@ CREATE INDEX idx_treatment_category ON treatment_records(category_id);
 -- 10. INVOICES (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE invoices (
+CREATE TABLE IF NOT EXISTS invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     invoice_number VARCHAR(30) NOT NULL,
@@ -368,11 +368,11 @@ CREATE TABLE invoices (
 
 COMMENT ON TABLE invoices IS 'Tenant-scoped patient invoices in DZD';
 
-CREATE INDEX idx_invoice_tenant ON invoices(tenant_id);
-CREATE INDEX idx_invoice_number ON invoices(tenant_id, invoice_number);
-CREATE INDEX idx_invoice_patient ON invoices(tenant_id, patient_id);
-CREATE INDEX idx_invoice_status ON invoices(tenant_id, payment_status_key);
-CREATE INDEX idx_invoice_date ON invoices(tenant_id, issue_date);
+CREATE INDEX IF NOT EXISTS idx_invoice_tenant ON invoices(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_number ON invoices(tenant_id, invoice_number);
+CREATE INDEX IF NOT EXISTS idx_invoice_patient ON invoices(tenant_id, patient_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_status ON invoices(tenant_id, payment_status_key);
+CREATE INDEX IF NOT EXISTS idx_invoice_date ON invoices(tenant_id, issue_date);
 
 
 
@@ -380,7 +380,7 @@ CREATE INDEX idx_invoice_date ON invoices(tenant_id, issue_date);
 -- 11. INVOICE ITEMS (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE invoice_items (
+CREATE TABLE IF NOT EXISTS invoice_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
@@ -401,9 +401,9 @@ CREATE TABLE invoice_items (
 
 COMMENT ON TABLE invoice_items IS 'Tenant-scoped line items for invoices';
 
-CREATE INDEX idx_invoice_items_tenant ON invoice_items(tenant_id);
-CREATE INDEX idx_invoice_items_invoice ON invoice_items(tenant_id, invoice_id);
-CREATE INDEX idx_invoice_items_treatment ON invoice_items(treatment_record_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_items_tenant ON invoice_items(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(tenant_id, invoice_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_items_treatment ON invoice_items(treatment_record_id);
 
 
 
@@ -411,7 +411,7 @@ CREATE INDEX idx_invoice_items_treatment ON invoice_items(treatment_record_id);
 -- 12. PAYMENTS (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
@@ -428,10 +428,10 @@ CREATE TABLE payments (
 
 COMMENT ON TABLE payments IS 'Tenant-scoped payment transactions in DZD';
 
-CREATE INDEX idx_payment_tenant ON payments(tenant_id);
-CREATE INDEX idx_payment_invoice ON payments(tenant_id, invoice_id);
-CREATE INDEX idx_payment_method ON payments(payment_method_id);
-CREATE INDEX idx_payment_date ON payments(tenant_id, payment_date);
+CREATE INDEX IF NOT EXISTS idx_payment_tenant ON payments(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_payment_invoice ON payments(tenant_id, invoice_id);
+CREATE INDEX IF NOT EXISTS idx_payment_method ON payments(payment_method_id);
+CREATE INDEX IF NOT EXISTS idx_payment_date ON payments(tenant_id, payment_date);
 
 
 
@@ -439,7 +439,7 @@ CREATE INDEX idx_payment_date ON payments(tenant_id, payment_date);
 -- 13. SUPPLIERS (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE suppliers (
+CREATE TABLE IF NOT EXISTS suppliers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     supplier_code VARCHAR(20) NOT NULL,
@@ -469,16 +469,16 @@ CREATE TABLE suppliers (
 COMMENT ON TABLE suppliers IS 'Tenant-scoped supplier/vendor management';
 COMMENT ON COLUMN suppliers.supplier_code IS 'Auto-generated, tenant-scoped (e.g., SUP-2025-0001)';
 
-CREATE INDEX idx_suppliers_tenant ON suppliers(tenant_id);
-CREATE INDEX idx_suppliers_code ON suppliers(tenant_id, supplier_code);
-CREATE INDEX idx_suppliers_name ON suppliers(tenant_id, name);
-CREATE INDEX idx_suppliers_status ON suppliers(tenant_id, status_key);
+CREATE INDEX IF NOT EXISTS idx_suppliers_tenant ON suppliers(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_suppliers_code ON suppliers(tenant_id, supplier_code);
+CREATE INDEX IF NOT EXISTS idx_suppliers_name ON suppliers(tenant_id, name);
+CREATE INDEX IF NOT EXISTS idx_suppliers_status ON suppliers(tenant_id, status_key);
 
 -- ============================================================================
 -- 14. INVENTORY CATEGORIES (Hybrid: Global + Tenant-Specific)
 -- ============================================================================
 
-CREATE TABLE inventory_categories (
+CREATE TABLE IF NOT EXISTS inventory_categories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
     category_key VARCHAR(100) NOT NULL,
@@ -494,16 +494,16 @@ CREATE TABLE inventory_categories (
 COMMENT ON TABLE inventory_categories IS 'Hybrid: NULL tenant_id = Global defaults, SET tenant_id = Custom categories';
 COMMENT ON COLUMN inventory_categories.tenant_id IS 'NULL for system defaults, UUID for tenant-specific';
 
-CREATE INDEX idx_inventory_cat_tenant ON inventory_categories(tenant_id);
-CREATE INDEX idx_inventory_cat_key ON inventory_categories(tenant_id, category_key);
-CREATE INDEX idx_inventory_cat_parent ON inventory_categories(parent_id);
-CREATE INDEX idx_inventory_cat_global ON inventory_categories(tenant_id) WHERE tenant_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_inventory_cat_tenant ON inventory_categories(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_cat_key ON inventory_categories(tenant_id, category_key);
+CREATE INDEX IF NOT EXISTS idx_inventory_cat_parent ON inventory_categories(parent_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_cat_global ON inventory_categories(tenant_id) WHERE tenant_id IS NULL;
 
 -- ============================================================================
 -- 15. INVENTORY ITEMS (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE inventory_items (
+CREATE TABLE IF NOT EXISTS inventory_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     item_code VARCHAR(30) NOT NULL,
@@ -546,19 +546,19 @@ COMMENT ON TABLE inventory_items IS 'Tenant-scoped inventory items with stock tr
 COMMENT ON COLUMN inventory_items.item_code IS 'Auto-generated, tenant-scoped (e.g., ITM-2025-0001)';
 COMMENT ON COLUMN inventory_items.unit_of_measure IS 'unit, box, bottle, kg, ml, etc.';
 
-CREATE INDEX idx_inventory_tenant ON inventory_items(tenant_id);
-CREATE INDEX idx_inventory_code ON inventory_items(tenant_id, item_code);
-CREATE INDEX idx_inventory_name ON inventory_items(tenant_id, name);
-CREATE INDEX idx_inventory_category ON inventory_items(category_id);
-CREATE INDEX idx_inventory_status ON inventory_items(tenant_id, status_key);
-CREATE INDEX idx_inventory_low_stock ON inventory_items(tenant_id, current_stock, min_stock_level) 
+CREATE INDEX IF NOT EXISTS idx_inventory_tenant ON inventory_items(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_code ON inventory_items(tenant_id, item_code);
+CREATE INDEX IF NOT EXISTS idx_inventory_name ON inventory_items(tenant_id, name);
+CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory_items(category_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_status ON inventory_items(tenant_id, status_key);
+CREATE INDEX IF NOT EXISTS idx_inventory_low_stock ON inventory_items(tenant_id, current_stock, min_stock_level) 
     WHERE current_stock <= min_stock_level;
 
 -- ============================================================================
 -- 16. PURCHASE ORDERS (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE purchase_orders (
+CREATE TABLE IF NOT EXISTS purchase_orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     po_number VARCHAR(30) NOT NULL,
@@ -597,17 +597,17 @@ CREATE TABLE purchase_orders (
 COMMENT ON TABLE purchase_orders IS 'Tenant-scoped purchase orders for inventory';
 COMMENT ON COLUMN purchase_orders.po_number IS 'Auto-generated, tenant-scoped (e.g., PO-2025-0001)';
 
-CREATE INDEX idx_po_tenant ON purchase_orders(tenant_id);
-CREATE INDEX idx_po_number ON purchase_orders(tenant_id, po_number);
-CREATE INDEX idx_po_supplier ON purchase_orders(tenant_id, supplier_id);
-CREATE INDEX idx_po_status ON purchase_orders(tenant_id, status_key);
-CREATE INDEX idx_po_date ON purchase_orders(tenant_id, order_date);
+CREATE INDEX IF NOT EXISTS idx_po_tenant ON purchase_orders(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_po_number ON purchase_orders(tenant_id, po_number);
+CREATE INDEX IF NOT EXISTS idx_po_supplier ON purchase_orders(tenant_id, supplier_id);
+CREATE INDEX IF NOT EXISTS idx_po_status ON purchase_orders(tenant_id, status_key);
+CREATE INDEX IF NOT EXISTS idx_po_date ON purchase_orders(tenant_id, order_date);
 
 -- ============================================================================
 -- 17. PURCHASE ORDER ITEMS (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE purchase_order_items (
+CREATE TABLE IF NOT EXISTS purchase_order_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     purchase_order_id UUID NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
@@ -635,16 +635,16 @@ CREATE TABLE purchase_order_items (
 
 COMMENT ON TABLE purchase_order_items IS 'Tenant-scoped line items for purchase orders';
 
-CREATE INDEX idx_po_items_tenant ON purchase_order_items(tenant_id);
-CREATE INDEX idx_po_items_po ON purchase_order_items(tenant_id, purchase_order_id);
-CREATE INDEX idx_po_items_inventory ON purchase_order_items(inventory_item_id);
-CREATE INDEX idx_po_items_expiry ON purchase_order_items(expiry_date) WHERE expiry_date IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_po_items_tenant ON purchase_order_items(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_po_items_po ON purchase_order_items(tenant_id, purchase_order_id);
+CREATE INDEX IF NOT EXISTS idx_po_items_inventory ON purchase_order_items(inventory_item_id);
+CREATE INDEX IF NOT EXISTS idx_po_items_expiry ON purchase_order_items(expiry_date) WHERE expiry_date IS NOT NULL;
 
 -- ============================================================================
 -- 18. STOCK MOVEMENTS (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE stock_movements (
+CREATE TABLE IF NOT EXISTS stock_movements (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     inventory_item_id UUID NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
@@ -677,17 +677,17 @@ COMMENT ON COLUMN stock_movements.movement_type IS 'Type of stock movement (in/o
 COMMENT ON COLUMN stock_movements.reference_type IS 'purchase_order, treatment_record, adjustment, etc.';
 COMMENT ON COLUMN stock_movements.reference_id IS 'ID of the referenced entity';
 
-CREATE INDEX idx_stock_movements_tenant ON stock_movements(tenant_id);
-CREATE INDEX idx_stock_movements_item ON stock_movements(tenant_id, inventory_item_id);
-CREATE INDEX idx_stock_movements_type ON stock_movements(tenant_id, movement_type);
-CREATE INDEX idx_stock_movements_date ON stock_movements(tenant_id, created_at);
-CREATE INDEX idx_stock_movements_reference ON stock_movements(reference_type, reference_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_tenant ON stock_movements(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_item ON stock_movements(tenant_id, inventory_item_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_type ON stock_movements(tenant_id, movement_type);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_date ON stock_movements(tenant_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_reference ON stock_movements(reference_type, reference_id);
 
 -- ============================================================================
 -- 19. EXPENSES (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE expenses (
+CREATE TABLE IF NOT EXISTS expenses (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     expense_number VARCHAR(30) NOT NULL,
@@ -729,19 +729,19 @@ COMMENT ON TABLE expenses IS 'Tenant-scoped expense tracking for financial repor
 COMMENT ON COLUMN expenses.category_key IS 'expense.category.inventory, expense.category.utilities, etc.';
 COMMENT ON COLUMN expenses.expense_number IS 'Auto-generated, tenant-scoped (e.g., EXP-2025-0001)';
 
-CREATE INDEX idx_expenses_tenant ON expenses(tenant_id);
-CREATE INDEX idx_expenses_number ON expenses(tenant_id, expense_number);
-CREATE INDEX idx_expenses_category ON expenses(tenant_id, category_key);
-CREATE INDEX idx_expenses_date ON expenses(tenant_id, expense_date);
-CREATE INDEX idx_expenses_status ON expenses(tenant_id, status_key);
-CREATE INDEX idx_expenses_supplier ON expenses(supplier_id);
-CREATE INDEX idx_expenses_po ON expenses(purchase_order_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_tenant ON expenses(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_number ON expenses(tenant_id, expense_number);
+CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(tenant_id, category_key);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(tenant_id, expense_date);
+CREATE INDEX IF NOT EXISTS idx_expenses_status ON expenses(tenant_id, status_key);
+CREATE INDEX IF NOT EXISTS idx_expenses_supplier ON expenses(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_po ON expenses(purchase_order_id);
 
 -- ============================================================================
 -- 20. AUDIT LOG (Tenant-Scoped)
 -- ============================================================================
 
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -757,10 +757,10 @@ CREATE TABLE audit_logs (
 
 COMMENT ON TABLE audit_logs IS 'Tenant-scoped audit trail';
 
-CREATE INDEX idx_audit_tenant ON audit_logs(tenant_id);
-CREATE INDEX idx_audit_user ON audit_logs(tenant_id, user_id);
-CREATE INDEX idx_audit_entity ON audit_logs(tenant_id, entity_type, entity_id);
-CREATE INDEX idx_audit_date ON audit_logs(tenant_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_logs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(tenant_id, user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(tenant_id, entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_date ON audit_logs(tenant_id, created_at);
 
 
 
@@ -768,7 +768,7 @@ CREATE INDEX idx_audit_date ON audit_logs(tenant_id, created_at);
 -- 21. MEDIA (Tenant-Scoped, Cloudinary-backed)
 -- ============================================================================
 
-CREATE TABLE media (
+CREATE TABLE IF NOT EXISTS media (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     cloudinary_public_id TEXT NOT NULL,
@@ -785,14 +785,14 @@ COMMENT ON TABLE media IS 'Tenant-scoped media files stored on Cloudinary';
 COMMENT ON COLUMN media.cloudinary_public_id IS 'Cloudinary public ID for deletion/management';
 COMMENT ON COLUMN media.cloudinary_url IS 'Full Cloudinary URL with transformations';
 
-CREATE INDEX idx_media_tenant ON media(tenant_id);
-CREATE INDEX idx_media_uploaded_by ON media(uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_media_tenant ON media(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_media_uploaded_by ON media(uploaded_by);
 
 -- ============================================================================
 -- 22. X-RAYS (Tenant-Scoped, extends media)
 -- ============================================================================
 
-CREATE TABLE xrays (
+CREATE TABLE IF NOT EXISTS xrays (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     media_id UUID NOT NULL UNIQUE REFERENCES media(id) ON DELETE CASCADE,
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -809,11 +809,11 @@ COMMENT ON TABLE xrays IS 'Tenant-scoped X-ray images linked to media and patien
 COMMENT ON COLUMN xrays.media_id IS 'FK to media table holding the Cloudinary file reference';
 COMMENT ON COLUMN xrays.treatment_record_id IS 'Optional link to a specific treatment record';
 
-CREATE INDEX idx_xrays_tenant ON xrays(tenant_id);
-CREATE INDEX idx_xrays_media ON xrays(media_id);
-CREATE INDEX idx_xrays_patient ON xrays(patient_id);
-CREATE INDEX idx_xrays_treatment ON xrays(treatment_record_id);
-CREATE INDEX idx_xrays_date ON xrays(tenant_id, captured_date);
+CREATE INDEX IF NOT EXISTS idx_xrays_tenant ON xrays(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_xrays_media ON xrays(media_id);
+CREATE INDEX IF NOT EXISTS idx_xrays_patient ON xrays(patient_id);
+CREATE INDEX IF NOT EXISTS idx_xrays_treatment ON xrays(treatment_record_id);
+CREATE INDEX IF NOT EXISTS idx_xrays_date ON xrays(tenant_id, captured_date);
 
 -- ============================================================================
 -- TRIGGERS FOR UPDATED_AT
@@ -827,49 +827,49 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_tenants_updated_at BEFORE UPDATE ON tenants
+CREATE OR REPLACE TRIGGER trg_tenants_updated_at BEFORE UPDATE ON tenants
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_roles_updated_at BEFORE UPDATE ON roles
+CREATE OR REPLACE TRIGGER trg_roles_updated_at BEFORE UPDATE ON roles
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users
+CREATE OR REPLACE TRIGGER trg_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_patients_updated_at BEFORE UPDATE ON patients
+CREATE OR REPLACE TRIGGER trg_patients_updated_at BEFORE UPDATE ON patients
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_treatment_cat_updated_at BEFORE UPDATE ON treatment_categories
+CREATE OR REPLACE TRIGGER trg_treatment_cat_updated_at BEFORE UPDATE ON treatment_categories
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_appointments_updated_at BEFORE UPDATE ON appointments
+CREATE OR REPLACE TRIGGER trg_appointments_updated_at BEFORE UPDATE ON appointments
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_treatment_records_updated_at BEFORE UPDATE ON treatment_records
+CREATE OR REPLACE TRIGGER trg_treatment_records_updated_at BEFORE UPDATE ON treatment_records
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_invoices_updated_at BEFORE UPDATE ON invoices
+CREATE OR REPLACE TRIGGER trg_invoices_updated_at BEFORE UPDATE ON invoices
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_suppliers_updated_at BEFORE UPDATE ON suppliers
+CREATE OR REPLACE TRIGGER trg_suppliers_updated_at BEFORE UPDATE ON suppliers
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_inventory_cat_updated_at BEFORE UPDATE ON inventory_categories
+CREATE OR REPLACE TRIGGER trg_inventory_cat_updated_at BEFORE UPDATE ON inventory_categories
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_inventory_items_updated_at BEFORE UPDATE ON inventory_items
+CREATE OR REPLACE TRIGGER trg_inventory_items_updated_at BEFORE UPDATE ON inventory_items
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_purchase_orders_updated_at BEFORE UPDATE ON purchase_orders
+CREATE OR REPLACE TRIGGER trg_purchase_orders_updated_at BEFORE UPDATE ON purchase_orders
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_expenses_updated_at BEFORE UPDATE ON expenses
+CREATE OR REPLACE TRIGGER trg_expenses_updated_at BEFORE UPDATE ON expenses
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_media_updated_at BEFORE UPDATE ON media
+CREATE OR REPLACE TRIGGER trg_media_updated_at BEFORE UPDATE ON media
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER trg_xrays_updated_at BEFORE UPDATE ON xrays
+CREATE OR REPLACE TRIGGER trg_xrays_updated_at BEFORE UPDATE ON xrays
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
@@ -1039,7 +1039,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_set_patient_code
+CREATE OR REPLACE TRIGGER trg_set_patient_code
     BEFORE INSERT ON patients
     FOR EACH ROW
     EXECUTE FUNCTION set_patient_code();
@@ -1055,7 +1055,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_set_invoice_number
+CREATE OR REPLACE TRIGGER trg_set_invoice_number
     BEFORE INSERT ON invoices
     FOR EACH ROW
     EXECUTE FUNCTION set_invoice_number();
@@ -1071,7 +1071,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_set_supplier_code
+CREATE OR REPLACE TRIGGER trg_set_supplier_code
     BEFORE INSERT ON suppliers
     FOR EACH ROW
     EXECUTE FUNCTION set_supplier_code();
@@ -1087,7 +1087,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_set_item_code
+CREATE OR REPLACE TRIGGER trg_set_item_code
     BEFORE INSERT ON inventory_items
     FOR EACH ROW
     EXECUTE FUNCTION set_item_code();
@@ -1103,7 +1103,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_set_po_number
+CREATE OR REPLACE TRIGGER trg_set_po_number
     BEFORE INSERT ON purchase_orders
     FOR EACH ROW
     EXECUTE FUNCTION set_po_number();
@@ -1119,7 +1119,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_set_expense_number
+CREATE OR REPLACE TRIGGER trg_set_expense_number
     BEFORE INSERT ON expenses
     FOR EACH ROW
     EXECUTE FUNCTION set_expense_number();
@@ -1147,7 +1147,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_update_stock_levels
+CREATE OR REPLACE TRIGGER trg_update_stock_levels
     AFTER INSERT ON stock_movements
     FOR EACH ROW
     EXECUTE FUNCTION update_stock_levels();
@@ -1349,7 +1349,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- MIGRATION: Auth Helper Function
+-- Auth Helper Function
 -- ============================================================================
 
 \echo 'Creating get_user_by_email function...'
@@ -1431,7 +1431,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_sync_invoice_paid_amount
+CREATE OR REPLACE TRIGGER trg_sync_invoice_paid_amount
     AFTER INSERT OR UPDATE OR DELETE ON payments
     FOR EACH ROW
     EXECUTE FUNCTION sync_invoice_paid_amount();
@@ -1440,14 +1440,14 @@ CREATE TRIGGER trg_sync_invoice_paid_amount
 -- P1.7: Full-text search index on patient names
 -- ============================================================================
 
-CREATE INDEX idx_patients_name_fts ON patients
+CREATE INDEX IF NOT EXISTS idx_patients_name_fts ON patients
     USING GIN (to_tsvector('simple', full_name));
 
 -- ============================================================================
 -- P1.10: Token blacklist for logout / revocation
 -- ============================================================================
 
-CREATE TABLE token_blacklist (
+CREATE TABLE IF NOT EXISTS token_blacklist (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     jti VARCHAR(255) NOT NULL,
     token_type VARCHAR(20) NOT NULL CHECK (token_type IN ('access', 'refresh')),
@@ -1457,8 +1457,8 @@ CREATE TABLE token_blacklist (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_token_blacklist_jti ON token_blacklist(jti);
-CREATE INDEX idx_token_blacklist_expires ON token_blacklist(expires_at);
+CREATE INDEX IF NOT EXISTS idx_token_blacklist_jti ON token_blacklist(jti);
+CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires ON token_blacklist(expires_at);
 
 -- ============================================================================
 -- NOTIFICATIONS TABLE (v3.0 - In-App Notifications)
@@ -1589,7 +1589,7 @@ BEGIN
         SELECT 1 FROM pg_trigger
         WHERE tgname = 'trg_set_prescription_number'
     ) THEN
-        CREATE TRIGGER trg_set_prescription_number
+        CREATE OR REPLACE TRIGGER trg_set_prescription_number
             BEFORE INSERT ON prescriptions
             FOR EACH ROW
             EXECUTE FUNCTION set_prescription_number();
