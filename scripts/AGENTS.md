@@ -7,6 +7,7 @@ Maintenance and utility scripts for database management and seeding.
 - `recreate-db.cmd` / `recreate-db.sh` — Drop and recreate the database (schema + seed); live at the **project root**, not in `scripts/`
 - `seed-sql.js` — Runner that delegates to `recreate-db.cmd`/`.sh`
 - `seed.sql` — SQL seed data for 3 demo clinics (El-Qods ~100 patients/396 appointments, Sourire trial, Teyar personal)
+- `seed-demo-clinic.js` — Idempotent prototype seeder for the public booking portal: creates tenant `clinic-demo` with two dentists and Sun–Thu 08:30–12:00 / 13:30–17:00 (plus Sat morning) `working_hours`; prints the slug; loads its own dotenv
 - `migrate.js` — Migration runner for up/down operations
 - `test-db-connection.js` — Database connection test script
 - `restore-db.ps1` — Windows restore script for nightly backups (ships to `{app}\backend\scripts` via installer packaging); takes a `.dump` path, reads credentials from `{app}\backend\.env`, requires `-Yes` (alias `-ConfirmBackup`, kept for compatibility) or typed `RESTORE` confirmation (destructive: `pg_restore --clean --if-exists`), and always attempts a safety pre-restore dump first

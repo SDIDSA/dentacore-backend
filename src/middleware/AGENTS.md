@@ -6,7 +6,8 @@ Express middleware pipeline — authentication, authorization, audit logging, ra
 ## Ownership
 - `auth.js` — JWT verification, role-based access control (RBAC)
 - `auditLogger.js` — Request audit logging (capped queue at 1000 entries)
-- `rateLimiter.js` — Configurable rate limiting via express-rate-limit
+- `rateLimiter.js` — Configurable rate limiting via express-rate-limit (`apiLimiter`, `mutationLimiter`, `strictMutationLimiter` 10/min — the public booking router mounts it router-wide)
+- `tenantBySlug.js` — Public-route tenant resolution: maps the `:clinic` subdomain slug to `req.tenantId` + `req.tenant`; unknown/malformed slugs all return the same generic 404 (`public.clinic_not_found`) so the clinic namespace can't be probed. Must be attached as `router.use('/:clinic', …)` — a bare `router.use(fn)` matches everything but captures no params
 - `errorHandler.js` — Global error handler (hides stack traces in production)
 - `responseFormatter.js` — `{ data, meta }` envelope helper; **not mounted** in `src/app.js` (routes return bare responses today)
 - `conflictResolution.js` — Conflict resolution for offline sync

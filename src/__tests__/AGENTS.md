@@ -12,6 +12,7 @@ Jest test suite for backend API endpoints, RBAC, multi-tenancy, and business log
 - `invoicePaymentReconciliation.test.js` — Payment↔invoice reconciliation regression tests (overpayment guard, recompute on payment delete, status-key whitelist)
 - `multitenancy.test.js` — Multi-tenancy isolation tests
 - `patientsSearch.test.js` — Multi-word patient search regression tests (plainto_tsquery)
+- `publicBooking.test.js` — Public portal end-to-end: slug-resolution 404s, dentist/service listing, slot computation from seeded `working_hours`, guest booking (patient stub + appointment + staff visibility via authenticated list), one-active-slot race guard, per-phone cap, cross-tenant dentist rejection
 - `rbac.test.js` — Role-based access control tests
 - `rbacGating.test.js` — Admin-only endpoint gating regression tests (audit-logs, reports, recent-activity: 403 non-admin / 200 admin)
 - `reports.test.js` — Report endpoint tests
@@ -28,7 +29,7 @@ Jest test suite for backend API endpoints, RBAC, multi-tenancy, and business log
 ## Work Guidance
 
 ## Verification
-- `npm test` from project root runs the full Jest suite (160 passing)
+- `npm test` from project root runs the full Jest suite (170 passing, 14 files)
 - `crossTenantIsolation.test.js` also covers invoice line-item `treatment_record_id` and treatments.js reference tenancy (regression tests for the guards added pre-delivery)
 
 ## Child DOX Index

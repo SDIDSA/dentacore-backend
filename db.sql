@@ -144,8 +144,10 @@ CREATE TABLE patients (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     patient_code VARCHAR(20) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
-    date_of_birth DATE NOT NULL,
-    gender VARCHAR(50) NOT NULL,
+    -- date_of_birth / gender are nullable: guests booking via the public portal
+    -- provide name + phone only; staff complete the profile at the first visit.
+    date_of_birth DATE,
+    gender VARCHAR(50),
     phone VARCHAR(20) NOT NULL,
     email VARCHAR(255),
     wilaya_id SMALLINT REFERENCES wilayas(id) ON DELETE SET NULL,
@@ -248,6 +250,41 @@ CREATE INDEX idx_appt_dentist ON appointments(tenant_id, dentist_id);
 CREATE INDEX idx_appt_date ON appointments(tenant_id, appointment_date);
 CREATE INDEX idx_appt_status ON appointments(tenant_id, status_key);
 CREATE INDEX idx_appt_dentist_date ON appointments(tenant_id, dentist_id, appointment_date);
+
+-- One active appointment per dentist per exact start time (public portal race guard).
+-- Cancelled / no-show / soft-deleted rows free the slot again.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_appt_active_slot
+    ON appointments(dentist_id, appointment_date)
+    WHERE status_key NOT IN ('appt.status.cancelled', 'appt.status.no_show');
+
+-- ============================================================================
+-- 8.5 WORKING HOURS (Tenant-Scoped, public booking availability)
+-- ============================================================================
+-- Weekly availability template per dentist. day_of_week follows the JS
+-- getDay() convention: 0 = Sunday ... 6 = Saturday. Slot granularity is
+-- per-row so a clinic can run 20-minute hygiene slots alongside 60-minute
+-- consultations by declaring two ranges for the same day.
+CREATE TABLE working_hours (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    dentist_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    slot_minutes SMALLINT NOT NULL DEFAULT 30 CHECK (slot_minutes BETWEEN 10 AND 120),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_wh_time CHECK (start_time < end_time),
+    CONSTRAINT uq_working_hours UNIQUE (dentist_id, day_of_week, start_time)
+);
+
+COMMENT ON TABLE working_hours IS 'Weekly bookable availability per dentist; drives /public/:clinic/slots';
+COMMENT ON COLUMN working_hours.day_of_week IS 'JS getDay() convention: 0=Sunday .. 6=Saturday';
+
+CREATE INDEX idx_wh_tenant_day ON working_hours(tenant_id, day_of_week);
+CREATE INDEX idx_wh_dentist ON working_hours(dentist_id);
 
 
 

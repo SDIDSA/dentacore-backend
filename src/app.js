@@ -26,6 +26,7 @@ const prescriptionRoutes = require('./routes/prescriptions');
 const reportRoutes = require('./routes/reports');
 const notificationRoutes = require('./routes/notifications');
 const odontogramRoutes = require('./routes/odontogram');
+const publicBookingRoutes = require('./routes/publicBookings');
 
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
@@ -135,6 +136,10 @@ app.use('/api/v1/prescriptions', prescriptionRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/odontogram', odontogramRoutes);
+
+// Public booking portal — unauthenticated by design; clinic resolved from the
+// subdomain slug in the path, strict per-IP limiter inside the router.
+app.use('/api/v1/public', publicBookingRoutes);
 
 if (process.env.NODE_ENV !== 'production') {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
