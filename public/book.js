@@ -70,7 +70,37 @@
         err_name:'أدخل اسمك الكامل.', sending:'جارٍ الإرسال…', min:'د', aria_theme:'تغيير المظهر', aria_lang:'اللغة' }
     };
 
-    var $ = function (id) { return document.getElementById(id); };
+    // Official category translations, extracted from dentacore lang files
+    // (en_us/fr_fr/ar_dz.json). Unknown/custom keys fall back to a prettified key.
+    // Official category translations extracted from dentacore lang files
+    // (en_us/fr_fr/ar_dz.json). Unknown/custom keys fall back to a prettified key.
+    var CATS = {
+      "cat.cosmetic": { en: "Cosmetic", fr: "Esthétique", ar: "تجميلي" },
+      "cat.cosmetic.veneers": { en: "Veneers", fr: "Facettes", ar: "فينير" },
+      "cat.cosmetic.whitening": { en: "Whitening", fr: "Blanchiment", ar: "تبييض" },
+      "cat.custom.pediatric": { en: "Pediatric", fr: "Pédiatrie", ar: "طب أسنان الأطفال" },
+      "cat.endodontics": { en: "Endodontics", fr: "Endodontie", ar: "علاج الجذور" },
+      "cat.endodontics.root_canal": { en: "Root Canal", fr: "Traitement de canal", ar: "معالجة قناة الجذر" },
+      "cat.orthodontics": { en: "Orthodontics", fr: "Orthodontie", ar: "تقويم الأسنان" },
+      "cat.orthodontics.braces": { en: "Braces", fr: "Appareils dentaires", ar: "تقويم معدني" },
+      "cat.orthodontics.clear_aligners": { en: "Clear Aligners", fr: "Gouttières transparentes", ar: "تقويم شفاف" },
+      "cat.periodontics": { en: "Periodontics", fr: "Parodontie", ar: "علاج اللثة" },
+      "cat.preventive": { en: "Preventive", fr: "Prévention", ar: "وقائي" },
+      "cat.preventive.cleaning": { en: "Cleaning", fr: "Détartrage", ar: "تنظيف الأسنان" },
+      "cat.preventive.fluoride": { en: "Fluoride", fr: "Fluorure", ar: "فلورايد" },
+      "cat.preventive.sealants": { en: "Sealants", fr: "Scellements", ar: "سد الشقوق" },
+      "cat.prosthodontics": { en: "Prosthodontics", fr: "Prothèse", ar: "تعويضات الأسنان" },
+      "cat.restorative": { en: "Restorative", fr: "Restauratrice", ar: "ترميمي" },
+      "cat.restorative.bridge": { en: "Bridge", fr: "Pont", ar: "جسر" },
+      "cat.restorative.crown": { en: "Crown", fr: "Couronne", ar: "تاج" },
+      "cat.restorative.filling": { en: "Filling", fr: "Plombage", ar: "حشوة" },
+      "cat.surgery": { en: "Surgery", fr: "Chirurgie", ar: "جراحة" },
+      "cat.surgery.extraction": { en: "Extraction", fr: "Extraction", ar: "خلع" },
+      "cat.surgery.implant": { en: "Implant", fr: "Implant", ar: "زرع" },
+      "cat.surgery.wisdom_tooth": { en: "Wisdom Tooth", fr: "Dent de sagesse", ar: "ضرس العقل" }
+    };
+
+    var $ = function (id) { return document.getElementById(id); };    var $ = function (id) { return document.getElementById(id); };
     var qsa = function (sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); };
     var LANG = de.getAttribute('lang');
 
@@ -88,7 +118,28 @@
       qsa('.lang-btn').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-l') === LANG); });
       $('themeBtn').setAttribute('aria-label', t('aria_theme'));
       renderDates();          // localized day labels; preserves selection
+      renderServices();       // localized category labels; preserves selection
       syncSummary();
+    }
+
+    function serviceLabel(key) {
+      var c = CATS[key];
+      return (c && (c[LANG] || c.en)) || key.replace(/^[^.]*\./, '').replace(/_/g, ' ');
+    }
+
+    function renderServices() {
+      var sb = $('services'); sb.innerHTML = '';
+      (state.services || []).forEach(function (s) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'chip';
+        b.textContent = serviceLabel(s.category_key);
+        if (state.serviceId === s.id) b.classList.add('on');
+        b.addEventListener('click', function () {
+          state.serviceId = (state.serviceId === s.id) ? null : s.id;
+          mark(sb, state.serviceId ? b : null);
+        });
+        sb.appendChild(b);
+      });
     }
 
     function setLang(l) {
@@ -110,7 +161,7 @@
     });
 
     // ---- state ----
-    var state = { dentists: [], dentistId: null, serviceId: null, date: null,
+    var state = { dentists: [], dentistId: null, serviceId: null, services: [], date: null,
                   slot: null, dates: [], slotMinutes: 30 };
 
     function show(id) { $(id).classList.remove('hidden'); }
@@ -206,17 +257,8 @@
         dbx.appendChild(b);
       });
 
-      var sb = $('services');
-      (rs[1].body || []).forEach(function (s) {
-        var b = document.createElement('button');
-        b.type = 'button'; b.className = 'chip';
-        b.textContent = s.category_key.replace(/^[^.]*\./, '').replace(/_/g, ' ');
-        b.addEventListener('click', function () {
-          state.serviceId = (state.serviceId === s.id) ? null : s.id;
-          mark(sb, state.serviceId ? b : null);
-        });
-        sb.appendChild(b);
-      });
+      state.services = rs[1].body;
+      renderServices();
 
       renderDates();
       show('flow');
