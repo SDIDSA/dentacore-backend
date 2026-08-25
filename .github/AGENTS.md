@@ -8,10 +8,9 @@ GitHub Actions CI pipeline for the backend.
 
 ## Local Contracts
 - Triggers on push/PR to main/master/develop branches
-- Test job boots a `postgres:16-alpine` service, applies the full schema (`db.sql`) and seed (`seed.sql`) via psql, then runs `npm run migrate` (exercises the migration path against a fresh baseline) followed by `npm test`
+- Test job boots a `postgres:16-alpine` service, applies the full schema (`db.sql`) and seed (`seed.sql`) via psql, then runs `npm test`
 - Node.js version: 20.x
-- Lint job runs `npx eslint src/ --ext .js` (continue-on-error)
-- No Docker image build — the Docker path was removed; the shipped deployment is native (bundled Node + PostgreSQL)
+- No lint job (ESLint is not configured in this repo) and no Docker image build — the shipped deployment is a zip-upload where Node.js and PostgreSQL are installed via apt by `deploy/setup.sh` (nothing is bundled)
 
 ## Work Guidance
 

@@ -1,14 +1,12 @@
 # Config
 
 ## Purpose
-Application configuration modules — database connection, Cloudinary media storage, Swagger API docs, migration runner, error definitions, and structured logging.
+Application configuration modules — database connection, Cloudinary media storage, Swagger API docs, error definitions, and structured logging.
 
 ## Ownership
 - `database.js` — Kysely + pg connection pool setup
 - `cloudinary.js` — Cloudinary SDK config
 - `swagger.js` — Swagger/OpenAPI spec generation
-- `autoMigrate.js`
-- `migrations.js` — Migration runner wrapper
 - `errors.js` — Custom error classes and codes
 - `logger.js` — Winston/structured logger config
 
@@ -18,7 +16,6 @@ Application configuration modules — database connection, Cloudinary media stor
 - `database.js` exports a `db` Kysely instance — single source of truth for DB access
 - `errors.js` exports `AppError` base class with HTTP statusCode and error code
 - `logger.js` exports singleton logger; log level controlled by `LOG_LEVEL` env var; also mirrors lines to `utils/fileSink.js` (file logging, disable with `LOG_FILE=false`)
-- `autoMigrate.js` applies pending `migrations/*.up.sql` sequentially at boot and throws on the first failure (the failed migration is not recorded) — never run it concurrently with a manual migrate
 
 ## Work Guidance
 

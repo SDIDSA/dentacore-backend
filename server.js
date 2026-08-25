@@ -4,7 +4,6 @@ const db = require('./src/config/database');
 const logger = require('./src/config/logger');
 const { initSocket } = require('./src/socket');
 const { checkUpcomingAppointments } = require('./src/services/notificationService');
-const { autoMigrate } = require('./src/config/autoMigrate');
 
 const PORT = process.env.PORT || 4000;
 const REMINDER_INTERVAL_MS = parseInt(process.env.REMINDER_INTERVAL_MS) || 15 * 60 * 1000;
@@ -12,10 +11,6 @@ const REMINDER_INTERVAL_MS = parseInt(process.env.REMINDER_INTERVAL_MS) || 15 * 
 let httpServer = null;
 
 async function start() {
-  if (process.env.AUTO_MIGRATE === 'true') {
-    logger.info('AUTO_MIGRATE enabled — applying pending migrations');
-    await autoMigrate(logger);
-  }
   return new Promise((resolve) => {
     const srv = app.listen(PORT, () => resolve(srv));
   });

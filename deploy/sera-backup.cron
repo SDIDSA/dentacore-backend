@@ -1,0 +1,5 @@
+# Sera nightly backup + maintenance (installed by deploy/setup.sh --backup-cron)
+# Runs as the postgres user (peer-auth socket access). To enable offsite copies,
+# configure rclone for the postgres user (`sudo -u postgres rclone config`) and
+# set __OFFSITE__ below to an rclone destination (e.g. remote:bucket/sera).
+30 2 * * * postgres APP_DIR=__APP_DIR__ OFFSITE_REMOTE=__OFFSITE__ /bin/bash __APP_DIR__/deploy/backup.sh >> /var/log/sera-backup.log 2>&1

@@ -714,7 +714,7 @@ BEGIN
                 CASE WHEN random() < 0.20 THEN 60 ELSE 30 END,
                 v_status_key, v_reason, v_note,
                 CASE WHEN random() < 0.5 THEN v_admin_id ELSE v_receptionist_id END
-            );
+            ) ON CONFLICT DO NOTHING;
             
             v_total_appts := v_total_appts + 1;
         END LOOP;
@@ -1852,9 +1852,9 @@ BEGIN
 
     -- ========================================================================
     -- 6.5: PRESCRIPTIONS (El-Qods: 10, Sourire: 2, Teyar: 3)
-    -- Note: prescription_number is provided explicitly because the
-    -- auto-numbering trigger (trg_set_prescription_number) is in the
-    -- migration file, not in db.sql. Format: RX-YYYYMM-NNNN
+    -- Note: prescription_number is provided explicitly (the auto-numbering
+    -- trigger trg_set_prescription_number in db.sql only fills it when NULL).
+    -- Format: RX-YYYYMM-NNNN
     -- ========================================================================
     INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, notes, status_key, created_by)
     VALUES

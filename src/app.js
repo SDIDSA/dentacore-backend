@@ -34,6 +34,10 @@ const { apiLimiter, mutationLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
 
+// Behind nginx (single reverse-proxy hop) in production; lets express-rate-limit
+// and req.ip see real client IPs from X-Forwarded-For instead of 127.0.0.1.
+app.set('trust proxy', 1);
+
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
@@ -145,37 +149,6 @@ if (process.env.NODE_ENV !== 'production') {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 }
-
-const path = require('node:path');
-const fs = require('node:fs');
-const updatesDir = path.join(__dirname, '..', 'updates');
-const SAFE_UPDATE_FILENAME = /^[\w][\w .()-]*\.(exe|zip|json)$/i;
-app.use('/api/v1/updates', (req, res, next) => {
-  if (req.path === '/version') {
-    const versionFile = path.join(updatesDir, 'version.json');
-    if (!fs.existsSync(versionFile)) {
-      return res.status(404).json({ error: 'update.not_found' });
-    }
-    try {
-      const ver = JSON.parse(fs.readFileSync(versionFile, 'utf8'));
-      res.json(ver);
-    } catch {
-      res.status(500).json({ error: 'error.internal_server' });
-    }
-  } else if (req.path.startsWith('/download/')) {
-    const filename = path.basename(req.path.slice('/download/'.length));
-    if (!SAFE_UPDATE_FILENAME.test(filename)) {
-      return res.status(400).json({ error: 'validation.error' });
-    }
-    const filePath = path.join(updatesDir, filename);
-    if (!path.resolve(filePath).startsWith(path.resolve(updatesDir) + path.sep)) {
-      return res.status(400).json({ error: 'validation.error' });
-    }
-    res.download(filePath, filename);
-  } else {
-    next();
-  }
-});
 
 app.use(express.static('public'));
 

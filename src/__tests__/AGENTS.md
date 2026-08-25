@@ -17,7 +17,6 @@ Jest test suite for backend API endpoints, RBAC, multi-tenancy, and business log
 - `rbacGating.test.js` — Admin-only endpoint gating regression tests (audit-logs, reports, recent-activity: 403 non-admin / 200 admin)
 - `reports.test.js` — Report endpoint tests
 - `treatmentPlans.test.js` — Treatment plan status workflow tests
-- `updatesDownloadGuard.test.js` — `/api/v1/updates` path traversal guard regression tests
 
 ## Local Contracts
 - Tests use supertest against the Express app (no live server)
@@ -29,7 +28,7 @@ Jest test suite for backend API endpoints, RBAC, multi-tenancy, and business log
 ## Work Guidance
 
 ## Verification
-- `npm test` from project root runs the full Jest suite (170 passing, 14 files)
+- `npm test` from project root runs the full Jest suite (166 passing, 13 files)
 - `crossTenantIsolation.test.js` also covers invoice line-item `treatment_record_id` and treatments.js reference tenancy (regression tests for the guards added pre-delivery)
 
 ## Child DOX Index
