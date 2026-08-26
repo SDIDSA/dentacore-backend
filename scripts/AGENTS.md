@@ -8,6 +8,7 @@ Maintenance and utility scripts for database management and seeding.
 - `seed-sql.js` — Runner that delegates to `recreate-db.cmd`/`.sh`
 - `seed.sql` — SQL seed data for 3 demo clinics (El-Qods ~100 patients/396 appointments, Sourire trial, Teyar personal)
 - `seed-demo-clinic.js` — Idempotent prototype seeder for the public booking portal: creates tenant `clinic-demo` with two dentists and Sun–Thu 08:30–12:00 / 13:30–17:00 (plus Sat morning) `working_hours`; prints the slug; loads its own dotenv
+- `create-platform-admin.js` — Creates or resets the platform owner account (`auth.role.platform_admin`) under the reserved `sera-platform` tenant; usage: `node scripts/create-platform-admin.js <email> <password> [full name]`; refuses to promote emails that already belong to a clinic tenant
 - `test-db-connection.js` — Database connection test script
 - `force-rls.js` — Guarded stub: refuses to run unless `ENABLE_FORCE_RLS=true`; FORCE RLS with no policies default-denies all access including the table owner, so policies must exist first
 - `verify-multitenancy.js` — Proves the app-layer tenant_id discriminator (no RLS exists; session vars are no-ops); asserts zero foreign-tenant rows in scoped selects and EXITS NON-ZERO on failure (CI-usable)

@@ -1,7 +1,7 @@
 # Routes
 
 ## Purpose
-Express route handlers for the API: 19 authenticated entity modules + 2 public modules (booking + signup). Each route module defines CRUD + search endpoints.
+Express route handlers for the API: 19 authenticated entity modules + 2 public modules (booking, signup) + 1 platform-operator module. Each route module defines CRUD + search endpoints.
 
 ## Ownership
 - `appointments.js` — Appointment scheduling CRUD
@@ -19,6 +19,7 @@ Express route handlers for the API: 19 authenticated entity modules + 2 public m
 - `prescriptions.js` — Prescription/eRx CRUD with RX-numbering
 - `publicBookings.js` — Public web booking portal API (unauthenticated; see contract below)
 - `signup.js` — Public clinic self-signup (unauthenticated; see contract below)
+- `platform.js` — Operator console API (cross-tenant; see contract below)
 - `purchaseOrders.js` — Purchase order CRUD
 - `reports.js` — Aggregated report endpoints
 - `treatmentPlans.js` — Treatment plan CRUD with status workflow
@@ -39,6 +40,7 @@ Express route handlers for the API: 19 authenticated entity modules + 2 public m
   - guards: `strictMutationLimiter` router-wide, max 1 upcoming booking per phone, and schema-level `uq_appt_active_slot` (unique dentist+start among active statuses) arbitrates races → `409 public.booking.slot_taken`
   - errors use `public.booking.*` keys; responses never echo other tenants' data
 - **`signup.js` is the third intentionally-unauthenticated surface** — `POST /api/v1/signup` creates a trial tenant (30-day `subscription_ends_at`) + its `auth.role.admin` user in one transaction; guards: own `signupLimiter` (10/hour/IP, test-bypassed), in-transaction uniqueness checks → `409 signup.error.subdomain_taken` / `signup.error.email_taken`, reserved-slug denylist (www/api/app/admin/book/signup/…), schema-format validation (subdomain regex, `+213` phone, password ≥ 8). Served page: `public/signup.html` + `signup.js`. The client's login screen links here (`App.SIGNUP_URL`)
+- **`platform.js` is the cross-tenant operator surface (durable)** — router-wide `authenticate` + `authorize('auth.role.platform_admin')`; a role no clinic account holds. Deliberately ignores the tenant discriminator: `GET /stats` (platform totals), `GET /tenants` (search/status filter + pagination + correlated per-tenant user/patient/appointment counts), `GET /tenants/:id` (detail + users), `PATCH /tenants/:id` (whitelisted fields only: name, subscription_status (enum-checked), subscription_plan, subscription_ends_at, is_active). Mounted with `mutationLimiter` in `app.js`. Served page: `public/platform.html` + `platform.js`; operator account provisioned by `scripts/create-platform-admin.js` under the reserved `sera-platform` tenant. Role seeds (incl. `auth.role.platform_admin`) live in `db.sql` (idempotent `ON CONFLICT DO NOTHING`) — not just seed.sql
 - Odontogram uses non-standard routing (patient-scoped, not entity-scoped)
 - **DELETE returns 204 no-content uniformly** (including users delete and changePassword) — clients declare `Call<Void>`
 - **Admin-gated modules**: `auditLogs.js` and `reports.js` wholesale via `authorize('auth.role.admin')`; dashboard `/recent-activity` per-route; `users.js` wholesale

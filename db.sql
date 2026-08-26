@@ -66,6 +66,16 @@ COMMENT ON COLUMN roles.role_key IS 'Unique translation key for frontend mapping
 
 CREATE INDEX IF NOT EXISTS idx_roles_key ON roles(role_key);
 
+-- Role seeds (idempotent). These used to live only in seed.sql, which left a
+-- fresh schema (db.sql without --seed) with ZERO roles - signup and user
+-- creation would fail.
+INSERT INTO roles (role_key, description) VALUES
+    ('auth.role.admin', 'System Administrator with full access'),
+    ('auth.role.dentist', 'Licensed dentist with clinical access'),
+    ('auth.role.receptionist', 'Front desk staff for appointments and billing'),
+    ('auth.role.platform_admin', 'Platform owner - manages all tenants (Sera operator)')
+ON CONFLICT (role_key) DO NOTHING;
+
 -- ============================================================================
 -- 3. GEOGRAPHIC DATA - ALGERIA (Global)
 -- ============================================================================

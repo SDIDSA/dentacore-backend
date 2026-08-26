@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sera Platform</title>
+<meta name="robots" content="noindex, nofollow">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="portal.css">
+<script src="site.js"></script>
+<script src="platform.js"></script>
+<style>
+  .sheet { width: min(1100px, 100%); }
+  h1 { font-size: clamp(1.3rem, 3vw, 1.7rem); }
+
+  /* ---- login ---- */
+  #login { display: flex; justify-content: center; padding-top: 8vh; }
+  #login .card { width: min(400px, 100%); }
+  #login h1 { margin-bottom: 4px; }
+
+  /* ---- app shell ---- */
+  .tabs { display: flex; gap: 8px; margin: 22px 0 18px; }
+  .tab {
+    border: 1px solid var(--line-strong); background: var(--card); color: var(--muted);
+    padding: 9px 18px; border-radius: 4px; cursor: pointer; font: inherit; font-size: .92rem;
+    font-weight: 500; transition: border-color .12s, background .12s, color .12s;
+  }
+  .tab:hover { border-color: var(--primary); color: var(--primary); }
+  .tab.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+  .logout {
+    border: 1px solid var(--line-strong); background: transparent; color: var(--muted);
+    font-family: 'Fira Code', monospace; font-size: .68rem; letter-spacing: .08em;
+    padding: 8px 11px; border-radius: 4px; cursor: pointer; transition: color .12s, border-color .12s;
+  }
+  .logout:hover { color: var(--primary); border-color: var(--primary); }
+
+  /* ---- stats ---- */
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  .stat .k { font-family: 'Fira Code', monospace; font-size: .66rem; letter-spacing: .1em;
+             text-transform: uppercase; color: var(--muted); }
+  .stat .v { font-size: 1.7rem; font-weight: 700; color: var(--ink); margin-top: 4px; line-height: 1.2; }
+  .stat .v small { font-size: .8rem; font-weight: 400; color: var(--muted); }
+
+  .section-label { font-family:'Fira Code',monospace; font-size:.74rem; color:var(--muted);
+                   letter-spacing:.08em; margin:26px 0 12px; text-transform: uppercase; }
+  .section-label b { color: var(--primary); margin-inline-end: 8px; }
+
+  /* ---- table ---- */
+  .tbl-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 6px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th { font-family: 'Fira Code', monospace; font-size: .64rem; letter-spacing: .1em; text-transform: uppercase;
+       color: var(--muted); text-align: start; padding: 12px 14px; border-bottom: 1px solid var(--line-strong); }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { cursor: pointer; transition: background .1s; }
+  tbody tr:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); }
+  td.num { font-family: 'Fira Code', monospace; font-size: .82rem; }
+
+  .pill { display: inline-block; font-family: 'Fira Code', monospace; font-size: .66rem; letter-spacing: .06em;
+          padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); }
+  .pill.active   { color: #15803d; border-color: #86efac; background: #f0fdf4; }
+  .pill.trial    { color: #1d4ed8; border-color: #bfdbfe; background: #eff6ff; }
+  .pill.suspended, .pill.cancelled, .pill.expired { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
+  [data-theme="dark"] .pill.active   { color: #4ade80; border-color: #166534; background: #052e16; }
+  [data-theme="dark"] .pill.trial    { color: #60a5fa; border-color: #1e3a8a; background: #172554; }
+  [data-theme="dark"] .pill.suspended, [data-theme="dark"] .pill.cancelled, [data-theme="dark"] .pill.expired { color: #fca5a5; border-color: #7f1d1d; background: #450a0a; }
+
+  /* ---- toolbar ---- */
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .toolbar input[type="text"], .toolbar input[type="search"] {
+    width: min(320px, 100%); border: 1px solid var(--line-strong); border-radius: 4px;
+    padding: 9px 12px; font: inherit; font-size: .9rem; color: var(--ink); background: var(--card);
+  }
+  .toolbar input:focus { outline: none; border-color: var(--primary); }
+  .toolbar .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    border: 1px solid var(--line-strong); background: var(--card); color: var(--muted);
+    padding: 6px 12px; border-radius: 999px; cursor: pointer; font: inherit; font-size: .78rem;
+    transition: border-color .12s, background .12s, color .12s;
+  }
+  .chip:hover { border-color: var(--primary); color: var(--primary); }
+  .chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+  .pager { display: flex; align-items: center; gap: 12px; justify-content: flex-end; margin-top: 12px; }
+  .pager button {
+    border: 1px solid var(--line-strong); background: var(--card); color: var(--ink);
+    padding: 7px 14px; border-radius: 4px; cursor: pointer; font: inherit; font-size: .85rem;
+  }
+  .pager button:disabled { opacity: .4; cursor: not-allowed; }
+  .pager button:not(:disabled):hover { border-color: var(--primary); color: var(--primary); }
+  .pager .note { align-self: center; }
+
+  /* ---- detail ---- */
+  .detail-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .back { border: none; background: transparent; color: var(--primary); font: inherit; font-size: .88rem;
+          cursor: pointer; padding: 0; }
+  .back:hover { text-decoration: underline; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  select {
+    width: 100%; border: 1px solid var(--line-strong); border-radius: 4px;
+    padding: 11px 13px; font: inherit; font-size: .95rem; color: var(--ink); background: var(--card);
+  }
+  select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+  .save-row { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
+  .ok-msg { color: #15803d; font-size: .85rem; }
+  [data-theme="dark"] .ok-msg { color: #4ade80; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 5px 16px; font-size: .92rem; }
+  .kv dt { font-size: .7rem; align-self: center; }
+  .kv dd { font-weight: 500; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="head">
+    <div>
+      <p class="kicker" data-i="kicker">Platform</p>
+      <h1 data-i="title">Sera Operator Console</h1>
+    </div>
+    <div class="controls" id="headerControls" style="visibility:hidden">
+      <div class="lang-group" role="group" aria-label="Language">
+        <button type="button" class="lang-btn" data-l="en">EN</button>
+        <button type="button" class="lang-btn" data-l="fr">FR</button>
+        <button type="button" class="lang-btn" data-l="ar">ع</button>
+      </div>
+      <button type="button" class="theme-btn" id="themeBtn" aria-label="Switch color theme">
+        <svg class="icon-sun" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 18C8.68629 18 6 15.3137 6 12C6 8.68629 8.68629 6 12 6C15.3137 6 18 8.68629 18 12C18 15.3137 15.3137 18 12 18ZM12 16C14.2091 16 16 14.2091 16 12C16 9.79086 14.2091 8 12 8C9.79086 8 8 9.79086 8 12C8 14.2091 9.79086 16 12 16ZM11 1H13V4H11V1ZM11 20H13V23H11V20ZM3.51472 4.92893L4.92893 3.51472L7.05025 5.63604L5.63604 7.05025L3.51472 4.92893ZM16.9497 18.364L18.364 16.9497L20.4853 19.0711L19.0711 20.4853L16.9497 18.364ZM19.0711 3.51472L20.4853 4.92893L18.364 7.05025L16.9497 5.63604L19.0711 3.51472ZM5.63604 16.9497L7.05025 18.364L4.92893 20.4853L3.51472 19.0711L5.63604 16.9497ZM23 11V13H20V11H23ZM4 11V13H1V11H4Z"/></svg>
+        <svg class="icon-moon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6C10 10.4183 13.5817 14 18 14C19.4386 14 20.7885 13.6203 21.9549 12.9556C21.4738 18.0302 17.2005 22 12 22C6.47715 22 2 17.5228 2 12C2 6.79948 5.9698 2.52616 11.0444 2.04507C10.3797 3.21152 10 4.56142 10 6Z"/></svg>
+      </button>
+      <button type="button" class="logout" id="logoutBtn" data-i="logout" style="visibility:hidden">Log out</button>
+    </div>
+  </header>
+
+  <!-- login -->
+  <main id="login">
+    <div class="card">
+      <p data-i="login_lede">Operator access only.</p>
+      <label for="email" data-i="email">Email</label>
+      <input id="email" dir="ltr" type="email" autocomplete="username">
+      <label for="password" data-i="password">Password</label>
+      <input id="password" dir="ltr" type="password" autocomplete="current-password">
+      <div class="actions">
+        <button class="btn" id="loginBtn" data-i="signin">Sign in</button>
+      </div>
+      <div class="msg err hidden" id="loginErr"></div>
+    </div>
+  </main>
+
+  <!-- app -->
+  <main id="app" class="hidden">
+    <div class="tabs">
+      <button type="button" class="tab on" id="tabOverview" data-i="tab_overview">Overview</button>
+      <button type="button" class="tab" id="tabClinics" data-i="tab_clinics">Clinics</button>
+    </div>
+
+    <!-- overview -->
+    <section id="viewOverview">
+      <div class="stats" id="statGrid"></div>
+      <p class="section-label"><b>01</b><span data-i="recent_signups">Recent signups</span></p>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-i="th_clinic">Clinic</th>
+              <th data-i="th_address">Address</th>
+              <th data-i="th_status">Status</th>
+              <th data-i="th_created">Created</th>
+            </tr>
+          </thead>
+          <tbody id="recentBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- clinics -->
+    <section id="viewClinics" class="hidden">
+      <div class="toolbar">
+        <input type="search" id="search" data-i-ph="search_ph" placeholder="Search name or address…">
+        <div class="chips" id="statusChips"></div>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-i="th_clinic">Clinic</th>
+              <th data-i="th_address">Address</th>
+              <th data-i="th_status">Status</th>
+              <th data-i="th_plan">Plan</th>
+              <th data-i="th_users">Users</th>
+              <th data-i="th_patients">Patients</th>
+              <th data-i="th_appts">Appts</th>
+              <th data-i="th_created">Created</th>
+            </tr>
+          </thead>
+          <tbody id="tenantsBody"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <span class="note" id="pagerInfo"></span>
+        <button type="button" id="prevBtn" data-i="prev">‹ Prev</button>
+        <button type="button" id="nextBtn" data-i="next">Next ›</button>
+      </div>
+    </section>
+
+    <!-- tenant detail -->
+    <section id="viewDetail" class="hidden">
+      <div class="detail-head">
+        <button type="button" class="back" id="backBtn">← <span data-i="back">Back to clinics</span></button>
+        <span class="pill" id="detailPill"></span>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <p class="section-label" style="margin-top:0"><b>01</b><span data-i="subscription">Subscription</span></p>
+          <label for="editStatus" data-i="th_status">Status</label>
+          <select id="editStatus"></select>
+          <label for="editPlan" data-i="th_plan">Plan</label>
+          <input id="editPlan" dir="ltr" placeholder="starter / clinic / enterprise">
+          <label for="editEnds" data-i="trial_ends">Trial / subscription ends</label>
+          <input id="editEnds" dir="ltr" type="date">
+          <div class="save-row">
+            <button class="btn" id="saveBtn" data-i="save">Save</button>
+            <span class="ok-msg hidden" id="saveOk" data-i="saved">Saved ✓</span>
+          </div>
+          <div class="msg err hidden" id="detailErr"></div>
+        </div>
+        <div class="card">
+          <p class="section-label" style="margin-top:0"><b>02</b><span data-i="clinic_info">Clinic</span></p>
+          <dl class="kv" id="detailInfo"></dl>
+        </div>
+      </div>
+      <p class="section-label"><b>03</b><span data-i="team">Team</span></p>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-i="name">Name</th>
+              <th data-i="email">Email</th>
+              <th data-i="th_role">Role</th>
+              <th data-i="th_status">Status</th>
+              <th data-i="th_lastlogin">Last login</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>sera · <span data-i="footer">operator console · internal use</span></footer>
+</div>
+
+</body>
+</html>
