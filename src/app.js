@@ -27,6 +27,7 @@ const reportRoutes = require('./routes/reports');
 const notificationRoutes = require('./routes/notifications');
 const odontogramRoutes = require('./routes/odontogram');
 const publicBookingRoutes = require('./routes/publicBookings');
+const signupRoutes = require('./routes/signup');
 
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
@@ -121,6 +122,7 @@ app.use('/api/v1/users', mutationLimiter);
 
 // API v1 routes
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/signup', signupRoutes);
 app.use('/api/v1/patients', patientRoutes);
 app.use('/api/v1/appointments', appointmentRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);

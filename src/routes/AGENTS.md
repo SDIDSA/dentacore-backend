@@ -1,7 +1,7 @@
 # Routes
 
 ## Purpose
-Express route handlers for the API: 19 authenticated entity modules + 1 public booking module. Each route module defines CRUD + search endpoints.
+Express route handlers for the API: 19 authenticated entity modules + 2 public modules (booking + signup). Each route module defines CRUD + search endpoints.
 
 ## Ownership
 - `appointments.js` — Appointment scheduling CRUD
@@ -18,6 +18,7 @@ Express route handlers for the API: 19 authenticated entity modules + 1 public b
 - `payments.js` — Payment recording CRUD
 - `prescriptions.js` — Prescription/eRx CRUD with RX-numbering
 - `publicBookings.js` — Public web booking portal API (unauthenticated; see contract below)
+- `signup.js` — Public clinic self-signup (unauthenticated; see contract below)
 - `purchaseOrders.js` — Purchase order CRUD
 - `reports.js` — Aggregated report endpoints
 - `treatmentPlans.js` — Treatment plan CRUD with status workflow
@@ -37,6 +38,7 @@ Express route handlers for the API: 19 authenticated entity modules + 1 public b
   - POST creates a guest patient stub (name + phone only; dob/gender nullable) with the standard `PAT-YYYY-NNNN` code, then an appointment at `appt.status.scheduled`; the request time must exactly match a currently-free slot
   - guards: `strictMutationLimiter` router-wide, max 1 upcoming booking per phone, and schema-level `uq_appt_active_slot` (unique dentist+start among active statuses) arbitrates races → `409 public.booking.slot_taken`
   - errors use `public.booking.*` keys; responses never echo other tenants' data
+- **`signup.js` is the third intentionally-unauthenticated surface** — `POST /api/v1/signup` creates a trial tenant (30-day `subscription_ends_at`) + its `auth.role.admin` user in one transaction; guards: own `signupLimiter` (10/hour/IP, test-bypassed), in-transaction uniqueness checks → `409 signup.error.subdomain_taken` / `signup.error.email_taken`, reserved-slug denylist (www/api/app/admin/book/signup/…), schema-format validation (subdomain regex, `+213` phone, password ≥ 8). Served page: `public/signup.html` + `signup.js`. The client's login screen links here (`App.SIGNUP_URL`)
 - Odontogram uses non-standard routing (patient-scoped, not entity-scoped)
 - **DELETE returns 204 no-content uniformly** (including users delete and changePassword) — clients declare `Call<Void>`
 - **Admin-gated modules**: `auditLogs.js` and `reports.js` wholesale via `authorize('auth.role.admin')`; dashboard `/recent-activity` per-route; `users.js` wholesale

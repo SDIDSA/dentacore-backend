@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create your clinic</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<script src="signup.js"></script>
+<style>
+  /* Same token set as book.html — light mirrors website/style.css light,
+     dark mirrors the app/site night palette */
+  :root, [data-theme="light"] {
+    --page: #f8fafc;
+    --card: #ffffff;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --line-strong: #cbd5e1;
+    --primary: #2563eb;
+    --primary-strong: #1d4ed8;
+  }
+  [data-theme="dark"] {
+    --page: #0f172a;
+    --card: #1e293b;
+    --ink: #f1f5f9;
+    --muted: #94a3b8;
+    --line: #273245;
+    --line-strong: #3b4a63;
+    --primary: #3b82f6;
+    --primary-strong: #60a5fa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Readex Pro', system-ui, sans-serif;
+    background: var(--page); color: var(--ink);
+    line-height: 1.6; min-height: 100vh;
+    display: flex; justify-content: center; padding: 40px 16px;
+    -webkit-font-smoothing: antialiased;
+    transition: background .2s ease, color .2s ease;
+  }
+  .sheet { width: min(560px, 100%); }
+
+  .head { border-bottom: 1px solid var(--line-strong); padding-bottom: 18px; margin-bottom: 26px;
+          display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+  .controls { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .lang-group { display: flex; border: 1px solid var(--line-strong); border-radius: 4px; overflow: hidden; }
+  .lang-btn {
+    border: none; background: transparent; color: var(--muted);
+    font-family: 'Fira Code', monospace; font-size: .68rem; letter-spacing: .08em;
+    padding: 8px 11px; cursor: pointer; transition: background .12s, color .12s;
+  }
+  [dir="rtl"] .lang-btn { font-family: 'Readex Pro', sans-serif; font-size: .78rem; }
+  .lang-btn:hover { color: var(--primary); }
+  .lang-btn.on { background: var(--primary); color: #fff; }
+  .theme-btn {
+    display: grid; place-items: center; width: 34px; height: 34px;
+    border: 1px solid var(--line-strong); border-radius: 4px;
+    background: transparent; color: var(--muted); cursor: pointer;
+    transition: color .12s, border-color .12s;
+  }
+  .theme-btn:hover { color: var(--primary); border-color: var(--primary); }
+  .theme-btn svg { width: 16px; height: 16px; }
+  [data-theme="dark"] .theme-btn .icon-sun { display: none; }
+  [data-theme="light"] .theme-btn .icon-moon { display: none; }
+
+  .kicker { font-family:'Fira Code',monospace; font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  .kicker::before { content:'[ '; color: var(--primary); } .kicker::after { content:' ]'; color: var(--primary); }
+  h1 { font-size: clamp(1.4rem, 4vw, 1.8rem); font-weight: 700; letter-spacing: -.02em; }
+  .lede { color: var(--muted); font-size: .95rem; margin-top: 4px; }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:26px; }
+  label { display:block; font-size:.82rem; color:var(--muted); margin:14px 0 5px; }
+  label:first-child { margin-top: 0; }
+  input {
+    width:100%; border:1px solid var(--line-strong); border-radius:4px;
+    padding:11px 13px; font:inherit; font-size:.95rem; color:var(--ink); background:var(--card);
+  }
+  input:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(37,99,235,.15); }
+  input.bad { border-color:#dc2626; }
+  .hint { font-family:'Fira Code',monospace; font-size:.68rem; color:var(--muted); letter-spacing:.05em; margin-top:5px; direction:ltr; text-align:start; }
+  .hint b { color: var(--primary); font-weight: 500; }
+
+  .actions { margin-top:22px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .btn {
+    background:var(--primary); color:#fff; border:1.5px solid var(--primary);
+    padding:13px 28px; border-radius:4px; font:inherit; font-weight:600; font-size:1rem; cursor:pointer;
+  }
+  .btn:hover { background:var(--primary-strong); border-color:var(--primary-strong); }
+  .btn[disabled] { opacity:.55; cursor:not-allowed; }
+  .note { font-family:'Fira Code',monospace; font-size:.7rem; color:var(--muted); letter-spacing:.06em; }
+
+  .msg { border:1px solid var(--line-strong); background:var(--card);
+         padding:12px 15px; border-radius:4px; font-size:.92rem; margin-top:18px; }
+  .msg.err { color:#b91c1c; border-color:#fecaca; background:#fef2f2; }
+  [data-theme="dark"] .msg.err { color:#fca5a5; border-color:#7f1d1d; background:#450a0a; }
+  .hidden { display:none !important; }
+
+  .done-num { font-family:'Fira Code',monospace; font-size:1.3rem; font-weight:500; color:var(--primary); letter-spacing:.02em; direction:ltr; }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:6px 18px; margin-top:16px; font-size:.95rem; }
+  dt { color:var(--muted); font-family:'Fira Code',monospace; font-size:.72rem; text-transform:uppercase; letter-spacing:.08em; align-self:center; }
+  dd { font-weight:500; }
+  hr.dash { border:none; border-top:1px dashed var(--line-strong); margin:20px 0; }
+
+  footer { margin-top:34px; padding-top:16px; border-top:1px dashed var(--line-strong);
+           font-family:'Fira Code',monospace; font-size:.66rem; letter-spacing:.09em;
+           text-transform:uppercase; color:var(--muted); }
+  a { color: var(--primary); }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="head">
+    <div>
+      <p class="kicker" data-i="kicker">Get started</p>
+      <h1 data-i="title">Create your clinic</h1>
+      <p class="lede" data-i="lede">30-day free trial · full features · no card required</p>
+    </div>
+    <div class="controls">
+      <div class="lang-group" role="group" aria-label="Language">
+        <button type="button" class="lang-btn" data-l="en">EN</button>
+        <button type="button" class="lang-btn" data-l="fr">FR</button>
+        <button type="button" class="lang-btn" data-l="ar">ع</button>
+      </div>
+      <button type="button" class="theme-btn" id="themeBtn" aria-label="Switch color theme">
+        <svg class="icon-sun" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 18C8.68629 18 6 15.3137 6 12C6 8.68629 8.68629 6 12 6C15.3137 6 18 8.68629 18 12C18 15.3137 15.3137 18 12 18ZM12 16C14.2091 16 16 14.2091 16 12C16 9.79086 14.2091 8 12 8C9.79086 8 8 9.79086 8 12C8 14.2091 9.79086 16 12 16ZM11 1H13V4H11V1ZM11 20H13V23H11V20ZM3.51472 4.92893L4.92893 3.51472L7.05025 5.63604L5.63604 7.05025L3.51472 4.92893ZM16.9497 18.364L18.364 16.9497L20.4853 19.0711L19.0711 20.4853L16.9497 18.364ZM19.0711 3.51472L20.4853 4.92893L18.364 7.05025L16.9497 5.63604L19.0711 3.51472ZM5.63604 16.9497L7.05025 18.364L4.92893 20.4853L3.51472 19.0711L5.63604 16.9497L23 11V13H20V11H23ZM4 11V13H1V11H4Z"/></svg>
+        <svg class="icon-moon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6C10 10.4183 13.5817 14 18 14C19.4386 14 20.7885 13.6203 21.9549 12.9556C21.4738 18.0302 17.2005 22 12 22C6.47715 22 2 17.5228 2 12C2 6.79948 5.9698 2.52616 11.0444 2.04507C10.3797 3.21152 10 4.56142 10 6Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- signup form -->
+  <main id="flow">
+    <div class="card">
+      <label for="clinicName" data-i="clinic_name">Clinic name</label>
+      <input id="clinicName" autocomplete="organization" maxlength="120">
+
+      <label for="subdomain" data-i="subdomain">Clinic address (booking link)</label>
+      <input id="subdomain" dir="ltr" autocomplete="off" maxlength="63" spellcheck="false">
+      <p class="hint">sera.dz/book/<b id="slugPreview">your-clinic</b></p>
+
+      <label for="fullName" data-i="name">Your full name</label>
+      <input id="fullName" autocomplete="name" maxlength="120">
+
+      <label for="email" data-i="email">Email (this will be your login)</label>
+      <input id="email" dir="ltr" type="email" autocomplete="email" maxlength="255">
+
+      <label for="phone" data-i="phone">Phone (Algerian mobile)</label>
+      <input id="phone" dir="ltr" placeholder="+213 5 XX XX XX XX" autocomplete="tel" maxlength="13">
+
+      <label for="password" data-i="password">Password</label>
+      <input id="password" dir="ltr" type="password" autocomplete="new-password" maxlength="128">
+
+      <label for="password2" data-i="password2">Confirm password</label>
+      <input id="password2" dir="ltr" type="password" autocomplete="new-password" maxlength="128">
+
+      <div class="actions">
+        <button class="btn" id="submitBtn" data-i="create">Create my clinic</button>
+        <span class="note" data-i="trial_note">trial starts immediately</span>
+      </div>
+      <div class="msg err hidden" id="formErr"></div>
+    </div>
+  </main>
+
+  <!-- success -->
+  <main id="done" class="hidden">
+    <div class="card" style="text-align:center">
+      <p class="kicker" style="justify-content:center;display:inline-flex" data-i="done_kicker">Welcome aboard</p>
+      <p data-i="done_ready">Your clinic is ready. Sign in from the desktop app with:</p>
+      <p class="done-num" id="doneEmail">…</p>
+      <hr class="dash">
+      <dl>
+        <dt data-i="done_clinic">Clinic</dt><dd id="doneClinic"></dd>
+        <dt data-i="done_link">Booking link</dt><dd class="done-num" id="doneSlug"></dd>
+        <dt data-i="done_trial">Trial ends</dt><dd id="doneTrial"></dd>
+      </dl>
+      <hr class="dash">
+      <p class="note" data-i="done_note">Download the desktop app from the website, sign in, and invite your team from the Staff page.</p>
+    </div>
+  </main>
+
+  <footer>sera · <span data-i="footer">clinic management · hosted &amp; secure</span></footer>
+</div>
+
+</body>
+</html>
