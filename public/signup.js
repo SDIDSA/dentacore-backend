@@ -1,32 +1,10 @@
 /* Clinic signup client — served same-origin; CSP script-src 'self' friendly.
-   Same pre-paint lang/theme resolution and dc-lang/dc-theme persistence as
-   book.js, so preferences carry across the marketing site, booking portal
-   and this page. */
+   Lang/theme pre-paint + header switchers come from site.js (shared with
+   book.html and the marketing site's dc-lang/dc-theme persistence). */
 (function () {
   'use strict';
 
-  // ---- pre-paint: resolve language and theme before first paint ------------
   var de = document.documentElement;
-  function stored(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-
-  var qs0 = new URLSearchParams(location.search);
-  var ql = qs0.get('lang');
-  var lang = ['en', 'fr', 'ar'].indexOf(ql || '') >= 0 ? ql
-    : ['en', 'fr', 'ar'].indexOf(stored('dc-lang') || '') >= 0 ? stored('dc-lang')
-    : (function () {
-        var nav = (navigator.language || 'en').toLowerCase();
-        return nav.indexOf('fr') === 0 ? 'fr' : (nav.indexOf('ar') === 0 ? 'ar' : 'en');
-      })();
-
-  var th = stored('dc-theme');
-  if (th !== 'dark' && th !== 'light') {
-    th = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
-  }
-  var qt = qs0.get('theme');            // one-shot override (?theme=dark|light), not persisted
-  if (qt === 'dark' || qt === 'light') th = qt;
-  de.setAttribute('lang', lang);
-  de.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
-  de.setAttribute('data-theme', th);
 
   document.addEventListener('DOMContentLoaded', function () {
     var T = {
@@ -107,35 +85,26 @@
     var $ = function (id) { return document.getElementById(id); };
     var flow = $('flow'), done = $('done');
 
-    function t(k) { return (T[lang] && T[lang][k]) || T.en[k] || k; }
+    function t(k) { var l = SITE.lang; return (T[l] && T[l][k]) || T.en[k] || k; }
 
     function applyLang() {
-      de.setAttribute('lang', lang);
-      de.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+      de.setAttribute('lang', SITE.lang);
+      de.setAttribute('dir', SITE.lang === 'ar' ? 'rtl' : 'ltr');
       document.title = 'Sera \u2014 ' + t('doc_title');
       document.querySelectorAll('[data-i]').forEach(function (el) {
         el.textContent = t(el.getAttribute('data-i'));
       });
       document.querySelectorAll('.lang-btn').forEach(function (b) {
-        b.classList.toggle('on', b.getAttribute('data-l') === lang);
+        b.classList.toggle('on', b.getAttribute('data-l') === SITE.lang);
       });
       $('themeBtn').setAttribute('aria-label', t('aria_theme'));
     }
 
     document.querySelectorAll('.lang-btn').forEach(function (b) {
-      b.addEventListener('click', function () {
-        lang = b.getAttribute('data-l');
-        try { localStorage.setItem('dc-lang', lang); } catch (e) {}
-        applyLang();
-      });
+      b.addEventListener('click', function () { SITE.setLang(b.getAttribute('data-l'), applyLang); });
     });
 
-    var themeBtn = $('themeBtn');
-    themeBtn.addEventListener('click', function () {
-      var next = de.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      de.setAttribute('data-theme', next);
-      try { localStorage.setItem('dc-theme', next); } catch (e) {}
-    });
+    SITE.wireControls(applyLang);
 
     // live slug preview: lowercase, keep [a-z0-9-], collapse repeats
     var subdomain = $('subdomain');
@@ -197,7 +166,7 @@
           $('doneClinic').textContent = res.body.tenant.name;
           $('doneSlug').textContent = 'sera.dz/book/' + res.body.tenant.subdomain;
           $('doneTrial').textContent = new Date(res.body.trial_ends_at)
-            .toLocaleDateString(lang === 'ar' ? 'ar-DZ' : (lang === 'fr' ? 'fr-FR' : 'en-GB'));
+            .toLocaleDateString(SITE.lang === 'ar' ? 'ar-DZ' : (SITE.lang === 'fr' ? 'fr-FR' : 'en-GB'));
           flow.classList.add('hidden');
           done.classList.remove('hidden');
           return;

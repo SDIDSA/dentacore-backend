@@ -1,32 +1,10 @@
 /* Booking portal client — served same-origin; CSP script-src 'self' friendly.
-   Pre-paint section resolves lang + theme synchronously; main logic waits for
-   DOMContentLoaded. Switchers persist to dc-lang / dc-theme — the SAME keys
-   the marketing site uses, so preferences carry across both. */
+   Lang/theme pre-paint + header switchers come from site.js (shared with
+   signup.html and the marketing site's dc-lang/dc-theme persistence). */
 (function () {
   'use strict';
 
-  // ---- pre-paint: resolve language and theme before first paint ------------
   var de = document.documentElement;
-  function stored(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-
-  var qs0 = new URLSearchParams(location.search);
-  var ql = qs0.get('lang');
-  var lang = ['en', 'fr', 'ar'].indexOf(ql || '') >= 0 ? ql
-    : ['en', 'fr', 'ar'].indexOf(stored('dc-lang') || '') >= 0 ? stored('dc-lang')
-    : (function () {
-        var nav = (navigator.language || 'en').toLowerCase();
-        return nav.indexOf('fr') === 0 ? 'fr' : (nav.indexOf('ar') === 0 ? 'ar' : 'en');
-      })();
-
-  var th = stored('dc-theme');
-  if (th !== 'dark' && th !== 'light') {
-    th = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
-  }
-  var qt = qs0.get('theme');            // one-shot override (?theme=dark|light), not persisted
-  if (qt === 'dark' || qt === 'light') th = qt;
-  de.setAttribute('lang', lang);
-  de.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
-  de.setAttribute('data-theme', th);
 
   document.addEventListener('DOMContentLoaded', function () {
     var qs = new URLSearchParams(location.search);
@@ -143,22 +121,10 @@
     }
 
     function setLang(l) {
-      if (['en', 'fr', 'ar'].indexOf(l) < 0 || l === LANG) return;
-      try { localStorage.setItem('dc-lang', l); } catch (e) {}
-      de.setAttribute('lang', l);
-      de.setAttribute('dir', l === 'ar' ? 'rtl' : 'ltr');
-      applyLang();
+      SITE.setLang(l, applyLang);
     }
 
-    qsa('.lang-btn').forEach(function (b) {
-      b.addEventListener('click', function () { setLang(this.getAttribute('data-l')); });
-    });
-
-    $('themeBtn').addEventListener('click', function () {
-      var next = de.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      de.setAttribute('data-theme', next);
-      try { localStorage.setItem('dc-theme', next); } catch (e) {}
-    });
+    SITE.wireControls(applyLang);
 
     // ---- state ----
     var state = { dentists: [], dentistId: null, serviceId: null, services: [], date: null,

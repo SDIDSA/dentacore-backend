@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sera — Dental Clinic Management</title>
+<meta name="description" content="Sera is the all-in-one dental clinic management platform. Scheduling, patient records, billing, inventory and reports — fast, offline-capable, and secure.">
+<script>
+/* resolve language before first paint to avoid wrong-direction flash */
+(function () {
+  var l = 'en';
+  try {
+    l = localStorage.getItem('dc-lang') || l;
+  } catch (_) {}
+  if (!l || l === 'en') {
+    var nav = (navigator.language || '').toLowerCase();
+    l = nav.indexOf('fr') === 0 ? 'fr' : (nav.indexOf('ar') === 0 ? 'ar' : 'en');
+  }
+  window.APP_NAME = 'Sera'; // app name SSOT for this site (mirrors pom.xml <app.name>)
+  document.documentElement.setAttribute('lang', l);
+  /* data-lang is what the i18n engine boots from (applyLang's initial LANG) —
+     without it a returning visitor's saved language was ignored */
+  document.documentElement.setAttribute('data-lang', l);
+  document.documentElement.setAttribute('dir', l === 'ar' ? 'rtl' : 'ltr');
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/svg+xml" href="icons/task-icon.svg">
+</head>
+<body>
+
+<div id="progressBar" aria-hidden="true"></div>
+
+<header class="nav">
+  <div class="container nav-inner">
+    <a class="brand" href="#top">
+      <span class="brand-mark" aria-hidden="true">
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="currentColor"><g transform="translate(4.8,4.8) scale(0.15)"><path
+     id="path1"
+     d="M 268.32554 4.4726216 C 202.01816 1.3492603 133.77995 23.549043 79.516378 75.964191 C -78.193147 228.30154 14.3336 488.94189 234.28797 511.94002 C 402.2524 529.50214 544.94832 372.50758 510.13529 208.45237 C 483.98551 85.222448 378.83785 9.6782238 268.32554 4.4726216 z M 258.73799 292.75773 C 308.17368 293.27499 357.53892 311.28546 397.30776 346.69297 C 414.23674 361.76539 414.1738 360.818 399.36196 376.99318 C 365.71056 413.74198 323.59346 435.08974 275.80784 439.62113 C 211.91236 445.68017 149.13554 419.20695 108.89568 369.23654 C 101.25056 359.74273 101.235 359.77371 119.75189 343.78763 C 159.79748 309.21522 209.3023 292.24048 258.73799 292.75773 z "
+     transform="matrix(0.49726755,0,0,0.50284557,-0.29677367,-2.1045067)" /></g></svg>
+      </span>
+      <span class="brand-name" data-brand></span>
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <div class="nav-actions">
+      <div class="lang-picker">
+        <button id="langBtn" class="theme-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Language">
+          <img id="langFlag" src="icons/flag-us.svg" alt="" width="20" height="14">
+        </button>
+        <div class="lang-menu" id="langMenu" role="menu">
+          <button type="button" role="menuitem" data-lang="en"><img src="icons/flag-us.svg" alt="" width="18" height="13">English</button>
+          <button type="button" role="menuitem" data-lang="fr"><img src="icons/flag-fr.svg" alt="" width="18" height="13">Français</button>
+          <button type="button" role="menuitem" data-lang="ar"><img src="icons/flag-dz.svg" alt="" width="18" height="13">العربية</button>
+        </div>
+      </div>
+      <button id="themeToggle" class="theme-toggle" aria-label="Switch color theme">
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 18C8.68629 18 6 15.3137 6 12C6 8.68629 8.68629 6 12 6C15.3137 6 18 8.68629 18 12C18 15.3137 15.3137 18 12 18ZM12 16C14.2091 16 16 14.2091 16 12C16 9.79086 14.2091 8 12 8C9.79086 8 8 9.79086 8 12C8 14.2091 9.79086 16 12 16ZM11 1H13V4H11V1ZM11 20H13V23H11V20ZM3.51472 4.92893L4.92893 3.51472L7.05025 5.63604L5.63604 7.05025L3.51472 4.92893ZM16.9497 18.364L18.364 16.9497L20.4853 19.0711L19.0711 20.4853L16.9497 18.364ZM19.0711 3.51472L20.4853 4.92893L18.364 7.05025L16.9497 5.63604L19.0711 3.51472ZM5.63604 16.9497L7.05025 18.364L4.92893 20.4853L3.51472 19.0711L5.63604 16.9497ZM23 11V13H20V11H23ZM4 11V13H1V11H4Z"/></svg>
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6C10 10.4183 13.5817 14 18 14C19.4386 14 20.7885 13.6203 21.9549 12.9556C21.4738 18.0302 17.2005 22 12 22C6.47715 22 2 17.5228 2 12C2 6.79948 5.9698 2.52616 11.0444 2.04507C10.3797 3.21152 10 4.56142 10 6ZM4 12C4 16.4183 7.58172 20 12 20C14.9654 20 17.5757 18.3788 18.9571 15.9546C18.6407 15.9848 18.3214 16 18 16C12.4772 16 8 11.5228 8 6C8 5.67863 8.01524 5.35933 8.04536 5.04293C5.62119 6.42426 4 9.03458 4 12ZM18.1642 2.29104L19 2.5V3.5L18.1642 3.70896C17.4476 3.8881 16.8881 4.4476 16.709 5.16417L16.5 6H15.5L15.291 5.16417C15.1119 4.4476 14.5524 3.8881 13.8358 3.70896L13 3.5V2.5L13.8358 2.29104C14.5524 2.1119 15.1119 1.5524 15.291 0.835829L15.5 0H16.5L16.709 0.835829C16.8881 1.5524 17.4476 2.1119 18.1642 2.29104ZM23.1642 7.29104L24 7.5V8.5L23.1642 8.70896C22.4476 8.8881 21.8881 9.4476 21.709 10.1642L21.5 11H20.5L20.291 10.1642C20.1119 9.4476 19.5524 8.8881 18.8358 8.70896L18 8.5V7.5L18.8358 7.29104C19.5524 7.1119 20.1119 6.5524 20.291 5.83583L20.5 5H21.5L21.709 5.83583C21.8881 6.5524 22.4476 7.1119 23.1642 7.29104Z"/></svg>
+      </button>
+      <a class="btn btn-primary btn-sm" href="signup.html"><span class="bl" data-k="nav.cta"></span></a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ============ Hero ============ -->
+  <section class="hero">
+    <div class="container hero-inner">
+      <div class="hero-copy reveal">
+        <p class="eyebrow">For modern dental clinics</p>
+        <h1>Run your entire clinic<br>from <mark>one screen.</mark></h1>
+        <p class="lede">
+          Scheduling, patient records, billing, inventory and analytics — purpose-built
+          for dental practices. Hosted securely with automatic nightly backups — and
+          the desktop app keeps working even when your connection drops.
+        </p>
+        <div class="hero-cta" id="download">
+          <!-- Bump this URL when publishing a new release (asset name carries the version). -->
+          <a id="downloadBtn"
+             class="btn btn-primary btn-lg"
+             href="https://github.com/SDIDSA/packages/releases/latest/download/Sera-Bootstrapper-0.8.0.exe"
+             download>
+            <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M13 10H18L12 16L6 10H11V3H13V10ZM4 19H20V12H22V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V12H4V19Z"/></svg><span class="bl" data-k="hero.dl"></span></a>
+          <a class="btn btn-ghost btn-lg" href="#pricing"><span class="bl" data-k="hero.pricing"></span></a>
+        </div>
+        <ul class="hero-meta">
+          <li>Free 30-day trial</li>
+          <li>Windows 10 / 11</li>
+          <li>Signed SHA-256 installer</li>
+        </ul>
+        <ul class="specimen" aria-label="Product vocabulary">
+          <li>odontogram</li><li>FDI numbering</li><li>DA pricing</li><li>SHA-256</li><li>offline-first</li><li>RTL</li>
+        </ul>
+      </div>
+
+      <!-- Stylized, INTERACTIVE mock of the desktop app -->
+      <div class="hero-app reveal delay-1" aria-label="Interactive preview of the Sera desktop application">
+        <div class="app-chrome">
+          <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+        <div class="app-body">
+          <aside class="app-side" aria-label="App sections">
+            <button type="button" class="side-item active" data-page="dashboard"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M14 21C13.4477 21 13 20.5523 13 20V12C13 11.4477 13.4477 11 14 11H20C20.5523 11 21 11.4477 21 12V20C21 20.5523 20.5523 21 20 21H14ZM4 13C3.44772 13 3 12.5523 3 12V4C3 3.44772 3.44772 3 4 3H10C10.5523 3 11 3.44772 11 4V12C11 12.5523 10.5523 13 10 13H4ZM9 11V5H5V11H9ZM4 21C3.44772 21 3 20.5523 3 20V16C3 15.4477 3.44772 15 4 15H10C10.5523 15 11 15.4477 11 16V20C11 20.5523 10.5523 21 10 21H4ZM5 19H9V17H5V19ZM15 19H19V13H15V19ZM13 4C13 3.44772 13.4477 3 14 3H20C20.5523 3 21 3.44772 21 4V8C21 8.55228 20.5523 9 20 9H14C13.4477 9 13 8.55228 13 8V4ZM15 5V7H19V5H15Z"/></svg><span>Dashboard</span></button>
+            <button type="button" class="side-item" data-page="appointments"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M9 1V3H15V1H17V3H21C21.5523 3 22 3.44772 22 4V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H7V1H9ZM20 11H4V19H20V11ZM7 5H4V9H20V5H17V7H15V5H9V7H7V5Z"/></svg><span>Appointments</span></button>
+            <button type="button" class="side-item" data-page="patients"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M2 22C2 17.5817 5.58172 14 10 14C14.4183 14 18 17.5817 18 22H16C16 18.6863 13.3137 16 10 16C6.68629 16 4 18.6863 4 22H2ZM10 13C6.685 13 4 10.315 4 7C4 3.685 6.685 1 10 1C13.315 1 16 3.685 16 7C16 10.315 13.315 13 10 13ZM10 11C12.21 11 14 9.21 14 7C14 4.79 12.21 3 10 3C7.79 3 6 4.79 6 7C6 9.21 7.79 11 10 11ZM18.2837 14.7028C21.0644 15.9561 23 18.752 23 22H21C21 19.564 19.5483 17.4671 17.4628 16.5271L18.2837 14.7028ZM17.5962 3.41321C19.5944 4.23703 21 6.20361 21 8.5C21 11.3702 18.8042 13.7252 16 13.9776V11.9646C17.6967 11.7222 19 10.264 19 8.5C19 7.11935 18.2016 5.92603 17.041 5.35635L17.5962 3.41321Z"/></svg><span>Patients</span></button>
+            <button type="button" class="side-item" data-page="billing"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.00488 3.00275H21.0049C21.5572 3.00275 22.0049 3.45046 22.0049 4.00275V20.0027C22.0049 20.555 21.5572 21.0027 21.0049 21.0027H3.00488C2.4526 21.0027 2.00488 20.555 2.00488 20.0027V4.00275C2.00488 3.45046 2.4526 3.00275 3.00488 3.00275ZM4.00488 5.00275V19.0027H20.0049V5.00275H4.00488ZM8.50488 14.0027H14.0049C14.281 14.0027 14.5049 13.7789 14.5049 13.5027C14.5049 13.2266 14.281 13.0027 14.0049 13.0027H10.0049C8.62417 13.0027 7.50488 11.8835 7.50488 10.5027C7.50488 9.12203 8.62417 8.00275 10.0049 8.00275H11.0049V6.00275H13.0049V8.00275H15.5049V10.0027H10.0049C9.72874 10.0027 9.50488 10.2266 9.50488 10.5027C9.50488 10.7789 9.72874 11.0027 10.0049 11.0027H14.0049C15.3856 11.0027 16.5049 12.122 16.5049 13.5027C16.5049 14.8835 15.3856 16.0027 14.0049 16.0027H13.0049V18.0027H11.0049V16.0027H8.50488V14.0027Z"/></svg><span>Billing</span></button>
+            <button type="button" class="side-item" data-page="inventory"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21 20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.48907C3 9.18048 3.14247 8.88917 3.38606 8.69972L11.3861 2.47749C11.7472 2.19663 12.2528 2.19663 12.6139 2.47749L20.6139 8.69972C20.8575 8.88917 21 9.18048 21 9.48907V20ZM19 19V9.97815L12 4.53371L5 9.97815V19H19ZM7 15H17V17H7V15Z"/></svg><span>Inventory</span></button>
+            <button type="button" class="side-item side-end" data-page="settings"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.33946 17.0002C2.90721 16.2515 2.58277 15.4702 2.36133 14.6741C3.3338 14.1779 3.99972 13.1668 3.99972 12.0002C3.99972 10.8345 3.3348 9.824 2.36353 9.32741C2.81025 7.71651 3.65857 6.21627 4.86474 4.99001C5.7807 5.58416 6.98935 5.65534 7.99972 5.072C9.01009 4.48866 9.55277 3.40635 9.4962 2.31604C11.1613 1.8846 12.8847 1.90004 14.5031 2.31862C14.4475 3.40806 14.9901 4.48912 15.9997 5.072C17.0101 5.65532 18.2187 5.58416 19.1346 4.99007C19.7133 5.57986 20.2277 6.25151 20.66 7.00021C21.0922 7.7489 21.4167 8.53025 21.6381 9.32628C20.6656 9.82247 19.9997 10.8336 19.9997 12.0002C19.9997 13.166 20.6646 14.1764 21.6359 14.673C21.1892 16.2839 20.3409 17.7841 19.1347 19.0104C18.2187 18.4163 17.0101 18.3451 15.9997 18.9284C14.9893 19.5117 14.4467 20.5941 14.5032 21.6844C12.8382 22.1158 11.1148 22.1004 9.49633 21.6818C9.55191 20.5923 9.00929 19.5113 7.99972 18.9284C6.98938 18.3451 5.78079 18.4162 4.86484 19.0103C4.28617 18.4205 3.77172 17.7489 3.33946 17.0002ZM8.99972 17.1964C10.0911 17.8265 10.8749 18.8227 11.2503 19.9659C11.7486 20.0133 12.2502 20.014 12.7486 19.9675C13.1238 18.8237 13.9078 17.8268 14.9997 17.1964C16.0916 16.5659 17.347 16.3855 18.5252 16.6324C18.8146 16.224 19.0648 15.7892 19.2729 15.334C18.4706 14.4373 17.9997 13.2604 17.9997 12.0002C17.9997 10.74 18.4706 9.5632 19.2729 8.6665C19.1688 8.4405 19.0538 8.21822 18.9279 8.00021C18.802 7.78219 18.667 7.57148 18.5233 7.36842C17.3457 7.61476 16.0911 7.43414 14.9997 6.80405C13.9083 6.17395 13.1246 5.17768 12.7491 4.03455C12.2509 3.98714 11.7492 3.98646 11.2509 4.03292C10.8756 5.17671 10.0916 6.17364 8.99972 6.80405C7.9078 7.43447 6.65245 7.61494 5.47428 7.36803C5.18485 7.77641 4.93463 8.21117 4.72656 8.66637C5.52881 9.56311 5.99972 10.74 5.99972 12.0002C5.99972 13.2604 5.52883 14.4372 4.72656 15.3339C4.83067 15.5599 4.94564 15.7822 5.07152 16.0002C5.19739 16.2182 5.3324 16.4289 5.47612 16.632C6.65377 16.3857 7.90838 16.5663 8.99972 17.1964ZM11.9997 15.0002C10.3429 15.0002 8.99972 13.6571 8.99972 12.0002C8.99972 10.3434 10.3429 9.00021 11.9997 9.00021C13.6566 9.00021 14.9997 10.3434 14.9997 12.0002C14.9997 13.6571 13.6566 15.0002 11.9997 15.0002ZM11.9997 13.0002C12.552 13.0002 12.9997 12.5525 12.9997 12.0002C12.9997 11.4479 12.552 11.0002 11.9997 11.0002C11.4474 11.0002 10.9997 11.4479 10.9997 12.0002C10.9997 12.5525 11.4474 13.0002 11.9997 13.0002Z"/></svg><span>Settings</span></button>
+          </aside>
+
+          <div class="app-main">
+
+            <!-- Dashboard -->
+            <section class="app-panel visible" data-panel="dashboard">
+              <div class="app-cards">
+                <div class="app-card">
+                  <span class="k">Patients today</span>
+                  <span class="v">14</span>
+                  <span class="trend up">&#9650; 12%</span>
+                </div>
+                <div class="app-card">
+                  <span class="k">Revenue · month</span>
+                  <span class="v">284 500 <small>DA</small></span>
+                  <span class="trend up">&#9650; 8%</span>
+                </div>
+              </div>
+              <div class="app-schedule">
+                <div class="sched-head"><span>Today's schedule</span><span class="pill">Wed 24</span></div>
+                <div class="row"><i style="background:var(--scheduled)"></i><b>09:00</b> Amina B. — Cleaning <em>Dr. Karim</em></div>
+                <div class="row"><i style="background:var(--confirmed)"></i><b>09:45</b> Yacine M. — Filling <em>Dr. Lina</em></div>
+                <div class="row"><i style="background:var(--success)"></i><b>10:30</b> Soraya K. — Checkup <em>Dr. Karim</em></div>
+                <div class="row dim"><i style="background:var(--warning)"></i><b>11:15</b> Omar T. — Root canal <em>Dr. Lina</em></div>
+              </div>
+            </section>
+
+            <!-- Appointments — mirrors the desktop MonthView -->
+            <section class="app-panel" data-panel="appointments">
+              <div id="apptMonthView" class="cal-wrap">
+                <div class="cal-head">
+                  <span class="cal-title">August 2026</span>
+                  <span class="pill">month</span>
+                </div>
+                <div class="cal-week">
+                  <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                </div>
+                <div class="cal-grid" id="apptGrid"><!-- cells injected --></div>
+              </div>
+
+              <div id="apptDayView" class="cal-dayview" hidden>
+                <button type="button" class="day-back" id="apptBack">
+                  <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M10.8284 12.0007L15.7782 16.9504L14.364 18.3646L8 12.0007L14.364 5.63672L15.7782 7.05093L10.8284 12.0007Z"/></svg>
+                  <b id="apptDayTitle">Mon 24</b>
+                </button>
+                <div class="app-schedule grow">
+                  <div class="sched-head"><span>Appointments</span><span class="pill live" id="apptDayCount">0 appts</span></div>
+                  <div id="apptDayRows"></div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Patients -->
+            <section class="app-panel" data-panel="patients">
+              <div class="fake-search">
+                <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18.031 16.6168L22.3137 20.8995L20.8995 22.3137L16.6168 18.031C15.0769 19.263 13.124 20 11 20C6.032 20 2 15.968 2 11C2 6.032 6.032 2 11 2C15.968 2 20 6.032 20 11C20 13.124 19.263 15.0769 18.031 16.6168ZM16.0247 15.8748C17.2475 14.6146 18 12.8956 18 11C18 7.1325 14.8675 4 11 4C7.1325 4 4 7.1325 4 11C4 14.8675 7.1325 18 11 18C12.8956 18 14.6146 17.2475 15.8748 16.0247L16.0247 15.8748Z"/></svg>
+                Search patients…
+              </div>
+              <div class="list-rows">
+                <div class="lrow">
+                  <span class="avatar av-blue">AB</span>
+                  <span class="lname">Amina Benali<small>PAT-2026-0041</small></span>
+                  <em>Last visit · today</em>
+                </div>
+                <div class="lrow">
+                  <span class="avatar av-teal">YM</span>
+                  <span class="lname">Yacine Meziane<small>PAT-2026-0107</small></span>
+                  <em>Last visit · 3 days ago</em>
+                </div>
+                <div class="lrow">
+                  <span class="avatar av-pink">SK</span>
+                  <span class="lname">Soraya Kaci<small>PAT-2025-0389</small></span>
+                  <em>Last visit · 1 week ago</em>
+                </div>
+                <div class="lrow">
+                  <span class="avatar av-indigo">OT</span>
+                  <span class="lname">Omar Toumi<small>PAT-2026-0233</small></span>
+                  <em>New patient</em>
+                </div>
+              </div>
+            </section>
+
+            <!-- Billing -->
+            <section class="app-panel" data-panel="billing">
+              <div class="app-cards">
+                <div class="app-card">
+                  <span class="k">Outstanding</span>
+                  <span class="v warn">46 200 <small>DA</small></span>
+                </div>
+                <div class="app-card">
+                  <span class="k">Collected · month</span>
+                  <span class="v ok">238 300 <small>DA</small></span>
+                </div>
+              </div>
+              <div class="list-rows">
+                <div class="lrow">
+                  <span class="mono">INV-2026-0184</span>
+                  <span class="lname">Amina Benali<small>12 000 DA</small></span>
+                  <span class="pill paid-pill">paid</span>
+                </div>
+                <div class="lrow">
+                  <span class="mono">INV-2026-0185</span>
+                  <span class="lname">Omar Toumi<small>31 500 DA</small></span>
+                  <span class="pill partial-pill">partial</span>
+                </div>
+                <div class="lrow">
+                  <span class="mono">INV-2026-0186</span>
+                  <span class="lname">Soraya Kaci<small>8 200 DA</small></span>
+                  <span class="pill unpaid-pill">unpaid</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- Inventory -->
+            <section class="app-panel" data-panel="inventory">
+              <div class="list-rows">
+                <div class="lrow col">
+                  <span class="lname">Composite resin A2<small>Batch #4417 · expires 08/2027</small></span>
+                  <span class="stock"><i style="width:72%"></i></span>
+                </div>
+                <div class="lrow col">
+                  <span class="lname">Nitrile gloves M<small>Batch #2209 · expires 12/2026</small></span>
+                  <span class="stock"><i style="width:38%"></i></span>
+                </div>
+                <div class="lrow col">
+                  <span class="lname">Lidocaine 2% cartridges<small>Batch #1180 · expires 03/2027</small></span>
+                  <span class="stock low"><i style="width:16%"></i><b>low</b></span>
+                </div>
+                <div class="lrow col">
+                  <span class="lname">Sterile bibs<small>Batch #7731</small></span>
+                  <span class="stock"><i style="width:88%"></i></span>
+                </div>
+              </div>
+            </section>
+
+            <!-- Settings -->
+            <section class="app-panel" data-panel="settings">
+              <div class="settings-rows">
+                <div class="srow">
+                  <span>Dark appearance</span>
+                  <span class="toggle on"><i></i></span>
+                </div>
+                <div class="srow">
+                  <span>Appointment reminders</span>
+                  <span class="toggle on"><i></i></span>
+                </div>
+                <div class="srow">
+                  <span>Nightly backup</span>
+                  <span class="toggle on"><i></i></span>
+                </div>
+                <div class="srow">
+                  <span>Language · العربية / FR / EN</span>
+                  <span class="pill">ar</span>
+                </div>
+              </div>
+            </section>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Features ============ -->
+  <section id="features" class="section">
+    <div class="container">
+      <header class="section-head reveal">
+        <div class="sh-text">
+          <h2>Everything a clinic needs.<br>Nothing it doesn't.</h2>
+          <p>One focused product instead of a dozen disconnected tools.</p>
+        </div>
+        <span class="idx" aria-hidden="true">01</span>
+      </header>
+      <div class="grid features">
+
+        <article class="card reveal">
+          <div class="card-icon ci-blue"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M9 1V3H15V1H17V3H21C21.5523 3 22 3.44772 22 4V20C22 20.5523 21.5523 21 21 21H3C2.44772 21 2.00488 20.5523 2.00488 20V4C2 3.44772 2.44772 3 3 3H7V1H9ZM20 10H4V19H20V10ZM15.0355 11.136L16.4497 12.5503L11.5 17.5L7.96447 13.9645L9.37868 12.5503L11.5 14.6716L15.0355 11.136ZM7 5H4V8H20V5H17V6H15V5H9V6H7V5Z"/></svg></div>
+          <h3>Smart scheduling</h3>
+          <p>Day, week and month views with drag-and-drop rescheduling, overlap detection and automatic reminders.</p>
+          <span class="tag">SCH-01</span>
+        </article>
+
+        <article class="card reveal delay-1">
+          <div class="card-icon ci-teal"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M5.70572 5.89018C6.42921 5.022 7.5071 4.5 9 4.5C9.90702 4.5 10.7486 4.7673 11.4538 5.22714C12.2364 5.73739 12.8501 6.48416 13.1936 7.36377C13.3945 7.87822 13.9744 8.13239 14.4888 7.93149C15.0033 7.73058 15.2575 7.15067 15.0565 6.63623C14.769 5.89989 14.3515 5.22943 13.8324 4.65272C14.2044 4.55311 14.5957 4.5 15 4.5C16.4929 4.5 17.5708 5.022 18.2943 5.89018C19.038 6.78262 19.5 8.15442 19.5 10C19.5 12.9029 19.0142 15.3848 18.2699 17.1024C17.485 18.9138 16.6026 19.5 16 19.5C15.8503 19.5 15.7246 19.4648 15.5385 19.1417C15.3127 18.7496 15.1541 18.1821 14.9471 17.4221C14.7731 16.7831 14.5569 15.9894 14.1947 15.3604C13.7871 14.6523 13.1003 14 12 14C10.8997 14 10.2129 14.6523 9.80525 15.3604C9.44313 15.9894 9.22692 16.7831 9.05289 17.4221C8.8459 18.1821 8.68726 18.7496 8.4615 19.1417C8.27544 19.4648 8.14973 19.5 8 19.5C7.3974 19.5 6.51501 18.9138 5.73006 17.1024C4.98575 15.3848 4.5 12.9029 4.5 10C4.5 8.15442 4.96203 6.78262 5.70572 5.89018ZM12 3.23245C11.1019 2.7645 10.0808 2.5 9 2.5C6.9929 2.5 5.32079 3.228 4.16928 4.60982C3.03797 5.96738 2.5 7.84558 2.5 10C2.5 13.0971 3.01425 15.8652 3.89494 17.8976C4.73499 19.8362 6.1026 21.5 8 21.5C9.10027 21.5 9.78706 20.8477 10.1947 20.1396C10.5692 19.4892 10.7876 18.6626 10.9648 18.0131C11.1626 17.2875 11.3192 16.7392 11.5385 16.3583C11.7246 16.0352 11.8503 16 12 16C12.1497 16 12.2754 16.0352 12.4615 16.3583C12.6808 16.7392 12.8374 17.2875 13.0352 18.0131C13.2123 18.6625 13.4308 19.4892 13.8053 20.1396C14.2129 20.8477 14.8997 21.5 16 21.5C17.8974 21.5 19.265 19.8362 20.1051 17.8976C20.9858 15.8652 21.5 13.0971 21.5 10C21.5 7.84558 20.962 5.96738 19.8307 4.60982C18.6792 3.228 17.0071 2.5 15 2.5C13.9192 2.5 12.8981 2.7645 12 3.23245Z"/></svg></div>
+          <h3>Dental chart &amp; records</h3>
+          <p>Interactive odontogram with FDI numbering, treatment history, X-ray gallery and prescriptions in one patient file.</p>
+          <span class="tag">ODONT-02</span>
+        </article>
+
+        <article class="card reveal delay-2">
+          <div class="card-icon ci-green"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.00488 3.00275H21.0049C21.5572 3.00275 22.0049 3.45046 22.0049 4.00275V20.0027C22.0049 20.555 21.5572 21.0027 21.0049 21.0027H3.00488C2.4526 21.0027 2.00488 20.555 2.00488 20.0027V4.00275C2.00488 3.45046 2.4526 3.00275 3.00488 3.00275ZM4.00488 5.00275V19.0027H20.0049V5.00275H4.00488ZM8.50488 14.0027H14.0049C14.281 14.0027 14.5049 13.7789 14.5049 13.5027C14.5049 13.2266 14.281 13.0027 14.0049 13.0027H10.0049C8.62417 13.0027 7.50488 11.8835 7.50488 10.5027C7.50488 9.12203 8.62417 8.00275 10.0049 8.00275H11.0049V6.00275H13.0049V8.00275H15.5049V10.0027H10.0049C9.72874 10.0027 9.50488 10.2266 9.50488 10.5027C9.50488 10.7789 9.72874 11.0027 10.0049 11.0027H14.0049C15.3856 11.0027 16.5049 12.122 16.5049 13.5027C16.5049 14.8835 15.3856 16.0027 14.0049 16.0027H13.0049V18.0027H11.0049V16.0027H8.50488V14.0027Z"/></svg></div>
+          <h3>Billing &amp; payments</h3>
+          <p>Invoices with line items, partial payments, status tracking and money-integrity checks you never have to think about.</p>
+          <span class="tag">BILL-03</span>
+        </article>
+
+        <article class="card reveal">
+          <div class="card-icon ci-orange"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M21 20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V9.48907C3 9.18048 3.14247 8.88917 3.38606 8.69972L11.3861 2.47749C11.7472 2.19663 12.2528 2.19663 12.6139 2.47749L20.6139 8.69972C20.8575 8.88917 21 9.18048 21 9.48907V20ZM19 19V9.97815L12 4.53371L5 9.97815V19H19ZM7 15H17V17H7V15Z"/></svg></div>
+          <h3>Inventory &amp; suppliers</h3>
+          <p>Stock levels, low-stock alerts, purchase orders and receiving — linked directly to treatments and expenses.</p>
+          <span class="tag">INV-04</span>
+        </article>
+
+        <article class="card reveal delay-1">
+          <div class="card-icon ci-indigo"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M3.51472 2.10051L22.6066 21.1924L21.1924 22.6066L19.1782 20.5924C18.503 20.8556 17.7684 21 17 21H7C3.68629 21 1 18.3137 1 15C1 12.3846 2.67346 10.16 5.00804 9.33857C5.0027 9.22639 5 9.11351 5 9C5 8.22228 5.12683 7.47418 5.36094 6.77527L2.10051 3.51472L3.51472 2.10051ZM7 9C7 9.08147 7.00193 9.16263 7.00578 9.24344L7.07662 10.7309L5.67183 11.2252C4.0844 11.7837 3 13.2889 3 15C3 17.2091 4.79086 19 7 19H17C17.1858 19 17.3687 18.9873 17.5478 18.9628L7.03043 8.44519C7.01032 8.62736 7 8.81247 7 9ZM12 2C15.866 2 19 5.13401 19 9C19 9.11351 18.9973 9.22639 18.992 9.33857C21.3265 10.16 23 12.3846 23 15C23 16.0883 22.7103 17.1089 22.2037 17.9889L20.7111 16.4955C20.8974 16.0335 21 15.5287 21 15C21 12.79 19.21 11 17 11C16.4711 11 15.9661 11.1027 15.5039 11.2892L14.0111 9.7964C14.8912 9.28978 15.9118 9 17 9C17 6.23858 14.7614 4 12 4C10.9295 4 9.93766 4.33639 9.12428 4.90922L7.69418 3.48056C8.88169 2.55284 10.3763 2 12 2Z"></path></svg></div>
+          <h3>Offline-first</h3>
+          <p>Internet down mid-day? Keep working. Every change queues locally and replays automatically once you reconnect.</p>
+          <span class="tag">OFF-05</span>
+        </article>
+
+        <article class="card reveal delay-2">
+          <div class="card-icon ci-pink"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18.5 10L22.9 21H20.745L19.544 18H15.454L14.255 21H12.101L16.5 10H18.5ZM10 2V4H16V6L14.0322 6.0006C13.2425 8.36616 11.9988 10.5057 10.4115 12.301C11.1344 12.9457 11.917 13.5176 12.7475 14.0079L11.9969 15.8855C10.9237 15.2781 9.91944 14.5524 8.99961 13.7249C7.21403 15.332 5.10914 16.5553 2.79891 17.2734L2.26257 15.3442C4.2385 14.7203 6.04543 13.6737 7.59042 12.3021C6.46277 11.0281 5.50873 9.57985 4.76742 8.00028L7.00684 8.00037C7.57018 9.03885 8.23979 10.0033 8.99967 10.877C10.2283 9.46508 11.2205 7.81616 11.9095 6.00101L2 6V4H8V2H10ZM17.5 12.8852L16.253 16H18.745L17.5 12.8852Z"/></svg></div>
+          <h3>Trilingual, RTL included</h3>
+          <p>Full English, French and Arabic interfaces — switch instantly, right-to-left included, for every user on every screen.</p>
+          <span class="tag">I18N-06</span>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ How it works ============ -->
+  <section id="how" class="section alt">
+    <div class="container">
+      <header class="section-head reveal">
+        <div class="sh-text">
+          <h2>Up and running in minutes</h2>
+          <p>The installer does the heavy lifting — no IT department required.</p>
+        </div>
+        <span class="idx" aria-hidden="true">02</span>
+      </header>
+      <ol class="steps">
+        <li class="reveal">
+          <span class="step-num">001</span>
+          <h3>Download the installer</h3>
+          <p>A tiny native launcher — verified with SHA-256 before it runs anything.</p>
+        </li>
+        <li class="reveal delay-1">
+          <span class="step-num">002</span>
+          <h3>Run the installer</h3>
+          <p>The desktop app connects to Sera's secure cloud — your data lives on hosted servers with automatic backups. Nothing to install or maintain.</p>
+        </li>
+        <li class="reveal delay-2">
+          <span class="step-num">003</span>
+          <h3>Sign in and go</h3>
+          <p>Create your clinic, invite your team, start booking patients. Nightly backups are scheduled for you.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============ Pricing ============ -->
+  <section id="pricing" class="section">
+    <div class="container">
+      <header class="section-head reveal">
+        <div class="sh-text">
+          <h2>Simple pricing, in dinars</h2>
+          <p>Per clinic, per month. Cancel anytime.</p>
+        </div>
+        <span class="idx" aria-hidden="true">03</span>
+      </header>
+      <div class="grid pricing">
+
+        <article class="price-card reveal">
+          <h3>Starter</h3>
+          <p class="price">4 900 <span>DA / month</span></p>
+          <p class="for">Single-dentist practices getting started.</p>
+          <ul>
+            <li>1 practitioner, up to 3 staff accounts</li>
+            <li>Scheduling, patients &amp; billing</li>
+            <li>Local data storage</li>
+            <li>Email support</li>
+          </ul>
+          <a class="btn btn-outline" href="signup.html"><span class="bl" data-k="pricing.trial"></span></a>
+        </article>
+
+        <article class="price-card featured reveal delay-1">
+          <span class="badge">Most clinics choose this</span>
+          <h3>Clinic</h3>
+          <p class="price">9 900 <span>DA / month</span></p>
+          <p class="for">Growing practices with a full team.</p>
+          <ul>
+            <li>Unlimited practitioners &amp; staff</li>
+            <li>All modules incl. inventory &amp; reports</li>
+            <li>Offline mode + automatic nightly backups</li>
+            <li>Audit log &amp; role-based permissions</li>
+            <li>Priority support</li>
+          </ul>
+          <a class="btn btn-primary" href="signup.html"><span class="bl" data-k="pricing.trial"></span></a>
+        </article>
+
+        <article class="price-card reveal delay-2">
+          <h3>Enterprise</h3>
+          <p class="price custom">Custom</p>
+          <p class="for">Multi-site groups and chains.</p>
+          <ul>
+            <li>Multiple clinics, consolidated reporting</li>
+            <li>Dedicated onboarding &amp; data migration</li>
+            <li>Custom SLA</li>
+          </ul>
+          <a class="btn btn-outline" href="mailto:zinou.teyar@gmail.com"><span class="bl" data-k="pricing.talk"></span></a>
+        </article>
+
+      </div>
+      <p class="pricing-note reveal">Every plan starts with a free 30-day trial — full features, no card required.</p>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section id="faq" class="section alt">
+    <div class="container narrow">
+      <header class="section-head reveal">
+        <div class="sh-text">
+          <h2>Frequently asked</h2>
+        </div>
+        <span class="idx" aria-hidden="true">04</span>
+      </header>
+      <div class="faq-list">
+        <details class="faq reveal">
+          <summary>Where does my data live?</summary>
+          <p>On Sera's secured servers, isolated per clinic and backed up automatically every night. Your clinic's data is never shared with other clinics, and you can export it at any time.</p>
+        </details>
+        <details class="faq reveal">
+          <summary>What happens if the internet goes out?</summary>
+          <p>Nothing dramatic. The app keeps working fully offline; changes made while disconnected are queued safely and replayed automatically in order when the connection returns.</p>
+        </details>
+        <details class="faq reveal">
+          <summary>Which platforms are supported?</summary>
+          <p>Windows 10 and 11 (64-bit). The backend runs on Sera's hosted servers — there is no server component to install.</p>
+        </details>
+        <details class="faq reveal">
+          <summary>How does the trial work?</summary>
+          <p>Download the installer, install, sign in. You get 30 days with every feature unlocked — no credit card. Keep using the Starter or Clinic plan afterwards.</p>
+        </details>
+        <details class="faq reveal">
+          <summary>Can my team use it at the same time?</summary>
+          <p>Yes. Role-based accounts (admin, dentist, receptionist) work concurrently, and every sensitive action is recorded in a tamper-evident audit log.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Final CTA ============ -->
+  <section class="cta-band">
+    <div class="container cta-inner reveal">
+      <h2>Your clinic deserves better software.</h2>
+      <p>Install in minutes. Try everything for 30 days.</p>
+      <a class="btn btn-light btn-lg" id="downloadBtnFooter"
+         href="https://github.com/SDIDSA/packages/releases/latest/download/Sera-Bootstrapper-0.8.0.exe"
+         download><span class="bl" data-k="cta.btn"></span></a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="brand small">
+      <span class="brand-mark" aria-hidden="true">
+        <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="currentColor"><g transform="translate(4.8,4.8) scale(0.15)"><path
+     id="path1"
+     d="M 268.32554 4.4726216 C 202.01816 1.3492603 133.77995 23.549043 79.516378 75.964191 C -78.193147 228.30154 14.3336 488.94189 234.28797 511.94002 C 402.2524 529.50214 544.94832 372.50758 510.13529 208.45237 C 483.98551 85.222448 378.83785 9.6782238 268.32554 4.4726216 z M 258.73799 292.75773 C 308.17368 293.27499 357.53892 311.28546 397.30776 346.69297 C 414.23674 361.76539 414.1738 360.818 399.36196 376.99318 C 365.71056 413.74198 323.59346 435.08974 275.80784 439.62113 C 211.91236 445.68017 149.13554 419.20695 108.89568 369.23654 C 101.25056 359.74273 101.235 359.77371 119.75189 343.78763 C 159.79748 309.21522 209.3023 292.24048 258.73799 292.75773 z "
+     transform="matrix(0.49726755,0,0,0.50284557,-0.29677367,-2.1045067)" /></g></svg>
+      </span>
+      <span class="brand-name" data-brand></span>
+    </div>
+    <p>&copy; 2026 SDIDSA. All rights reserved. &mdash; Designed &amp; built in Algiers.</p>
+    <div class="footer-links">
+      <a href="mailto:zinou.teyar@gmail.com">Contact</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  document.querySelectorAll('[data-brand]').forEach(function (el) { el.textContent = window.APP_NAME; });
+
+  // ---- Theme -------------------------------------------------------------
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('dc-theme'); } catch (_) {}
+  var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  root.setAttribute('data-theme', saved || (prefersLight ? 'light' : 'dark'));
+
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('dc-theme', next); } catch (_) {}
+  });
+
+  // ---- Scroll reveal -----------------------------------------------------
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  } else {
+    document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
+  }
+
+  // ---- Interactive app preview: sidebar tabs switch panels ---------------
+  var tabs = document.querySelectorAll('.app-side .side-item');
+  var panels = document.querySelectorAll('.app-panel');
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var page = tab.getAttribute('data-page');
+      tabs.forEach(function (t) { t.classList.toggle('active', t === tab); });
+      panels.forEach(function (p) {
+        p.classList.toggle('visible', p.getAttribute('data-panel') === page);
+        // restart row entrance animations on each switch
+        if (p.classList.contains('visible')) {
+          p.querySelectorAll('.lrow, .app-card').forEach(function (el) {
+            el.style.animation = 'none';
+            void el.offsetWidth; // reflow
+            el.style.animation = '';
+          });
+        }
+      });
+    });
+  });
+
+  // ---- Interactive month calendar (mirrors the desktop MonthView: --------
+  // primary tint scales with appointment count, today highlighted,
+  // non-work days dimmed, click a day -> day view)
+    var grid = document.getElementById('apptGrid');
+  var monthView = document.getElementById('apptMonthView');
+  var dayView = document.getElementById('apptDayView');
+  if (grid && monthView && dayView) {
+    // August 2026 — Algerian workweek Sun–Thu, so Fri/Sat are off.
+    // Aug 1 2026 is a Saturday -> 5 leading blanks on a Mon-first grid.
+    var COUNTS = {2:6,3:9,4:11,5:7,6:12,9:8,10:10,11:13,12:6,13:9,16:7,17:12,18:9,19:14,20:8,23:10,24:14,25:11,26:9,27:12,30:8,31:5};
+    var OFF = [1,7,8,14,15,21,22,28,29];
+    var TODAY = 24;
+    var LEADING_BLANKS = 5;
+
+    function apptRow(a) {
+      return '<div class="row"><i style="background:' + a[3] + '"></i><b>' + a[0] +
+             '</b> ' + a[1] + ' <em>' + a[2] + '</em></div>';
+    }
+
+    var SAMPLE_APPTS = {
+      24: [['09:00','Amina B. — Cleaning','done','var(--success)'],
+           ['09:45','Yacine M. — Filling','in chair','var(--confirmed)'],
+           ['10:30','Soraya K. — Checkup','waiting','var(--warning)'],
+           ['11:15','Omar T. — Root canal','scheduled','var(--scheduled)'],
+           ['12:00','Nadia R. — Consultation','scheduled','var(--border)']],
+      19: [['09:00','Karim A. — Extraction','done','var(--success)'],
+           ['10:00','Lina H. — Whitening','done','var(--success)'],
+           ['11:30','Mehdi S. — Brace check','scheduled','var(--scheduled)']]
+    };
+    var DEFAULT_APPTS = [
+      ['09:00','General consultation','scheduled','var(--scheduled)'],
+      ['10:15','Scaling & polishing','scheduled','var(--confirmed)'],
+      ['11:00','Follow-up visit','scheduled','var(--border)']
+    ];
+
+    var currentOpenDay = null;
+    function openDay(day) {
+      currentOpenDay = day;
+      var date = new Date(2026, 7, day);
+      var locale = LANG === 'ar' ? 'ar-DZ' : (LANG === 'fr' ? 'fr-FR' : 'en-US');
+      var label = date.toLocaleDateString(locale, { weekday: 'short' }) + ' ' + day;
+      document.getElementById('apptDayTitle').textContent = label;
+      var list = SAMPLE_APPTS[day] || DEFAULT_APPTS;
+      document.getElementById('apptDayCount').textContent = list.length + ' ' + MOCK[LANG].appts;
+      document.getElementById('apptDayRows').innerHTML = list.map(apptRow).join('');
+      monthView.hidden = true;
+      dayView.hidden = false;
+    }
+
+    document.getElementById('apptBack').addEventListener('click', function () {
+      dayView.hidden = true;
+      monthView.hidden = false;
+    });
+
+    for (var b = 0; b < LEADING_BLANKS; b++) {
+      grid.appendChild(document.createElement('span'));
+    }
+    for (var d = 1; d <= 31; d++) {
+      (function (day) {
+        var off = OFF.indexOf(day) >= 0;
+        var cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'cal-cell' + (off ? ' off' : '') + (day === TODAY ? ' today' : '');
+        // tint intensity follows the desktop's factor = min(count/5, 1)/5 mix
+        var tint = Math.min(COUNTS[day] || 0, 5) / 5 * 0.16;
+        if (tint > 0) cell.style.background = 'rgba(59,130,246,' + tint.toFixed(2) + ')';
+        cell.innerHTML = '<span class="cnt">' + (COUNTS[day] || 0) + '</span><span>' + day + '</span>';
+        if (!off) cell.addEventListener('click', function () { openDay(day); });
+        else cell.setAttribute('aria-disabled', 'true');
+        grid.appendChild(cell);
+      })(d);
+    }
+  }
+
+  // ---- Scroll: progress bar, nav elevation --------------------------------
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var bar = document.getElementById('progressBar');
+  var navEl = document.querySelector('.nav');
+  var ticking = false;
+
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {
+      var y = window.scrollY || window.pageYOffset;
+      var max = document.documentElement.scrollHeight - window.innerHeight;
+      bar.style.transform = 'scaleX(' + (max > 0 ? Math.min(y / max, 1) : 0) + ')';
+      navEl.classList.toggle('scrolled', y > 10);
+      ticking = false;
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  // ---- Best-effort: resolve the true "latest" bootstrapper URL -----------
+  // The GitHub release asset name embeds the version. If the manifest is
+  // reachable we point both buttons at the actual latest bootstrapper;
+  // otherwise the hardcoded URLs above remain the fallback.
+  var MANIFEST = 'https://github.com/SDIDSA/packages/releases/latest/download/version.json';
+  try { fetch(MANIFEST, { cache: 'no-store' })
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function (v) {
+      if (v && v.bootstrapper_url) {
+        ['downloadBtn', 'downloadBtnFooter'].forEach(function (id) {
+          var a = document.getElementById(id);
+          if (a) a.href = v.bootstrapper_url;
+        });
+      }
+    })
+    .catch(function () { /* keep hardcoded fallback */ }); } catch (_) { /* fetch unavailable */ }
+
+  // ---- i18n: English / Français / العربية (RTL) ---------------------------
+  var I18N = {
+    en: {
+      _dir: 'ltr', _flag: 'icons/flag-us.svg',
+      'doc.title.sub': 'Dental Clinic Management',
+      'nav.features': 'Features', 'nav.how': 'How it works', 'nav.pricing': 'Pricing', 'nav.faq': 'FAQ',
+      'nav.cta': 'Get started',
+      'hero.eyebrow': 'For modern dental clinics',
+      'hero.h1': 'Run your entire clinic<br>from <mark>one screen.</mark>',
+      'hero.lede': 'Scheduling, patient records, billing, inventory and analytics \u2014 purpose-built for dental practices. Hosted securely with automatic nightly backups \u2014 and the desktop app keeps working even when your connection drops.',
+      'hero.dl': 'Download for Windows', 'hero.pricing': 'View pricing',
+      'meta.0': 'Free 30-day trial', 'meta.1': 'Windows 10 / 11', 'meta.2': 'SHA-256 verified installer',
+      'feat.head': 'Everything a clinic needs.<br>Nothing it doesn\u2019t.', 'feat.sub': 'One focused product instead of a dozen disconnected tools.',
+      'feat.t.0': 'Smart scheduling', 'feat.d.0': 'Day, week and month views with drag-and-drop rescheduling, overlap detection and automatic reminders.',
+      'feat.t.1': 'Dental chart & records', 'feat.d.1': 'Interactive odontogram with FDI numbering, treatment history, X-ray gallery and prescriptions in one patient file.',
+      'feat.t.2': 'Billing & payments', 'feat.d.2': 'Invoices with line items, partial payments, status tracking and money-integrity checks you never have to think about.',
+      'feat.t.3': 'Inventory & suppliers', 'feat.d.3': 'Stock levels, low-stock alerts, purchase orders and receiving \u2014 linked directly to treatments and expenses.',
+      'feat.t.4': 'Offline-first', 'feat.d.4': 'Internet down mid-day? Keep working. Every change queues locally and replays automatically once you reconnect.',
+      'feat.t.5': 'Trilingual, RTL included', 'feat.d.5': 'Full English, French and Arabic interfaces \u2014 switch instantly, right-to-left included, for every user on every screen.',
+      'how.head': 'Up and running in minutes', 'how.sub': 'The installer does the heavy lifting \u2014 no IT department required.',
+      'how.t.0': 'Download the installer', 'how.d.0': 'A tiny native launcher \u2014 verified with SHA-256 before it runs anything.',
+      'how.t.1': 'Run the installer', 'how.d.1': 'The desktop app connects to Sera\u2019s secure cloud \u2014 your data lives on hosted servers with automatic backups. Nothing to install or maintain.',
+      'how.t.2': 'Sign in and go', 'how.d.2': 'Create your clinic, invite your team, start booking patients. Nightly backups are scheduled for you.',
+      'pr.head': 'Simple pricing, in dinars', 'pr.sub': 'Per clinic, per month. Cancel anytime.',
+      'pr.badge': 'Most clinics choose this', 'pr.note': 'Every plan starts with a free 30-day trial \u2014 full features, no card required.',
+      'pr.per': 'DA / month', 'pr.custom': 'Custom',
+      'pr.name.0': 'Starter', 'pr.for.0': 'Single-dentist practices getting started.',
+      'pr.li.0': ['1 practitioner, up to 3 staff accounts', 'Scheduling, patients & billing', 'Local data storage', 'Email support'],
+      'pr.name.1': 'Clinic', 'pr.for.1': 'Growing practices with a full team.',
+      'pr.li.1': ['Unlimited practitioners & staff', 'All modules incl. inventory & reports', 'Offline mode + automatic nightly backups', 'Audit log & role-based permissions', 'Priority support'],
+      'pr.name.2': 'Enterprise', 'pr.for.2': 'Multi-site groups and chains.',
+      'pr.li.2': ['Multiple clinics, consolidated reporting', 'Dedicated onboarding & data migration', 'Custom SLA'],
+      'pricing.trial': 'Start free trial', 'pricing.talk': 'Talk to us',
+      'faq.head': 'Frequently asked',
+      'faq.q.0': 'Where does my data live?', 'faq.a.0': 'On Sera\u2019s secured servers, isolated per clinic and backed up automatically every night. Your clinic\u2019s data is never shared with other clinics, and you can export it at any time.',
+      'faq.q.1': 'What happens if the internet goes out?', 'faq.a.1': 'Nothing dramatic. The app keeps working fully offline; changes made while disconnected are queued safely and replayed automatically in order when the connection returns.',
+      'faq.q.2': 'Which platforms are supported?', 'faq.a.2': 'Windows 10 and 11 (64-bit). The backend runs on Sera\u2019s hosted servers \u2014 there is no server component to install.',
+      'faq.q.3': 'How does the trial work?', 'faq.a.3': 'Download the installer, install, sign in. You get 30 days with every feature unlocked \u2014 no credit card. Keep using the Starter or Clinic plan afterwards.',
+      'faq.q.4': 'Can my team use it at the same time?', 'faq.a.4': 'Yes. Role-based accounts (admin, dentist, receptionist) work concurrently, and every sensitive action is recorded in a tamper-evident audit log.',
+      'cta.head': 'Your clinic deserves better software.', 'cta.sub': 'Install in minutes. Try everything for 30 days.', 'cta.btn': 'Download the installer',
+      'footer.copy': '\u00A9 2026 SDIDSA. All rights reserved. \u2014 Designed & built in Algiers.', 'footer.contact': 'Contact',
+      'aria.theme': 'Switch color theme', 'aria.lang': 'Language'
+    },
+    fr: {
+      _dir: 'ltr', _flag: 'icons/flag-fr.svg',
+      'doc.title.sub': 'Gestion de cabinet dentaire',
+      'nav.features': 'Fonctionnalit\u00E9s', 'nav.how': 'Installation', 'nav.pricing': 'Tarifs', 'nav.faq': 'FAQ',
+      'nav.cta': 'Commencer',
+      'hero.eyebrow': 'Pour les cliniques dentaires modernes',
+      'hero.h1': 'G\u00E9rez toute votre clinique<br>depuis <mark>un seul \u00E9cran.</mark>',
+      'hero.lede': 'Planning, dossiers patients, facturation, stocks et statistiques \u2014 conçu pour les cabinets dentaires. Hébergement sécurisé avec sauvegardes automatiques chaque nuit \u2014 et l\u2019application reste utilisable même sans connexion.',
+      'hero.dl': 'T\u00E9l\u00E9charger pour Windows', 'hero.pricing': 'Voir les tarifs',
+      'meta.0': 'Essai gratuit de 30 jours', 'meta.1': 'Windows 10 / 11', 'meta.2': 'Programme d\u2019installation v\u00E9rifi\u00E9 SHA-256',
+      'feat.head': 'Tout ce dont une clinique a besoin.<br>Rien de superflu.', 'feat.sub': 'Un produit unique au lieu d\u2019une dizaine d\u2019outils d\u00E9connect\u00E9s.',
+      'feat.t.0': 'Planification intelligente', 'feat.d.0': 'Vues jour, semaine et mois avec replanification par glisser-d\u00E9poser, d\u00E9tection des chevauchements et rappels automatiques.',
+      'feat.t.1': 'Odontogramme & dossiers', 'feat.d.1': 'Odontogramme interactif (num\u00E9rotation FDI), historique des traitements, radiographies et ordonnances dans un dossier patient unique.',
+      'feat.t.2': 'Facturation & paiements', 'feat.d.2': 'Factures avec lignes d\u00E9taill\u00E9es, paiements partiels, suivi des statuts et contr\u00F4les d\u2019int\u00E9grit\u00E9 automatiques.',
+      'feat.t.3': 'Stocks & fournisseurs', 'feat.d.3': 'Niveaux de stock, alertes de seuil, bons de commande et r\u00E9ception \u2014 li\u00E9s aux traitements et aux d\u00E9penses.',
+      'feat.t.4': 'Hors ligne d\u2019abord', 'feat.d.4': 'Une coupure Internet en pleine journ\u00E9e ? Continuez \u00E0 travailler. Chaque modification est mise en file locale puis rejou\u00E9e automatiquement au retour du r\u00E9seau.',
+      'feat.t.5': 'Trilingue, RTL inclus', 'feat.d.5': 'Interfaces compl\u00E8tes en anglais, fran\u00E7ais et arabe \u2014 basculez instantan\u00E9ment, droite-\u00E0-gauche comprise, pour chaque utilisateur sur chaque \u00E9cran.',
+      'how.head': 'Op\u00E9rationnel en quelques minutes', 'how.sub': 'Le programme d\u2019installation fait le gros du travail \u2014 sans service informatique.',
+      'how.t.0': 'T\u00E9l\u00E9chargez le programme d\u2019installation', 'how.d.0': 'Un petit lanceur natif \u2014 v\u00E9rifi\u00E9 par SHA-256 avant d\u2019ex\u00E9cuter quoi que ce soit.',
+      'how.t.1': 'Lancez l\u2019installateur', 'how.d.1': 'L\u2019application se connecte au cloud s\u00E9curis\u00E9 de Sera \u2014 vos donn\u00E9es r\u00E9sident sur des serveurs h\u00E9berg\u00E9s avec sauvegardes automatiques. Rien \u00E0 installer ni \u00E0 maintenir.',
+      'how.t.2': 'Connectez-vous, c\u2019est parti', 'how.d.2': 'Cr\u00E9ez votre clinique, invitez votre \u00E9quipe, planifiez vos premiers patients. Les sauvegardes nocturnes sont programm\u00E9es pour vous.',
+      'pr.head': 'Tarification simple, en dinars', 'pr.sub': 'Par clinique, par mois. Sans engagement.',
+      'pr.badge': 'Le choix de la plupart des cliniques', 'pr.note': 'Chaque formule commence par un essai gratuit de 30 jours \u2014 toutes les fonctionnalit\u00E9s, sans carte bancaire.',
+      'pr.per': 'DA / mois', 'pr.custom': 'Sur mesure',
+      'pr.name.0': 'Starter', 'pr.for.0': 'Cabinets mono-praticien qui d\u00E9marrent.',
+      'pr.li.0': ['1 praticien, jusqu\u2019\u00E0 3 comptes staff', 'Planning, patients & facturation', 'Stockage local des donn\u00E9es', 'Support par e-mail'],
+      'pr.name.1': 'Clinique', 'pr.for.1': 'Cabinets en croissance avec une \u00E9quipe compl\u00E8te.',
+      'pr.li.1': ['Praticiens et staff illimit\u00E9s', 'Tous les modules : stocks & rapports', 'Mode hors ligne + sauvegardes nocturnes auto', 'Journal d\u2019audit & permissions par r\u00F4le', 'Support prioritaire'],
+      'pr.name.2': 'Enterprise', 'pr.for.2': 'Groupes et r\u00E9seaux multi-sites.',
+      'pr.li.2': ['Cliniques multiples, rapports consolid\u00E9s', 'Onboarding d\u00E9di\u00E9 & migration des donn\u00E9es', 'SLA personnalis\u00E9'],
+      'pricing.trial': 'Essai gratuit', 'pricing.talk': 'Nous contacter',
+      'faq.head': 'Questions fr\u00E9quentes',
+      'faq.q.0': 'O\u00F9 sont h\u00E9berg\u00E9es mes donn\u00E9es ?', 'faq.a.0': 'Sur des serveurs sécurisés, isolés par clinique et sauvegardés automatiquement chaque nuit. Les données de votre cabinet ne sont jamais partagées avec d\u2019autres cliniques, et vous pouvez les exporter à tout moment.',
+      'faq.q.1': 'Que se passe-t-il si Internet tombe ?', 'faq.a.1': 'Rien de dramatique. L\u2019application continue de fonctionner hors ligne ; les modifications effectu\u00E9es sont mises en file d\u2019attente puis rejou\u00E9es automatiquement dans l\u2019ordre au retour de la connexion.',
+      'faq.q.2': 'Quelles plateformes sont prises en charge ?', 'faq.a.2': 'Windows 10 et 11 (64 bits). Le serveur tourne dans le cloud de Sera : aucun composant serveur \u00E0 installer.',
+      'faq.q.3': 'Comment fonctionne l\u2019essai ?', 'faq.a.3': 'T\u00E9l\u00E9chargez le programme d\u2019installation, installez, connectez-vous. Vous disposez de 30 jours avec toutes les fonctionnalit\u00E9s d\u00E9bloqu\u00E9es \u2014 sans carte bancaire. Passez ensuite \u00E0 la formule Starter ou Clinique.',
+      'faq.q.4': 'Mon \u00E9quipe peut-elle l\u2019utiliser simultan\u00E9ment ?', 'faq.a.4': 'Oui. Les comptes par r\u00F4le (admin, dentiste, secr\u00E9taire) fonctionnent en parall\u00E8le, et chaque action sensible est consign\u00E9e dans un journal d\u2019audit infalsifiable.',
+      'cta.head': 'Votre clinique m\u00E9rite un meilleur logiciel.', 'cta.sub': 'Install\u00E9 en minutes. Tout \u00E0 essayer pendant 30 jours.', 'cta.btn': 'T\u00E9l\u00E9charger le programme d\u2019installation',
+      'footer.copy': '\u00A9 2026 SDIDSA. Tous droits r\u00E9serv\u00E9s. \u2014 Con\u00E7u et d\u00E9velopp\u00E9 \u00E0 Alger.', 'footer.contact': 'Contact',
+      'aria.theme': 'Changer de th\u00E8me', 'aria.lang': 'Langue'
+    },
+    ar: {
+      _dir: 'rtl', _flag: 'icons/flag-dz.svg',
+      'doc.title.sub': '\u0625\u062F\u0627\u0631\u0629 \u0639\u064A\u0627\u062F\u0627\u062A \u0627\u0644\u0623\u0633\u0646\u0627\u0646',
+      'nav.features': '\u0627\u0644\u0645\u064A\u0632\u0627\u062A', 'nav.how': '\u0643\u064A\u0641\u064A\u0629 \u0627\u0644\u062A\u062B\u0628\u064A\u062A', 'nav.pricing': '\u0627\u0644\u0623\u0633\u0639\u0627\u0631', 'nav.faq': '\u0623\u0633\u0626\u0644\u0629 \u0634\u0627\u0626\u0629',
+      'nav.cta': '\u0627\u0628\u062F\u0623 \u0627\u0644\u0622\u0646',
+      'hero.eyebrow': '\u0644\u0639\u064A\u0627\u062F\u0627\u062A \u0627\u0644\u0623\u0633\u0646\u0627\u0646 \u0627\u0644\u062D\u062F\u064A\u062B\u0629',
+      'hero.h1': '\u0623\u062F\u0631 \u0639\u064A\u0627\u062F\u062A\u0643 \u0628\u0627\u0644\u0643\u0627\u0645\u0644<br>\u0645\u0646 <mark>\u0634\u0627\u0634\u0629 \u0648\u0627\u062D\u062F\u0629.</mark>',
+      'hero.lede': 'المواعيد، سجلات المرضى، الفواتير، المخزون والإحصائيات \u2014 مصمم خصيصاً لعيادات الأسنان. استضافة آمنة مع نسخ احتياطية تلقائية كل ليلة \u2014 ويظل التطبيق يعمل حتى دون اتصال.',
+      'hero.dl': '\u062A\u062D\u0645\u064A\u0644 \u0644\u0646\u0638\u0627\u0645 Windows', 'hero.pricing': '\u0639\u0631\u0636 \u0627\u0644\u0623\u0633\u0639\u0627\u0631',
+      'meta.0': '\u062A\u062C\u0631\u0628\u0629 \u0645\u062C\u0627\u0646\u064A\u0629 30 \u064A\u0648\u0645\u0627\u064B', 'meta.1': 'Windows 10 / 11', 'meta.2': '\u0645\u062B\u0628\u0651\u062A \u0645\u0648\u0642\u0651\u0639 SHA-256',
+      'feat.head': '\u0643\u0644 \u0645\u0627 \u062A\u062D\u062A\u0627\u062C\u0647 \u0627\u0644\u0639\u064A\u0627\u062F\u0629.<br>\u0648\u0644\u0627 \u0634\u064A\u0621 \u0632\u0627\u0626\u062F.', 'feat.sub': '\u0645\u0646\u062A\u062C \u0648\u0627\u062D\u062F \u0645\u0631\u0643\u0651\u0632 \u0628\u062F\u0644\u0627\u064B \u0645\u0646 \u0639\u0634\u0631\u0629 \u0623\u062F\u0648\u0627\u062A \u0645\u0646\u0641\u0635\u0644\u0629.',
+      'feat.t.0': '\u062C\u062F\u0648\u0644\u0629 \u0630\u0643\u064A\u0629', 'feat.d.0': '\u0639\u0631\u0636 \u064A\u0648\u0645\u064A \u0648\u0623\u0633\u0628\u0648\u0639\u064A \u0648\u0634\u0647\u0631\u064A \u0645\u0639 \u0627\u0644\u0633\u062D\u0628 \u0648\u0627\u0644\u0625\u0641\u0644\u0627\u062A\u060C \u0648\u0627\u0643\u062A\u0634\u0627\u0641 \u0627\u0644\u062A\u0639\u0627\u0631\u0636\u0627\u062A\u060C \u0648\u062A\u0630\u0643\u064A\u0631\u0627\u062A \u062A\u0644\u0642\u0627\u0626\u064A\u0629.',
+      'feat.t.1': '\u0645\u062E\u0637\u0637 \u0627\u0644\u0623\u0633\u0646\u0627\u0646 \u0648\u0627\u0644\u0633\u062C\u0644\u0627\u062A', 'feat.d.1': '\u0631\u0633\u0645 \u062A\u0641\u0627\u0639\u0644\u064A \u0628\u062A\u0631\u0642\u064A\u0645 FDI\u060C \u0633\u062C\u0644 \u0627\u0644\u0639\u0644\u0627\u062C\u0627\u062A\u060C \u0645\u0639\u0631\u0636 \u0627\u0644\u0623\u0634\u0639\u0629 \u0648\u0627\u0644\u0648\u0635\u0641\u0627\u062A \u0641\u064A \u0645\u0644\u0641 \u0645\u0631\u064A\u0636 \u0648\u0627\u062D\u062F.',
+      'feat.t.2': '\u0627\u0644\u0641\u0648\u0627\u062A\u064A\u0631 \u0648\u0627\u0644\u062F\u0641\u0639\u0627\u062A', 'feat.d.2': '\u0641\u0648\u0627\u062A\u064A\u0631 \u0628\u0628\u0646\u0648\u062F \u0645\u0641\u0635\u0651\u0644\u0629\u060C \u062F\u0641\u0639\u0627\u062A \u062C\u0632\u0626\u064A\u0629\u060C \u062A\u062A\u0628\u0651\u0639 \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0648\u0641\u062D\u0648\u0635\u0627\u062A \u0633\u0644\u0627\u0645\u0629 \u0645\u0627\u0644\u064A\u0629 \u062A\u0644\u0642\u0627\u0626\u064A\u0629.',
+      'feat.t.3': '\u0627\u0644\u0645\u062E\u0632\u0648\u0646 \u0648\u0627\u0644\u0645\u0648\u0631\u062F\u0648\u0646', 'feat.d.3': '\u0645\u0633\u062A\u0648\u064A\u0627\u062A \u0627\u0644\u0645\u062E\u0632\u0648\u0646\u060C \u062A\u0646\u0628\u064A\u0647\u0627\u062A \u0627\u0644\u0646\u0642\u0635\u060C \u0623\u0648\u0627\u0645\u0631 \u0627\u0644\u0634\u0631\u0627\u0621 \u0648\u0627\u0644\u0627\u0633\u062A\u0644\u0627\u0645 \u2014 \u0645\u0631\u062A\u0628\u0637\u0629 \u0628\u0627\u0644\u0639\u0644\u0627\u062C\u0627\u062A \u0648\u0627\u0644\u0645\u0635\u0627\u0631\u064A\u0641.',
+      'feat.t.4': '\u064A\u0639\u0645\u0644 \u062F\u0648\u0646 \u0627\u062A\u0635\u0627\u0644 \u0623\u0648\u0644\u0627\u064B', 'feat.d.4': '\u0627\u0646\u0642\u0637\u0639 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A \u0641\u064A \u0645\u0646\u062A\u0635\u0641 \u0627\u0644\u064A\u0648\u0645\u061F \u062A\u0627\u0628\u0639 \u0627\u0644\u0639\u0645\u0644. \u0643\u0644 \u062A\u0639\u062F\u064A\u0644 \u064A\u064F\u062D\u0641\u0638 \u0645\u062D\u0644\u064A\u0627\u064B \u0648\u064A\u064F\u0639\u0627\u062F \u0625\u0631\u0633\u0627\u0644\u0647 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0639\u0646\u062F \u0639\u0648\u062F\u0629 \u0627\u0644\u0634\u0628\u0643\u0629.',
+      'feat.t.5': '\u062B\u0644\u0627\u062B \u0644\u063A\u0627\u062A \u0645\u0639 \u062F\u0639\u0645 RTL', 'feat.d.5': '\u0648\u0627\u062C\u0647\u0627\u062A \u0643\u0627\u0645\u0644\u0629 \u0628\u0627\u0644\u0625\u0646\u062C\u0644\u064A\u0632\u064A\u0629 \u0648\u0627\u0644\u0641\u0631\u0646\u0633\u064A\u0629 \u0648\u0627\u0644\u0639\u0631\u0628\u064A\u0629 \u2014 \u0628\u062F\u0651\u0644 \u0641\u0648\u0631\u0627\u064B\u060C \u0645\u0639 \u0627\u0644\u0643\u062A\u0627\u0628\u0629 \u0645\u0646 \u0627\u0644\u064A\u0645\u064A\u0646 \u0625\u0644\u0649 \u0627\u0644\u064A\u0633\u0627\u0631\u060C \u0644\u0643\u0644 \u0645\u0633\u062A\u062E\u062F\u0645 \u0648\u0643\u0644 \u0634\u0627\u0634\u0629.',
+      'how.head': '\u062C\u0627\u0647\u0632 \u0644\u0644\u0639\u0645\u0644 \u0641\u064A \u062F\u0642\u0627\u0626\u0642', 'how.sub': '\u0627\u0644\u0645\u062B\u0628\u0651\u062A \u064A\u0642\u0648\u0645 \u0628\u0627\u0644\u0639\u0645\u0644 \u0627\u0644\u0634\u0627\u0642 \u2014 \u062F\u0648\u0646 \u062D\u0627\u062C\u0629 \u0644\u0642\u0633\u0645 \u062A\u0642\u0646\u064A\u0629.',
+      'how.t.0': '\u062D\u0645\u0651\u0644 \u0627\u0644\u0645\u062B\u0628\u0651\u062A', 'how.d.0': '\u0645\u0634\u063A\u0651\u0644 \u0623\u0635\u0644\u064A \u0635\u063A\u064A\u0631 \u2014 \u064A\u062A\u0645 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646\u0647 \u0639\u0628\u0631 SHA-256 \u0642\u0628\u0644 \u062A\u0634\u063A\u064A\u0644 \u0623\u064A \u0634\u064A\u0621.',
+      'how.t.1': '\u0634\u063A\u0651\u0644 \u0627\u0644\u0645\u062B\u0628\u0651\u062A', 'how.d.1': '\u064A\u062A\u0635\u0644 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0628\u0633\u062D\u0627\u0628\u0629 Sera \u0627\u0644\u0622\u0645\u0646\u0629 \u2014 \u062A\u0628\u0642\u0649 \u0628\u064A\u0627\u0646\u0627\u062A\u0643 \u0639\u0644\u0649 \u062E\u062F\u0645\u0627\u062A \u0645\u0633\u062A\u0636\u0627\u0641\u0629 \u0645\u0639 \u0646\u0633\u062E \u0627\u062D\u062A\u064A\u0627\u0637\u064A \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B. \u0644\u0627 \u0634\u064A\u0621 \u0644\u0644\u062A\u062B\u0628\u064A\u062A \u0648\u0644\u0627 \u0644\u0644\u0635\u064A\u0627\u0646\u0629.',
+      'how.t.2': '\u0633\u062C\u0651\u0644 \u062F\u062E\u0648\u0644\u0643 \u0648\u0627\u0646\u0637\u0644\u0642', 'how.d.2': '\u0623\u0646\u0634\u0626 \u0639\u064A\u0627\u062F\u062A\u0643\u060C \u0627\u062F\u0639\u064F \u0641\u0631\u064A\u0642\u0643\u060C \u0627\u0628\u062F\u0623 \u0628\u062D\u062C\u0632 \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F. \u0627\u0644\u0646\u0633\u062E \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A \u0627\u0644\u0644\u064A\u0644\u064A \u0645\u062C\u062F\u0648\u0644 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B.',
+      'pr.head': '\u0623\u0633\u0639\u0627\u0631 \u0628\u0633\u064A\u0637\u0629\u060C \u0628\u0627\u0644\u062F\u064A\u0646\u0627\u0631', 'pr.sub': '\u0644\u0643\u0644 \u0639\u064A\u0627\u062F\u0629\u060C \u0634\u0647\u0631\u064A\u0627\u064B. \u0625\u0644\u063A\u0627\u0621 \u0641\u064A \u0623\u064A \u0648\u0642\u062A.',
+      'pr.badge': '\u062E\u064A\u0627\u0631 \u0645\u0639\u0638\u0645 \u0627\u0644\u0639\u064A\u0627\u062F\u0627\u062A', 'pr.note': '\u0643\u0644 \u062E\u0637\u0629 \u062A\u0628\u062F\u0623 \u0628\u062A\u062C\u0631\u0628\u0629 \u0645\u062C\u0627\u0646\u064A\u0629 30 \u064A\u0648\u0645\u0627\u064B \u2014 \u0628\u0643\u0644 \u0627\u0644\u0645\u064A\u0632\u0627\u062A \u0648\u062F\u0648\u0646 \u0628\u0637\u0627\u0642\u0629 \u0628\u0646\u0643\u064A\u0629.',
+      'pr.per': '\u062F\u062C / \u0634\u0647\u0631', 'pr.custom': '\u062D\u0633\u0628 \u0627\u0644\u0637\u0644\u0628',
+      'pr.name.0': 'Starter', 'pr.for.0': '\u0639\u064A\u0627\u062F\u0627\u062A \u0628\u0645\u0645\u0627\u0631\u0633 \u0648\u0627\u062D\u062F \u0641\u064A \u0628\u062F\u0627\u064A\u062A\u0647\u0627.',
+      'pr.li.0': ['\u0645\u0645\u0627\u0631\u0633 \u0648\u0627\u062D\u062F \u0648\u062D\u062A\u0649 3 \u062D\u0633\u0627\u0628\u0627\u062A \u0645\u0648\u0638\u0641\u064A\u0646', '\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0648\u0627\u0644\u0645\u0631\u0636\u0649 \u0648\u0627\u0644\u0641\u0648\u0627\u062A\u064A\u0631', '\u062A\u062E\u0632\u064A\u0646 \u0645\u062D\u0644\u064A \u0644\u0644\u0628\u064A\u0627\u0646\u0627\u062A', '\u062F\u0639\u0645 \u0639\u0628\u0631 \u0627\u0644\u0628\u0631\u064A\u062F'],
+      'pr.name.1': 'Clinic', 'pr.for.1': '\u0627\u0644\u0639\u064A\u0627\u062F\u0627\u062A \u0627\u0644\u0646\u0627\u0645\u064A\u0629 \u0628\u0641\u0631\u064A\u0642 \u0643\u0627\u0645\u0644.',
+      'pr.li.1': ['\u0645\u0645\u0627\u0631\u0633\u0648\u0646 \u0648\u0645\u0648\u0638\u0641\u0648\u0646 \u0628\u0644\u0627 \u062D\u062F\u0648\u062F', '\u0643\u0644 \u0627\u0644\u0648\u062D\u062F\u0627\u062A: \u0627\u0644\u0645\u062E\u0632\u0648\u0646 \u0648\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631', '\u0648\u0636\u0639 \u062F\u0648\u0646 \u0627\u062A\u0635\u0627\u0644 + \u0646\u0633\u062E \u0627\u062D\u062A\u064A\u0627\u0637\u064A \u0644\u064A\u0644\u064A \u062A\u0644\u0642\u0627\u0626\u064A', '\u0633\u062C\u0644 \u062A\u062F\u0642\u064A\u0642 \u0648\u0635\u0644\u0627\u062D\u064A\u0627\u062A \u062D\u0633\u0628 \u0627\u0644\u062F\u0648\u0631', '\u062F\u0639\u0645 \u0623\u0648\u0644\u0648\u064A\u0629'],
+      'pr.name.2': 'Enterprise', 'pr.for.2': '\u0627\u0644\u0645\u062C\u0645\u0648\u0639\u0627\u062A \u0645\u062A\u0639\u062F\u062F\u0629 \u0627\u0644\u0645\u0648\u0627\u0642\u0639.',
+      'pr.li.2': ['\u0639\u064A\u0627\u062F\u0627\u062A \u0645\u062A\u0639\u062F\u062F\u0629 \u0648\u062A\u0642\u0627\u0631\u064A\u0631 \u0645\u0648\u062D\u062F\u0629', '\u062A\u062F\u0631\u064A\u0628 \u0648\u0646\u0642\u0644 \u0628\u064A\u0627\u0646\u0627\u062A \u0645\u062E\u0635\u0635', 'SLA \u062D\u0633\u0628 \u0627\u0644\u0627\u062A\u0641\u0627\u0642'],
+      'pricing.trial': '\u062A\u062C\u0631\u0628\u0629 \u0645\u062C\u0627\u0646\u064A\u0629', 'pricing.talk': '\u062A\u0648\u0627\u0635\u0644 \u0645\u0639\u0646\u0627',
+      'faq.head': '\u0623\u0633\u0626\u0644\u0629 \u0634\u0627\u0626\u0639\u0629',
+      'faq.q.0': '\u0623\u064A\u0646 \u062A\u062A\u062E\u0632\u064A\u0646 \u0628\u064A\u0627\u0646\u0627\u062A\u064A\u061F', 'faq.a.0': 'على خوادم Sera المؤمنة، معزولة لكل عيادة ونسخ احتياطية تلقائية كل ليلة. لا تتم مشاركة بيانات عيادتك أبداً مع عيادات أخرى، ويمكنك تصديرها في أي وقت.',
+      'faq.q.1': '\u0645\u0627\u0630\u0627 \u0644\u0648 \u0627\u0646\u0642\u0637\u0639 \u0627\u0644\u0625\u0646\u062A\u0631\u0646\u062A\u061F', 'faq.a.1': '\u0644\u0627 \u0634\u064A\u0621 \u0645\u062B\u064A\u0631. \u064A\u0633\u062A\u0645\u0631 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0641\u064A \u0627\u0644\u0639\u0645\u0644 \u062F\u0648\u0646 \u0627\u062A\u0635\u0627\u0644 \u0628\u0627\u0644\u0643\u0627\u0645\u0644\u061B \u0627\u0644\u062A\u0639\u062F\u064A\u0644\u0627\u062A \u062A\u064F\u0631\u0627\u062A\u0628 \u0628\u0623\u0645\u0627\u0646 \u0648\u062A\u064F\u0639\u0627\u062F \u0625\u0631\u0633\u0627\u0644\u0647\u0627 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B \u0639\u0646\u062F \u0639\u0648\u062F\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644.',
+      'faq.q.2': '\u0645\u0627 \u0627\u0644\u0645\u0646\u0635\u0627\u062A \u0627\u0644\u0645\u062F\u0639\u0648\u0645\u0629\u061F', 'faq.a.2': 'Windows 10 \u064811 (\u0646\u0638\u0627\u0645 64-bit). \u064A\u0639\u0645\u0644 \u0627\u0644\u062E\u0627\u062F\u0645 \u0639\u0644\u0649 \u062E\u062F\u0645\u0627\u062A Sera \u0627\u0644\u0645\u0633\u062A\u0636\u0627\u0641\u0629 \u2014 \u0644\u0627 \u064A\u0648\u062C\u062F \u0645\u0643\u0648\u0651\u0646 \u062E\u0627\u062F\u0645 \u0644\u0644\u062A\u062B\u0628\u064A\u062A.',
+      'faq.q.3': '\u0643\u064A\u0641 \u062A\u0639\u0645\u0644 \u0627\u0644\u062A\u062C\u0631\u0628\u0629\u061F', 'faq.a.3': '\u062D\u0645\u0651\u0644 \u0627\u0644\u0645\u062B\u0628\u0651\u062A\u060C \u062B\u0628\u0651\u062A\u060C \u0633\u062C\u0651\u0644 \u0627\u0644\u062F\u062E\u0648\u0644. \u0644\u062F\u064A\u0643 30 \u064A\u0648\u0645\u0627\u064B \u0628\u0643\u0644 \u0627\u0644\u0645\u064A\u0632\u0627\u062A \u0645\u0641\u062A\u0648\u062D\u0629 \u2014 \u062F\u0648\u0646 \u0628\u0637\u0627\u0642\u0629 \u0628\u0646\u0643\u064A\u0629. \u0627\u062E\u062A\u0631 \u062E\u0637\u0629 Starter \u0623\u0648 Clinic \u0628\u0639\u062F\u0647\u0627.',
+      'faq.q.4': '\u0647\u0644 \u064A\u0645\u0643\u0646 \u0644\u0641\u0631\u064A\u0642\u064A \u0627\u0633\u062A\u062E\u062F\u0627\u0645\u0647 \u0641\u064A \u0646\u0641\u0633 \u0627\u0644\u0648\u0642\u062A\u061F', 'faq.a.4': '\u0646\u0639\u0645. \u062D\u0633\u0627\u0628\u0627\u062A \u0628\u0623\u062F\u0648\u0627\u0631 \u0645\u062E\u062A\u0644\u0641\u0629 (\u0645\u062F\u064A\u0631\u060C \u0637\u0628\u064A\u0628\u060C \u0645\u0633\u062A\u0634\u0639\u0627\u0631) \u062A\u0639\u0645\u0644 \u0628\u0627\u0644\u062A\u0632\u0627\u0645\u0646\u060C \u0648\u0643\u0644 \u0625\u062C\u0631\u0627\u0621 \u062D\u0633\u0627\u0633 \u064A\u064F\u0633\u062C\u0644 \u0641\u064A \u0633\u062C\u0644 \u062A\u062F\u0642\u064A\u0642 \u0645\u0636\u0627\u062F \u0644\u0644\u062A\u0644\u0648\u062B.',
+      'cta.head': '\u0639\u064A\u0627\u062F\u062A\u0643 \u062A\u0633\u062A\u062D\u0642 \u0628\u0631\u0645\u062C\u064A\u0627\u062A \u0623\u0641\u0636\u0644.', 'cta.sub': '\u0627\u0644\u062A\u062B\u0628\u064A\u062A \u0641\u064A \u062F\u0642\u0627\u0626\u0642. \u062C\u0631\u0651\u0628 \u0643\u0644 \u0634\u064A\u0621 \u0644\u0645\u062F\u0629 30 \u064A\u0648\u0645\u0627\u064B.', 'cta.btn': '\u062A\u062D\u0645\u064A\u0644 \u0627\u0644\u0645\u062B\u0628\u0651\u062A',
+      'footer.copy': '\u00A9 2026 SDIDSA. \u062C\u0645\u064A\u0639 \u0627\u0644\u062D\u0642\u0648\u0642 \u0645\u062D\u0641\u0648\u0638\u0629. \u2014 \u062A\u0635\u0645\u064A\u0645 \u0648\u062A\u0637\u0648\u064A\u0631 \u0641\u064A \u0627\u0644\u062C\u0632\u0627\u0626\u0631.', 'footer.contact': '\u0627\u062A\u0635\u0644 \u0628\u0646\u0627',
+      'aria.theme': '\u062A\u0628\u062F\u064A\u0644 \u0627\u0644\u0645\u0638\u0647\u0631', 'aria.lang': '\u0627\u0644\u0644\u063A\u0629'
+    }
+  };
+
+
+  // ---- i18n engine --------------------------------------------------------
+  var MOCK = {
+    en: {
+      tabs: { dashboard: 'Dashboard', appointments: 'Appointments', patients: 'Patients', billing: 'Billing', inventory: 'Inventory', settings: 'Settings' },
+      kToday: 'Patients today', kRev: 'Revenue \u00B7 month', kSched: 'Today\u2019s schedule', wed: 'Wed 24',
+      month: 'August 2026', monthPill: 'month',
+      days: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], appts: 'appts', apptList: 'Appointments',
+      st: { done: 'done', chair: 'in chair', waiting: 'waiting', sched: 'scheduled' },
+      tr: { cleaning: 'Cleaning', filling: 'Filling', checkup: 'Checkup', root: 'Root canal', consult: 'Consultation', scaling: 'Scaling & polishing', followup: 'Follow-up visit', extraction: 'Extraction', whitening: 'Whitening', brace: 'Brace check' },
+      searchPh: 'Search patients\u2026', lastToday: 'Last visit \u00B7 today', last3: 'Last visit \u00B7 3 days ago', lastWeek: 'Last visit \u00B7 1 week ago', newPat: 'New patient',
+      paid: 'paid', partial: 'partial', unpaid: 'unpaid',
+      kOut: 'Outstanding', kCol: 'Collected \u00B7 month', low: 'low',
+      dark: 'Dark appearance', rem: 'Appointment reminders', bak: 'Nightly backup', langLbl: 'Language'
+    },
+    fr: {
+      tabs: { dashboard: 'Tableau de bord', appointments: 'Rendez-vous', patients: 'Patients', billing: 'Facturation', inventory: 'Stocks', settings: 'Param\u00E8tres' },
+      kToday: 'Patients aujourd\u2019hui', kRev: 'Revenus \u00B7 mois', kSched: 'Planning du jour', wed: 'Mer. 24',
+      month: 'Ao\u00FBt 2026', monthPill: 'mois',
+      days: ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'], appts: 'rdv', apptList: 'Rendez-vous',
+      st: { done: 'termin\u00E9', chair: 'au fauteuil', waiting: 'en salle', sched: 'planifi\u00E9' },
+      tr: { cleaning: 'D\u00E9tartrage', filling: 'Obturation', checkup: 'Contr\u00F4le', root: 'Traitement canalaire', consult: 'Consultation', scaling: 'D\u00E9tartrage & polissage', followup: 'Visite de contr\u00F4le', extraction: 'Extraction', whitening: 'Blanchiment', brace: 'Contr\u00F4le appareil' },
+      searchPh: 'Rechercher des patients\u2026', lastToday: 'Derni\u00E8re visite \u00B7 aujourd\u2019hui', last3: 'Derni\u00E8re visite \u00B7 il y a 3 jours', lastWeek: 'Derni\u00E8re visite \u00B7 il y a 1 semaine', newPat: 'Nouveau patient',
+      paid: 'pay\u00E9e', partial: 'partielle', unpaid: 'impay\u00E9e',
+      kOut: 'Encours', kCol: 'Encaiss\u00E9 \u00B7 mois', low: 'faible',
+      dark: 'Apparence sombre', rem: 'Rappels de rendez-vous', bak: 'Sauvegarde nocturne', langLbl: 'Langue'
+    },
+    ar: {
+      tabs: { dashboard: '\u0627\u0644\u0631\u0626\u064A\u0633\u064A\u0629', appointments: '\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F', patients: '\u0627\u0644\u0645\u0631\u0636\u0649', billing: '\u0627\u0644\u0641\u0648\u0627\u062A\u064A\u0631', inventory: '\u0627\u0644\u0645\u062E\u0632\u0648\u0646', settings: '\u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A' },
+      kToday: '\u0645\u0631\u0636\u0649 \u0627\u0644\u064A\u0648\u0645', kRev: '\u0625\u064A\u0631\u0627\u062F\u0627\u062A \u0627\u0644\u0634\u0647\u0631', kSched: '\u0645\u0648\u0627\u0639\u064A\u062F \u0627\u0644\u064A\u0648\u0645', wed: '\u0623\u0631\u0628\u0639\u0627\u0621 24',
+      month: '\u0623\u063A\u0633\u0637\u0633 2026', monthPill: '\u0634\u0647\u0631\u064A',
+      days: ['\u0627\u062B\u0646\u064A\u0646','\u062B\u0644\u0627\u062B\u0627\u0621','\u0623\u0631\u0628\u0639\u0627\u0621','\u062E\u0645\u064A\u0633','\u062C\u0645\u0639\u0629','\u0633\u0628\u062A','\u0623\u062D\u062F'], appts: '\u0645\u0648\u0627\u0639\u064A\u062F', apptList: '\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F',
+      st: { done: '\u0645\u0646\u062A\u0647\u064A', chair: '\u0641\u064A \u0627\u0644\u0643\u0631\u0633\u064A', waiting: '\u0628\u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631', sched: '\u0645\u0628\u0631\u0645\u062C' },
+      tr: { cleaning: '\u062A\u0646\u0638\u064A\u0641', filling: '\u062D\u0634\u0648\u0629', checkup: '\u0641\u062D\u0635', root: '\u0639\u0644\u0627\u062C \u062C\u0630\u0648\u0631', consult: '\u0627\u0633\u062A\u0634\u0627\u0631\u0629', scaling: '\u062A\u0646\u0638\u064A\u0641 \u0648\u062A\u0644\u0645\u064A\u0639', followup: '\u0632\u064A\u0627\u0631\u0629 \u0645\u062A\u0627\u0628\u0639\u0629', extraction: '\u062E\u0644\u0639', whitening: '\u062A\u0628\u064A\u064A\u0636', brace: '\u0645\u062A\u0627\u0628\u0639\u0629 \u062A\u0642\u0648\u064A\u0645' },
+      searchPh: '\u0627\u0628\u062D\u062B \u0639\u0646 \u0645\u0631\u064A\u0636\u2026', lastToday: '\u0622\u062E\u0631 \u0632\u064A\u0627\u0631\u0629 \u00B7 \u0627\u0644\u064A\u0648\u0645', last3: '\u0622\u062E\u0631 \u0632\u064A\u0627\u0631\u0629 \u00B7 \u0642\u0628\u0644 3 \u0623\u064A\u0627\u0645', lastWeek: '\u0622\u062E\u0631 \u0632\u064A\u0627\u0631\u0629 \u00B7 \u0642\u0628\u0644 \u0623\u0633\u0628\u0648\u0639', newPat: '\u0645\u0631\u064A\u0636 \u062C\u062F\u064A\u062F',
+      paid: '\u0645\u062F\u0641\u0648\u0639\u0629', partial: '\u062C\u0632\u0626\u064A\u0629', unpaid: '\u063A\u064A\u0631 \u0645\u062F\u0641\u0648\u0639\u0629',
+      kOut: '\u0627\u0644\u0645\u062A\u0628\u0642\u064A', kCol: '\u0627\u0644\u0645\u062D\u0635\u0651\u0644 \u00B7 \u0634\u0647\u0631', low: '\u0645\u0646\u062E\u0641\u0636',
+      dark: '\u0627\u0644\u0645\u0638\u0647\u0631 \u0627\u0644\u062F\u0627\u0643\u0646', rem: '\u062A\u0630\u0643\u064A\u0631\u0627\u062A \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F', bak: '\u0627\u0644\u0646\u0633\u062E \u0627\u0644\u0627\u062D\u062A\u064A\u0627\u0637\u064A \u0627\u0644\u0644\u064A\u0644\u064A', langLbl: '\u0627\u0644\u0644\u063A\u0629'
+    }
+  };
+
+  var LANG = document.documentElement.getAttribute('data-lang') || 'en';
+  var $ = function (sel) { return document.querySelector(sel); };
+  var $$ = function (sel) { return document.querySelectorAll(sel); };
+
+  function applyLang(lang) {
+    if (!I18N[lang]) lang = 'en';
+    LANG = lang;
+    var t = I18N[lang], m = MOCK[lang];
+
+    document.documentElement.setAttribute('lang', lang);
+    document.documentElement.setAttribute('dir', t._dir);
+    try { localStorage.setItem('dc-lang', lang); } catch (_) {}
+    document.title = window.APP_NAME + ' \u2014 ' + t['doc.title.sub'];
+    var md = $('meta[name="description"]'); if (md) md.setAttribute('content', t['hero.lede']);
+    $('#langFlag').src = t._flag;
+    $('#themeToggle').setAttribute('aria-label', t['aria.theme']);
+    $('#langBtn').setAttribute('aria-label', t['aria.lang']);
+
+    var navLinks = $$('.nav-links a');
+    ['nav.features','nav.how','nav.pricing','nav.faq'].forEach(function (k, i) { navLinks[i].textContent = t[k]; });
+    $$('[data-k]').forEach(function (el) { el.textContent = t[el.getAttribute('data-k')]; });
+
+    $('.eyebrow').textContent = t['hero.eyebrow'];
+    $('.hero-copy h1').innerHTML = t['hero.h1'];
+    $('.lede').textContent = t['hero.lede'];
+    $$('.hero-meta li').forEach(function (li, i) { li.textContent = t['meta.' + i]; });
+
+    $('#features .section-head h2').innerHTML = t['feat.head'];
+    $('#features .section-head p').textContent = t['feat.sub'];
+    $$('#features .card').forEach(function (card, i) {
+      card.querySelector('h3').textContent = t['feat.t.' + i];
+      card.querySelector('p').textContent = t['feat.d.' + i];
+    });
+
+    $('#how .section-head h2').textContent = t['how.head'];
+    $('#how .section-head p').textContent = t['how.sub'];
+    $$('.steps li').forEach(function (li, i) {
+      li.querySelector('h3').textContent = t['how.t.' + i];
+      li.querySelector('p').textContent = t['how.d.' + i];
+    });
+
+    $('#pricing .section-head h2').textContent = t['pr.head'];
+    $('#pricing .section-head p').textContent = t['pr.sub'];
+    $('.price-card.featured .badge').textContent = t['pr.badge'];
+    $$('.pricing .price-card').forEach(function (card, i) {
+      var h3 = card.querySelector('h3'); if (h3) h3.textContent = t['pr.name.' + i];
+      // Starter/Clinic render "<price> <span>DA / month</span>"; Enterprise
+      // uses ".price.custom" with no inner span \u2014 guard both shapes
+      var per = card.querySelector('.price span');
+      if (per) per.textContent = t['pr.per'];
+      var custom = card.querySelector('.price.custom');
+      if (custom) custom.textContent = t['pr.custom'];
+      var fEl = card.querySelector('.for'); if (fEl) fEl.textContent = t['pr.for.' + i];
+      var ul = card.querySelector('ul');
+      if (ul) ul.innerHTML = t['pr.li.' + i].map(function (x) { return '<li>' + x + '</li>'; }).join('');
+    });
+    $('.pricing-note').textContent = t['pr.note'];
+
+    $('#faq .section-head h2').textContent = t['faq.head'];
+    $$('.faq-list .faq').forEach(function (d, i) {
+      d.querySelector('summary').textContent = t['faq.q.' + i];
+      d.querySelector('p').textContent = t['faq.a.' + i];
+    });
+
+    $('.cta-band h2').textContent = t['cta.head'];
+    $('.cta-band p').textContent = t['cta.sub'];
+    $('.footer p').textContent = t['footer.copy'];
+    var fl = $$('.footer-links a'); if (fl[0]) fl[0].textContent = t['footer.contact'];
+
+    // --- interactive mock ---
+    if (!m) return;
+    try {
+    document.querySelectorAll('.app-side .side-item').forEach(function (tab) {
+      var lbl = m.tabs[tab.getAttribute('data-page')];
+      var span = tab.querySelector('span');
+      if (lbl && span) span.textContent = lbl;
+    });
+    var dashK = document.querySelectorAll('[data-panel="dashboard"] .app-card .k');
+    dashK[0].textContent = m.kToday; dashK[1].textContent = m.kRev;
+    $('[data-panel="dashboard"] .sched-head span').textContent = m.kSched;
+    $('[data-panel="dashboard"] .sched-head .pill').textContent = m.wed;
+    var dashRows = [
+      ['09:00', 'var(--scheduled)', 'Amina B.', m.tr.cleaning, 'Dr. Karim'],
+      ['09:45', 'var(--confirmed)', 'Yacine M.', m.tr.filling, 'Dr. Lina'],
+      ['10:30', 'var(--success)', 'Soraya K.', m.tr.checkup, 'Dr. Karim'],
+      ['11:15', 'var(--warning)', 'Omar T.', m.tr.root, 'Dr. Lina']
+    ];
+    document.querySelectorAll('[data-panel="dashboard"] .app-schedule .row').forEach(function (r, i) {
+      var d = dashRows[i];
+      r.innerHTML = '<i style="background:' + d[1] + '"></i><b>' + d[0] + '</b> ' + d[2] + ' \u2014 ' + d[3] + ' <em>' + d[4] + '</em>';
+    });
+    $('.fake-search').lastChild.textContent = m.searchPh;
+    var ems = document.querySelectorAll('[data-panel="patients"] .lrow em');
+    [m.lastToday, m.last3, m.lastWeek, m.newPat].forEach(function (v, i) { if (ems[i]) ems[i].textContent = v; });
+    var billK = document.querySelectorAll('[data-panel="billing"] .app-card .k');
+    billK[0].textContent = m.kOut; billK[1].textContent = m.kCol;
+    var pillMap = [['paid-pill', m.paid], ['partial-pill', m.partial], ['unpaid-pill', m.unpaid]];
+    pillMap.forEach(function (p) { var el = $('.' + p[0]); if (el) el.textContent = p[1]; });
+    var lowB = document.querySelector('.stock.low b'); if (lowB) lowB.textContent = m.low;
+    var srows = document.querySelectorAll('[data-panel="settings"] .srow span:first-child');
+    [m.dark, m.rem, m.bak, m.langLbl].forEach(function (v, i) { if (srows[i]) srows[i].textContent = v; });
+    var langPill = document.querySelector('[data-panel="settings"] .srow .pill');
+    if (langPill) langPill.textContent = lang;
+    } catch (_) { /* mock is decorative \u2014 never let it break translations */ }
+
+    // calendar chrome
+    try {
+    $('.cal-title').textContent = m.month;
+    $('.cal-head .pill').textContent = m.monthPill;
+    $$('.cal-week span').forEach(function (sEl, i) { sEl.textContent = m.days[i]; });
+    $('.cal-dayview .sched-head span').textContent = m.apptList;
+    if (typeof currentOpenDay === 'number' && !dayView.hidden && typeof openDay === 'function') {
+      openDay(currentOpenDay);
+    }
+    } catch (_) { }
+  }
+
+  // language picker
+  var langBtn = document.getElementById('langBtn');
+  var langMenu = document.getElementById('langMenu');
+  langBtn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var open = langMenu.classList.toggle('open');
+    langBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('click', function () { langMenu.classList.remove('open'); });
+  langMenu.querySelectorAll('button[data-lang]').forEach(function (b) {
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      langMenu.classList.remove('open');
+      applyLang(b.getAttribute('data-lang'));
+    });
+  });
+
+  applyLang(LANG);
+})();
+</script>
+</body>
+</html>
+
+
+
+
