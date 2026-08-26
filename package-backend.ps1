@@ -3,13 +3,15 @@
   Packages the Sera backend into a hosting-ready zip (sera-backend-<version>.zip).
 
 .DESCRIPTION
-  Builds a whitelist-based staging tree, stages the authored Linux deployment
-  assets (deploy/setup.sh / sera.service / nginx-sera.conf + README-HOSTED.txt,
-  normalized to LF-only), validates every staged .js file with `node --check`,
-  then compresses to dist\ and prints a SHA-256.
+  Builds a whitelist-based staging tree, stages the authored deployment assets
+  for BOTH targets (Linux: deploy/setup.sh / sera.service / nginx-sera.conf /
+  backup.sh / sera-backup.cron; Windows: deploy/setup.ps1 / backup.ps1, plus
+  README-HOSTED.txt — normalized to LF-only), validates every staged .js file
+  with `node --check`, then compresses to dist\ and prints a SHA-256.
 
-  The zip is platform-neutral: everything inside deploys on an Ubuntu host per
-  docs/HOSTING.md (the script itself is Windows PowerShell by design).
+  The zip is platform-neutral: everything inside deploys on an Ubuntu host
+  (deploy/setup.sh) or a Windows Server host (deploy/setup.ps1) per
+  docs/HOSTING.md (the packager itself is Windows PowerShell by design).
 
 .PARAMETER Version
   Version stamp for the artifact name. Default: parsed from ..\dentacore\pom.xml,
@@ -108,7 +110,8 @@ deploy  : see deploy/setup.sh and README-HOSTED.txt
 
     # ── authored deploy assets (kept LF-only in the zip) ─────────
     foreach ($a in 'deploy\setup.sh', 'deploy\sera.service', 'deploy\nginx-sera.conf',
-                   'deploy\backup.sh', 'deploy\sera-backup.cron', 'README-HOSTED.txt') {
+                   'deploy\backup.sh', 'deploy\sera-backup.cron',
+                   'deploy\setup.ps1', 'deploy\backup.ps1', 'README-HOSTED.txt') {
         $p = Join-Path $stage $a
         New-Item -ItemType Directory -Path (Split-Path $p -Parent) -Force | Out-Null
         Copy-ItemChecked (Join-Path $ROOT $a) (Split-Path $p -Parent)
@@ -131,6 +134,7 @@ deploy  : see deploy/setup.sh and README-HOSTED.txt
     # LF purity on shell/unit assets
     foreach ($lf in 'deploy/setup.sh', 'deploy/sera.service', 'deploy/nginx-sera.conf',
                    'deploy/backup.sh', 'deploy/sera-backup.cron',
+                   'deploy/setup.ps1', 'deploy/backup.ps1',
                    'README-HOSTED.txt', 'HOSTED-BUILD.txt') {
         $bytes = [IO.File]::ReadAllBytes((Join-Path $stage $lf))
         if ($bytes -contains [byte]13) { throw "CR found in $lf (must be LF-only)" }
