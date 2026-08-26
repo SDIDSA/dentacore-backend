@@ -12,41 +12,103 @@
 <script src="site.js"></script>
 <script src="book.js"></script>
 <style>
-  .clinic-name { color: var(--primary); }
+  /* ---- instrument-datasheet rework (mirrors website/style.css) ---- */
+  .sheet { width: min(1080px, 100%); }
 
-  .step-label { font-family:'Fira Code',monospace; font-size:.74rem; color:var(--muted); letter-spacing:.08em; margin:22px 0 10px; text-transform: uppercase; }
-  .step-label b { color: var(--primary); margin-inline-end: 8px; }
+  body {
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* brand header */
+  .brand { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .brand .mark { width: 26px; height: 26px; color: var(--primary); align-self: center; flex-shrink: 0; }
+  .wordmark { font-family: 'Fira Code', monospace; font-weight: 500; font-size: 1.05rem;
+              letter-spacing: .12em; text-transform: lowercase; }
+  .brand .rule { width: 1px; height: 22px; background: var(--line-strong); align-self: center; }
+  .clinic-name { font-size: clamp(1.25rem, 3.4vw, 1.8rem); font-weight: 700;
+                 letter-spacing: -.02em; color: var(--ink); text-transform: capitalize; }
+
+  /* two-column layout: selection steps | details */
+  .layout { display: grid; grid-template-columns: 1fr 340px; gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+
+  .step-label {
+    font-family:'Fira Code',monospace; font-size:.72rem; color:var(--muted); letter-spacing:.1em;
+    text-transform: uppercase; margin: 0 0 12px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 10px; position: relative;
+  }
+  .step-label::before { content:''; position: absolute; inset-inline-start: -14px; top: -2px;
+                        width: 7px; height: 7px; border-top: 1px solid var(--primary);
+                        border-inline-start: 1px solid var(--primary); }
+  .step-label b { color: var(--primary); font-weight: 500; }
+  .step-block { margin-bottom: 30px; }
 
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip {
     border:1px solid var(--line-strong); background:var(--card); color:var(--ink);
-    padding:9px 14px; border-radius:4px; cursor:pointer; font:inherit; font-size:.9rem;
-    transition: border-color .12s, background .12s, color .12s;
+    padding:10px 16px; border-radius:0; cursor:pointer; font:inherit; font-size:.92rem;
+    text-align: start; transition: border-color .12s, box-shadow .12s, color .12s;
+    position: relative;
   }
+  .chip::after { content:''; position:absolute; inset-inline-start:0; top:0; bottom:0; width:2px;
+                 background: var(--primary); transform: scaleY(0); transition: transform .12s; }
   .chip:hover { border-color: var(--primary); }
+  .chip:hover::after { transform: scaleY(1); }
   .chip.on { background:var(--primary); border-color:var(--primary); color:#fff; }
-  .chip small { display:block; font-family:'Fira Code',monospace; font-size:.62rem; opacity:.75; }
+  .chip.on::after { display:none; }
 
-  .slots { display:grid; grid-template-columns:repeat(auto-fill,minmax(84px,1fr)); gap:8px; }
+  .slots { display:grid; grid-template-columns:repeat(auto-fill,minmax(86px,1fr)); gap:8px; }
   .slot {
     font-family:'Fira Code',monospace; font-size:.85rem; text-align:center;
     border:1px solid var(--line-strong); background:var(--card);
     /* buttons do NOT inherit body color — without this, slot labels render
        UA-black and vanish against the dark-theme card */
     color:var(--ink);
-    padding:9px 4px; border-radius:4px; cursor:pointer; font-weight:500;
+    padding:10px 4px; border-radius:0; cursor:pointer; font-weight:500;
+    transition: border-color .12s, background .12s, color .12s;
   }
   .slot:hover { border-color:var(--primary); color:var(--primary); }
   .slot.on { background:var(--primary); border-color:var(--primary); color:#fff; }
+
+  /* details aside */
+  .side { position: sticky; top: 24px; }
+  @media (max-width: 860px) { .side { position: static; } }
+  .side .card { border-top: 2px solid var(--primary); border-radius: 0; }
+  .side label:first-of-type { margin-top: 0; }
+
+  .readout {
+    font-family:'Fira Code',monospace; font-size:.78rem; color:var(--muted);
+    letter-spacing:.04em; padding:10px 12px; margin-bottom: 16px;
+    border:1px dashed var(--line-strong); background: transparent;
+  }
+  .readout b { color: var(--primary); font-weight: 500; }
+  .readout:empty { display: none; }
+
+  /* confirmation stub */
+  #done .card { border-radius: 0; border-top: 2px solid var(--primary); position: relative; }
+  #done .card::after { content:''; position:absolute; inset-inline:0; top:-6px;
+                       border-top:1px dashed var(--line-strong); }
+  .stub-num { font-family:'Fira Code',monospace; font-size:2.1rem; font-weight:500;
+              color:var(--primary); letter-spacing:.04em; direction:ltr; }
+  .stub-note { max-width: 46ch; margin-inline: auto; }
+
+  footer { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  footer::before { content:''; }
 </style>
 </head>
 <body>
 <div class="sheet">
 
   <header class="head">
-    <div>
-      <p class="kicker" data-i="kicker">Book online</p>
-      <h1><span class="clinic-name" id="clinicName">…</span></h1>
+    <div class="brand">
+      <svg class="mark" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="currentColor"><g transform="translate(4.8,4.8) scale(0.15)"><path d="M 268.32554 4.4726216 C 202.01816 1.3492603 133.77995 23.549043 79.516378 75.964191 C -78.193147 228.30154 14.3336 488.94189 234.28797 511.94002 C 402.2524 529.50214 544.94832 372.50758 510.13529 208.45237 C 483.98551 85.222448 378.83785 9.6782238 268.32554 4.4726216 z M 258.73799 292.75773 C 308.17368 293.27499 357.53892 311.28546 397.30776 346.69297 C 414.23674 361.76539 414.1738 360.818 399.36196 376.99318 C 365.71056 413.74198 323.59346 435.08974 275.80784 439.62113 C 211.91236 445.68017 149.13554 419.20695 108.89568 369.23654 C 101.25056 359.74273 101.235 359.77371 119.75189 343.78763 C 159.79748 309.21522 209.3023 292.24048 258.73799 292.75773 z " transform="matrix(0.49726755,0,0,0.50284557,-0.29677367,-2.1045067)"/></g></svg>
+      <span class="wordmark">sera</span>
+      <span class="rule" aria-hidden="true"></span>
+      <h1 class="clinic-name" id="clinicName">…</h1>
     </div>
     <div class="controls">
       <div class="lang-group" role="group" aria-label="Language">
@@ -69,40 +131,50 @@
 
   <!-- flow -->
   <main id="flow" class="hidden">
+    <div class="layout">
 
-    <section>
-      <p class="step-label"><b>01</b><span data-i="step_dentist">Choose your practitioner</span></p>
-      <div class="chips" id="dentists"></div>
-      <p class="step-label"><b>02</b><span data-i="step_service">Service (optional)</span></p>
-      <div class="chips" id="services"></div>
-    </section>
+      <div class="steps">
+        <section class="step-block">
+          <p class="step-label"><b>01</b><span data-i="step_dentist">Choose your practitioner</span></p>
+          <div class="chips" id="dentists"></div>
+        </section>
 
-    <section>
-      <p class="step-label"><b>03</b><span data-i="step_date">Pick a day</span></p>
-      <div class="chips" id="dates"></div>
-      <p class="step-label"><b>04</b><span data-i="step_time">Pick a time</span></p>
-      <div class="slots" id="slots"></div>
-      <p class="note hidden" id="noSlots" style="margin-top:10px" data-i="noslots">No free times on this day.</p>
-    </section>
+        <section class="step-block">
+          <p class="step-label"><b>02</b><span data-i="step_service">Service (optional)</span></p>
+          <div class="chips" id="services"></div>
+        </section>
 
-    <section>
-      <p class="step-label"><b>05</b><span data-i="step_you">Your details</span></p>
-      <div class="card">
-        <label for="fullName" data-i="name">Full name</label>
-        <input id="fullName" autocomplete="name" maxlength="120">
-        <label for="phone" data-i="phone">Phone (Algerian mobile)</label>
-        <input id="phone" dir="ltr" placeholder="+213 5 XX XX XX XX" autocomplete="tel" maxlength="13">
-        <label for="notes" data-i="notes">Reason / notes (optional)</label>
-        <textarea id="notes" rows="2" maxlength="500"></textarea>
+        <section class="step-block">
+          <p class="step-label"><b>03</b><span data-i="step_date">Pick a day</span></p>
+          <div class="chips" id="dates"></div>
+        </section>
 
-        <div class="actions">
-          <button class="btn" id="submitBtn" data-i="confirm">Confirm appointment</button>
-          <span class="note" id="pickedSummary"></span>
-        </div>
-        <div class="msg err hidden" id="formErr"></div>
+        <section class="step-block">
+          <p class="step-label"><b>04</b><span data-i="step_time">Pick a time</span></p>
+          <div class="slots" id="slots"></div>
+          <p class="note hidden" id="noSlots" style="margin-top:10px" data-i="noslots">No free times on this day.</p>
+        </section>
       </div>
-    </section>
 
+      <aside class="side">
+        <div class="card">
+          <p class="step-label"><b>05</b><span data-i="step_you">Your details</span></p>
+          <div class="readout" id="pickedSummary"></div>
+          <label for="fullName" data-i="name">Full name</label>
+          <input id="fullName" autocomplete="name" maxlength="120">
+          <label for="phone" data-i="phone">Phone (Algerian mobile)</label>
+          <input id="phone" dir="ltr" placeholder="+213 5 XX XX XX XX" autocomplete="tel" maxlength="13">
+          <label for="notes" data-i="notes">Reason / notes (optional)</label>
+          <textarea id="notes" rows="2" maxlength="500"></textarea>
+
+          <div class="actions">
+            <button class="btn" id="submitBtn" data-i="confirm">Confirm appointment</button>
+          </div>
+          <div class="msg err hidden" id="formErr"></div>
+        </div>
+      </aside>
+
+    </div>
   </main>
 
   <!-- success -->
@@ -110,7 +182,7 @@
     <div class="card" style="text-align:center">
       <p class="kicker" style="justify-content:center;display:inline-flex" data-i="done_kicker">Confirmed</p>
       <p data-i="done_code">Your patient number</p>
-      <p class="done-num" id="donePatientCode">PAT-0000-0000</p>
+      <p class="stub-num" id="donePatientCode">PAT-0000-0000</p>
       <hr class="dash">
       <dl>
         <dt data-i="when">When</dt><dd id="doneWhen" dir="ltr"></dd>
@@ -118,11 +190,14 @@
         <dt data-i="duration">Duration</dt><dd id="doneDuration" dir="ltr"></dd>
       </dl>
       <hr class="dash">
-      <p class="note" data-i="done_note">Arrive 5 minutes early. To reschedule, call the clinic and give this patient number.</p>
+      <p class="note stub-note" data-i="done_note">Arrive 5 minutes early. To reschedule, call the clinic and give this patient number.</p>
     </div>
   </main>
 
-  <footer>sera · <span data-i="footer">online booking · no account needed</span></footer>
+  <footer>
+    <span>sera · <span data-i="footer">online booking · no account needed</span></span>
+    <span class="mono" id="sheetRef">OP-BOOKING</span>
+  </footer>
 </div>
 
 </body>

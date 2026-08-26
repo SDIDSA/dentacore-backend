@@ -78,7 +78,7 @@
       "cat.surgery.wisdom_tooth": { en: "Wisdom Tooth", fr: "Dent de sagesse", ar: "ضرس العقل" }
     };
 
-    var $ = function (id) { return document.getElementById(id); };    var $ = function (id) { return document.getElementById(id); };
+    var $ = function (id) { return document.getElementById(id); };
     var qsa = function (sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); };
     var LANG = de.getAttribute('lang');
 
