@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Sera nightly maintenance: pg_dump + retention prune + offsite copy + audit trim.
-# Intended to run from cron as the `postgres` user (peer-auth socket access);
-# see deploy/sera-backup.cron or docs/HOSTING.md section 5.
+# Intended to run from cron as the app user (who owns the self-contained PG in
+# .prod-tools), connecting with .env credentials; see deploy/sera-backup.cron,
+# prod.sh --backup-cron, or docs/HOSTING.md section 5.
 #
 # Environment:
 #   APP_DIR               app root containing .env          (default: script's parent dir)
@@ -17,14 +18,24 @@ RETENTION_DAYS="${RETENTION_DAYS:-14}"
 AUDIT_RETENTION_DAYS="${AUDIT_RETENTION_DAYS:-180}"
 OFFSITE_REMOTE="${OFFSITE_REMOTE:-}"
 
-get_env() { grep -E "^${1}=" "$APP_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2-; }
+get_env() { grep -E "^${1}=" "$APP_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r'; }
 DB_NAME="$(get_env DB_NAME)"; DB_NAME="${DB_NAME:-dentacore}"
+DB_USER="$(get_env DB_USER)"; DB_USER="${DB_USER:-dentacore}"
+DB_PORT="$(get_env DB_PORT)"; DB_PORT="${DB_PORT:-5434}"
+DB_PASS="$(get_env DB_PASSWORD)"
+
+# self-contained PG tools + server live under .prod-tools; connect over TCP (md5)
+export PATH="$APP_DIR/.prod-tools/pgsql/bin:$PATH"
+export PGHOST=127.0.0.1
+export PGPORT="$DB_PORT"
+export PGUSER="$DB_USER"
+export PGPASSWORD="$DB_PASS"
 
 mkdir -p "$BACKUP_DIR"
 
 dump="$BACKUP_DIR/$DB_NAME-$(date +%F).dump"
 echo "-- pg_dump -> $dump"
-pg_dump -Fc "$DB_NAME" > "$dump"
+pg_dump -Fc -h "$PGHOST" -p "$DB_PORT" -U "$DB_USER" "$DB_NAME" > "$dump"
 
 find "$BACKUP_DIR" -name '*.dump' -mtime "+$RETENTION_DAYS" -delete
 
@@ -38,7 +49,7 @@ if [ -n "$OFFSITE_REMOTE" ]; then
 fi
 
 if [ "$AUDIT_RETENTION_DAYS" -gt 0 ]; then
-  psql -d "$DB_NAME" -v ON_ERROR_STOP=1 \
+  psql -h "$PGHOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 \
     -c "DELETE FROM audit_logs WHERE created_at < now() - interval '${AUDIT_RETENTION_DAYS} days'"
 fi
 

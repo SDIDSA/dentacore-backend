@@ -1,11 +1,11 @@
 # Hosting Runbook
 
-Production deployment guide for the Sera backend on Ubuntu 22.04/24.04.
+Production deployment guide for the Sera backend on Ubuntu 22.04/24.04 or Windows Server.
 
 ## Prerequisites
 
-- Ubuntu 22.04 or 24.04 LTS (must run as root or with sudo)
-- Internet access (setup.sh installs Node.js and PostgreSQL when missing)
+- Ubuntu 22.04 or 24.04 LTS (must run as root or with sudo) **or** Windows 10+ / Server 2019+
+- Internet access (first run downloads Node.js + PostgreSQL binaries)
 
 ## Quick Deploy
 
@@ -15,61 +15,80 @@ scp sera-backend-*.zip root@your-server:/opt/
 ssh root@your-server
 cd /opt && unzip sera-backend-*.zip && cd sera-backend
 
-# 2. Run setup (installs everything, creates DB, applies schema)
-sudo bash deploy/setup.sh --systemd
+# 2. First run: downloads binaries, creates DB, applies schema, starts server
+sudo bash prod.sh --systemd
 
 # 3. Verify
 curl http://localhost:4000/health
 ```
 
-## What setup.sh Does
+Windows:
+```powershell
+# 1. Extract the zip, open PowerShell as Administrator
+cd C:\sera-backend
 
-1. Installs Node.js 22 via nodesource (if missing or < 20)
-2. Installs PostgreSQL + starts the service (if missing)
-3. Installs production npm dependencies (`npm ci --omit=dev`)
-4. Creates `.env` from `.env.example` with auto-generated:
-   - `DB_PASSWORD` (16-byte hex)
-   - `JWT_SECRET` + `JWT_REFRESH_SECRET` (32-byte hex)
-   - `PORT=4000`, `NODE_ENV=production`
-5. Creates PostgreSQL role + database (when reachable as `postgres` superuser)
-6. Applies `db.sql` base schema
-7. With `--systemd`: creates a `sera` system user, installs and enables the service
+# 2. First run: downloads binaries, creates DB, applies schema, starts server
+.\prod.ps1 -Service -Domain api.sera.dz
+
+# 3. Verify
+curl http://localhost:4000/health
+```
+
+## What prod.sh / prod.ps1 Does
+
+1. Downloads Node.js binaries into `.prod-tools/node-*` (cached, ~30 MB)
+2. Downloads PostgreSQL binaries into `.prod-tools/pgsql/` (cached, Windows: EDB ~50 MB, Linux: Percona ~304 MB, selective extract)
+3. On first run:
+   - Creates `.env` from `.env.example` with auto-generated secrets
+   - Initializes PG data dir at `.prod-tools/pgsql/data/`
+   - Creates role + database, applies `db.sql` schema
+4. Starts PG via `pg_ctl start` (port 5434)
+5. Installs production npm dependencies (`npm ci --omit=dev`)
+6. With `-Domain`: installs Caddy as a Windows service with auto-TLS
+7. Starts `node server.js`
+
+Ctrl+C stops PG gracefully. Data persists in `.prod-tools/pgsql/data/` across runs.
 
 ## Options
 
 | Flag | Description |
 |------|-------------|
-| `--systemd` | Install and enable the `sera` systemd service |
-| `--port N` | Override listening port (default: 4000) |
-| `--seed` | Load `seed.sql` demo data after schema |
-| `--backup-cron [rclone-remote]` | Install `/etc/cron.d/sera-backup`: nightly `pg_dump -Fc` + 14-day dump retention + optional rclone offsite copy + 180-day `audit_logs` trim |
+| `--systemd` / `-Service` | Install and enable the `sera` service (systemd on Linux, Scheduled Task on Windows) |
+| `--port N` / `-Port N` | Override listening port (default: 4000) |
+| `--seed` / `-Seed` | Load `seed.sql` demo data after schema |
+| `--backup-cron [rclone-remote]` / `-BackupCron` | Install backup task: nightly `pg_dump -Fc` + 14-day dump retention + optional rclone offsite copy + 180-day `audit_logs` trim |
+| `-Domain <name>` | (Windows) Install Caddy reverse proxy with auto-TLS for the given domain |
 
 ## Post-Deploy Checklist
 
 1. **Review `.env`** — set `CORS_ORIGIN` to your frontend URL, configure Cloudinary/SMTP if needed
-2. **Firewall** — open port 4000 (or your reverse proxy port)
-3. **Reverse proxy** — see `deploy/nginx-sera.conf` for an nginx sample
-4. **TLS** — `sudo certbot --nginx -d api.yourdomain.com`
-5. **Backups** — run setup with `--backup-cron` (see Options), or schedule `pg_dump` manually
+2. **Firewall** — open port 80/443 (Caddy/nginx handles TLS and proxies to 4000)
+3. **Reverse proxy** — Linux: see `deploy/nginx-sera.conf` + `certbot`; Windows: `-Domain` flag installs Caddy automatically
+4. **Backups** — run with `--backup-cron` (see Options), or schedule `pg_dump` manually
 
 ## Backups + Maintenance
 
-Recommended: let setup.sh install the cron (runs as the `postgres` user):
+Recommended: let the script install the cron/task:
 
 ```bash
-# with offsite copy (configure rclone for the postgres user first:
-#   sudo -u postgres rclone config
-sudo bash deploy/setup.sh --backup-cron rclone-remote:bucket/sera
-# or local-only (add a remote later by editing /etc/cron.d/sera-backup)
-sudo bash deploy/setup.sh --backup-cron
+# Linux with offsite copy (configure rclone for the app user first:
+#   sudo -u sera rclone config)
+sudo bash prod.sh --backup-cron rclone-remote:bucket/sera
+# or local-only
+sudo bash prod.sh --backup-cron
 ```
 
-`deploy/backup.sh` does all of it: nightly `pg_dump -Fc`, retention prune,
+```powershell
+# Windows
+.\prod.ps1 -BackupCron
+```
+
+`deploy/backup.sh` / `deploy/backup.ps1` do all of it: nightly `pg_dump -Fc`, retention prune,
 rclone copy when `OFFSITE_REMOTE` is set, and trims `audit_logs` older than
 180 days (`AUDIT_RETENTION_DAYS`). Verify after the first night:
 `cat /var/log/sera-backup.log && ls -lh /var/backups/sera`.
 
-## Reverse Proxy (nginx)
+## Reverse Proxy (nginx — Linux only)
 
 A sample config is at `deploy/nginx-sera.conf`. Copy and adapt:
 
@@ -100,7 +119,7 @@ NODE_ENV=production node server.js
 
 ```bash
 # Connect
-PGPASSWORD=<password> psql -h localhost -p 5432 -U dentacore -d dentacore
+PGPASSWORD=<password> psql -h 127.0.0.1 -p 5434 -U dentacore -d dentacore
 ```
 
 ## Updating
@@ -110,13 +129,13 @@ PGPASSWORD=<password> psql -h localhost -p 5432 -U dentacore -d dentacore
 sudo systemctl stop sera
 
 # 2. Backup database
-pg_dump -h localhost -p 5432 -U dentacore -d dentacore > backup-$(date +%F).dump
+pg_dump -h 127.0.0.1 -p 5434 -U dentacore -d dentacore > backup-$(date +%F).dump
 
 # 3. Extract new zip over existing directory
 cd /opt && unzip -o sera-backend-*.zip
 
-# 4. Run setup (safe to re-run — skips DB creation, re-applies db.sql)
-cd sera-backend && sudo bash deploy/setup.sh
+# 4. Re-run (safe — skips DB creation, re-applies db.sql, skips .env)
+cd sera-backend && sudo bash prod.sh
 
 # 5. Restart
 sudo systemctl start sera
@@ -126,7 +145,7 @@ sudo systemctl start sera
 
 | Symptom | Fix |
 |---------|-----|
-| `FATAL: role "dentacore" does not exist` | Run setup.sh with postgres superuser access, or create role manually |
-| `FATAL: database "dentacore" does not exist` | Run setup.sh, or `createdb -h localhost -p 5432 -U dentacore dentacore` |
+| `FATAL: role "dentacore" does not exist` | Re-run with postgres superuser access, or create role manually |
+| `FATAL: database "dentacore" does not exist` | Re-run prod.sh/prod.ps1, or `createdb -h 127.0.0.1 -p 5434 -U dentacore dentacore` |
 | `EACCES: permission denied` on uploads | `chown -R sera:sera /opt/sera-backend` |
 | Port already in use | Change `PORT` in `.env` or stop the conflicting service |

@@ -1,6 +1,6 @@
 # Sera nightly maintenance for Windows: pg_dump + retention prune + offsite copy + audit trim.
 # Windows equivalent of deploy/backup.sh (Ubuntu/cron). Installed by
-# deploy/setup.ps1 -BackupCron as a SYSTEM Scheduled Task; can also run manually:
+# prod.ps1 -BackupCron as a SYSTEM Scheduled Task; can also run manually:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File deploy\backup.ps1
 #
 # Connects as the dentacore app role using credentials from .env (no postgres
@@ -34,17 +34,22 @@ function Get-EnvValue([string]$key) {
 
 $DbName = Get-EnvValue "DB_NAME"; if (-not $DbName) { $DbName = "dentacore" }
 $DbHost = Get-EnvValue "DB_HOST"; if (-not $DbHost) { $DbHost = "localhost" }
-$DbPort = Get-EnvValue "DB_PORT"; if (-not $DbPort) { $DbPort = "5432" }
+$DbPort = Get-EnvValue "DB_PORT"; if (-not $DbPort) { $DbPort = "5434" }
 $DbUser = Get-EnvValue "DB_USER"; if (-not $DbUser) { $DbUser = "dentacore" }
 $DbPass = Get-EnvValue "DB_PASSWORD"
 if (-not $OffsiteRemote) { $OffsiteRemote = Get-EnvValue "OFFSITE_REMOTE" }
 
-# locate psql/pg_dump
+# locate psql/pg_dump — prefer the self-contained .prod-tools, fall back to a system PG
 $pgTool = $null
-foreach ($name in @("pg_dump.exe", "psql.exe")) {
-    $hit = Get-ChildItem "C:\Program Files\PostgreSQL\*\bin\$name" -ErrorAction SilentlyContinue |
-        Sort-Object { [int]($_.Directory.Parent.Name -replace '[^\d]', '') } -Descending | Select-Object -First 1
-    if ($hit) { $pgTool = $hit.FullName; break }
+$selfTool = Join-Path $AppDir ".prod-tools\pgsql\bin\pg_dump.exe"
+if (Test-Path $selfTool) {
+    $pgTool = $selfTool
+} else {
+    foreach ($name in @("pg_dump.exe", "psql.exe")) {
+        $hit = Get-ChildItem "C:\Program Files\PostgreSQL\*\bin\$name" -ErrorAction SilentlyContinue |
+            Sort-Object { [int]($_.Directory.Parent.Name -replace '[^\d]', '') } -Descending | Select-Object -First 1
+        if ($hit) { $pgTool = $hit.FullName; break }
+    }
 }
 if (-not $pgTool) { $pgTool = (Get-Command pg_dump -ErrorAction SilentlyContinue).Source }
 if (-not $pgTool) { Write-Error "pg_dump/psql not found"; exit 1 }

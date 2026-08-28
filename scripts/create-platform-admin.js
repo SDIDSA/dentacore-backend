@@ -77,7 +77,7 @@ const PLATFORM_SUBDOMAIN = 'sera-platform';
         email,
         password_hash: bcrypt.hashSync(password, 10),
         full_name: fullName || 'Sera Operator',
-        phone: '+213000000000',
+        phone: `+213${String(Date.now()).slice(-9)}`,
         status_key: 'user.status.active',
       })
       .execute();

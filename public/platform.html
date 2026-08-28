@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="favicon.ico">
 <title>Sera Platform</title>
 <meta name="robots" content="noindex, nofollow">
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
@@ -13,143 +13,104 @@
 <script src="site.js"></script>
 <script src="platform.js"></script>
 <style>
-  /* ---- instrument-datasheet console rework (mirrors website/style.css) ---- */
-  .sheet { width: min(1160px, 100%); }
-
-  body {
-    background-image:
-      linear-gradient(var(--grid-line) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-    background-size: 32px 32px;
-  }
-
-  /* brand header */
-  .brand { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-  .brand .mark { width: 26px; height: 26px; color: var(--primary); align-self: center; flex-shrink: 0; }
-  .wordmark { font-family: 'Fira Code', monospace; font-weight: 500; font-size: 1.05rem;
-              letter-spacing: .12em; text-transform: lowercase; }
-  .brand .rule { width: 1px; height: 22px; background: var(--line-strong); align-self: center; }
-  h1 { font-size: clamp(1.2rem, 2.6vw, 1.5rem); font-weight: 700; letter-spacing: -.02em; }
-
-  /* index tabs */
-  .tabs { display: flex; gap: 0; margin: 26px 0 20px; border-bottom: 1px solid var(--line-strong); }
-  .tab {
-    border: none; border-bottom: 2px solid transparent; background: transparent; color: var(--muted);
-    padding: 10px 22px; cursor: pointer; font: inherit; font-size: .95rem;
-    font-weight: 500; transition: color .12s, border-color .12s; margin-bottom: -1px;
-  }
-  .tab:hover { color: var(--primary); }
-  .tab.on { color: var(--primary); border-bottom-color: var(--primary); }
-  .tab .idx { font-family: 'Fira Code', monospace; font-size: .68rem; margin-inline-end: 8px; opacity: .7; }
-
-  .logout {
-    border: 1px solid var(--line-strong); background: transparent; color: var(--muted);
-    font-family: 'Fira Code', monospace; font-size: .68rem; letter-spacing: .08em;
-    padding: 8px 11px; border-radius: 0; cursor: pointer; transition: color .12s, border-color .12s;
-  }
-  .logout:hover { color: var(--primary); border-color: var(--primary); }
-
-  /* stat devices */
-  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0;
-           border: 1px solid var(--line-strong); background: var(--card); }
-  .stat { padding: 18px 18px 16px; border-inline-end: 1px solid var(--line); border-bottom: 1px solid var(--line);
-          position: relative; }
-  .stat::before { content:''; position:absolute; top:0; inset-inline-start:0; width:22px; height:2px;
-                  background: var(--line-strong); transition: background .15s, width .15s; }
-  .stat:hover::before { background: var(--primary); width: 44px; }
-  .stat .k { font-family: 'Fira Code', monospace; font-size: .64rem; letter-spacing: .12em;
-             text-transform: uppercase; color: var(--muted); }
-  .stat .v { font-family: 'Fira Code', monospace; font-size: 1.9rem; font-weight: 500;
-             color: var(--ink); margin-top: 6px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-
-  .section-label { font-family:'Fira Code',monospace; font-size:.72rem; color:var(--muted);
-                   letter-spacing:.1em; margin:30px 0 12px; text-transform: uppercase;
-                   padding-bottom: 8px; border-bottom: 1px solid var(--line);
-                   display: flex; align-items: baseline; gap: 10px; position: relative; }
-  .section-label::before { content:''; position: absolute; inset-inline-start: -14px; top: -2px;
-                        width: 7px; height: 7px; border-top: 1px solid var(--primary);
-                        border-inline-start: 1px solid var(--primary); }
-  .section-label b { color: var(--primary); font-weight: 500; }
-
-  /* ledger tables */
-  .tbl-wrap { background: var(--card); border: 1px solid var(--line-strong); overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-  th { font-family: 'Fira Code', monospace; font-size: .62rem; letter-spacing: .12em; text-transform: uppercase;
-       color: var(--muted); text-align: start; font-weight: 400; padding: 11px 14px;
-       border-bottom: 1px solid var(--line-strong); background: color-mix(in srgb, var(--muted) 6%, transparent); }
-  td { padding: 12px 14px; border-bottom: 1px solid var(--line); }
-  tr:last-child td { border-bottom: none; }
-  tbody tr { cursor: pointer; transition: background .1s, box-shadow .1s; }
-  tbody tr:hover { background: color-mix(in srgb, var(--primary) 5%, transparent);
-                   box-shadow: inset 2px 0 0 var(--primary); }
-  td.num, .num { font-family: 'Fira Code', monospace; font-size: .8rem; font-variant-numeric: tabular-nums; }
-  td b { font-weight: 600; }
-
-  .pill { display: inline-flex; align-items: center; gap: 6px; font-family: 'Fira Code', monospace;
-          font-size: .64rem; letter-spacing: .08em; text-transform: uppercase;
-          padding: 3px 9px; border: 1px solid var(--line-strong); color: var(--muted); border-radius: 0; }
-  .pill::before { content:''; width: 6px; height: 6px; border-radius: 50%;
-                  background: var(--muted); flex-shrink: 0; }
-  .pill.active   { color: #15803d; border-color: #86efac; }
-  .pill.active::before   { background: #22c55e; }
-  .pill.trial    { color: #1d4ed8; border-color: #93c5fd; }
-  .pill.trial::before    { background: #3b82f6; }
-  .pill.suspended, .pill.cancelled, .pill.expired { color: #b91c1c; border-color: #fca5a5; }
-  .pill.suspended::before, .pill.cancelled::before, .pill.expired::before { background: #ef4444; }
-  [data-theme="dark"] .pill.active   { color: #4ade80; border-color: #166534; }
-  [data-theme="dark"] .pill.trial    { color: #93c5fd; border-color: #1e3a8a; }
-  [data-theme="dark"] .pill.suspended, [data-theme="dark"] .pill.cancelled, [data-theme="dark"] .pill.expired { color: #fca5a5; border-color: #7f1d1d; }
-
-  /* toolbar */
-  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
-  .toolbar input[type="text"], .toolbar input[type="search"] {
-    width: min(320px, 100%); border: 1px solid var(--line-strong); border-radius: 0;
-    padding: 9px 12px; font: inherit; font-size: .9rem; color: var(--ink); background: var(--card);
-  }
-  .toolbar input:focus { outline: none; border-color: var(--primary); }
-  .toolbar .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip {
-    border: 1px solid var(--line-strong); background: var(--card); color: var(--muted);
-    padding: 6px 13px; border-radius: 0; cursor: pointer; font: inherit; font-size: .76rem;
-    font-family: 'Fira Code', monospace; letter-spacing: .05em;
-    transition: border-color .12s, background .12s, color .12s;
-  }
-  .chip:hover { border-color: var(--primary); color: var(--primary); }
-  .chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
-
-  .pager { display: flex; align-items: center; gap: 12px; justify-content: flex-end; margin-top: 12px; }
-  .pager button {
-    border: 1px solid var(--line-strong); background: var(--card); color: var(--ink);
-    padding: 7px 14px; border-radius: 0; cursor: pointer; font: inherit; font-size: .85rem;
-  }
-  .pager button:disabled { opacity: .4; cursor: not-allowed; }
-  .pager button:not(:disabled):hover { border-color: var(--primary); color: var(--primary); }
-  .pager .note { align-self: center; }
-
-  /* detail */
-  .detail-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
-  .back { border: none; background: transparent; color: var(--primary); font: inherit; font-size: .88rem;
-          cursor: pointer; padding: 0; }
-  .back:hover { text-decoration: underline; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 18px; }
-  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
-  .grid2 .card { border-radius: 0; border-top: 2px solid var(--primary); }
-  select {
-    width: 100%; border: 1px solid var(--line-strong); border-radius: 0;
-    padding: 11px 13px; font: inherit; font-size: .95rem; color: var(--ink); background: var(--card);
-  }
-  select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
-  .save-row { display: flex; align-items: center; gap: 12px; margin-top: 18px; }
-  .ok-msg { color: #15803d; font-size: .85rem; font-family: 'Fira Code', monospace; }
-  [data-theme="dark"] .ok-msg { color: #4ade80; }
-  .kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: .92rem; }
-  .kv dt { font-size: .66rem; align-self: center; }
-  .kv dd { font-weight: 500; overflow-wrap: anywhere; }
-
-  /* login */
-  #login { display: flex; justify-content: center; padding-top: 9vh; }
-  #login .card { width: min(400px, 100%); border-radius: 0; border-top: 2px solid var(--primary); }
-  #login h1 { margin-bottom: 4px; }
+.sheet{width:min(1160px,100%)}
+body{background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);background-size:32px 32px}
+.brand{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.brand .mark{width:26px;height:26px;color:var(--primary);align-self:center;flex-shrink:0}
+.wordmark{font-family:'Fira Code',monospace;font-weight:500;font-size:1.05rem;letter-spacing:.12em;text-transform:lowercase}
+.brand .rule{width:1px;height:22px;background:var(--line-strong);align-self:center}
+h1{font-size:clamp(1.2rem,2.6vw,1.5rem);font-weight:700;letter-spacing:-.02em}
+.tabs{display:flex;gap:0;margin:26px 0 20px;border-bottom:1px solid var(--line-strong);flex-wrap:wrap}
+.tab{border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted);padding:10px 18px;cursor:pointer;font:inherit;font-size:.88rem;font-weight:500;transition:color .12s,border-color .12s;margin-bottom:-1px;white-space:nowrap}
+.tab:hover{color:var(--primary)}.tab.on{color:var(--primary);border-bottom-color:var(--primary)}
+.tab .idx{font-family:'Fira Code',monospace;font-size:.68rem;margin-inline-end:8px;opacity:.7}
+.logout{border:1px solid var(--line-strong);background:transparent;color:var(--muted);font-family:'Fira Code',monospace;font-size:.68rem;letter-spacing:.08em;padding:8px 11px;border-radius:0;cursor:pointer;transition:color .12s,border-color .12s}
+.logout:hover{color:var(--primary);border-color:var(--primary)}
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0;border:1px solid var(--line-strong);background:var(--card)}
+.stat{padding:18px 18px 16px;border-inline-end:1px solid var(--line);border-bottom:1px solid var(--line);position:relative}
+.stat::before{content:'';position:absolute;top:0;inset-inline-start:0;width:22px;height:2px;background:var(--line-strong);transition:background .15s,width .15s}
+.stat:hover::before{background:var(--primary);width:44px}
+.stat .k{font-family:'Fira Code',monospace;font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font-family:'Fira Code',monospace;font-size:1.9rem;font-weight:500;color:var(--ink);margin-top:6px;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat .v.sm{font-size:1.1rem}
+.section-label{font-family:'Fira Code',monospace;font-size:.72rem;color:var(--muted);letter-spacing:.1em;margin:30px 0 12px;text-transform:uppercase;padding-bottom:8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:10px;position:relative}
+.section-label::before{content:'';position:absolute;inset-inline-start:-14px;top:-2px;width:7px;height:7px;border-top:1px solid var(--primary);border-inline-start:1px solid var(--primary)}
+.section-label b{color:var(--primary);font-weight:500}
+.tbl-wrap{background:var(--card);border:1px solid var(--line-strong);overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th{font-family:'Fira Code',monospace;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:start;font-weight:400;padding:11px 14px;border-bottom:1px solid var(--line-strong);background:color-mix(in srgb,var(--muted) 6%,transparent)}
+td{padding:12px 14px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:none}
+tbody tr{cursor:pointer;transition:background .1s,box-shadow .1s}
+tbody tr:hover{background:color-mix(in srgb,var(--primary) 5%,transparent);box-shadow:inset 2px 0 0 var(--primary)}
+td.num,.num{font-family:'Fira Code',monospace;font-size:.8rem;font-variant-numeric:tabular-nums}
+td b{font-weight:600}
+.pill{display:inline-flex;align-items:center;gap:6px;font-family:'Fira Code',monospace;font-size:.64rem;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border:1px solid var(--line-strong);color:var(--muted);border-radius:0}
+.pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.pill.active{color:#15803d;border-color:#86efac}.pill.active::before{background:#22c55e}
+.pill.trial{color:#1d4ed8;border-color:#93c5fd}.pill.trial::before{background:#3b82f6}
+.pill.suspended,.pill.cancelled,.pill.expired{color:#b91c1c;border-color:#fca5a5}
+.pill.suspended::before,.pill.cancelled::before,.pill.expired::before{background:#ef4444}
+.pill.paid{color:#15803d;border-color:#86efac}.pill.paid::before{background:#22c55e}
+.pill.sent{color:#1d4ed8;border-color:#93c5fd}.pill.sent::before{background:#3b82f6}
+.pill.draft{color:var(--muted);border-color:var(--line-strong)}.pill.draft::before{background:var(--muted)}
+.pill.void{color:#b91c1c;border-color:#fca5a5}.pill.void::before{background:#ef4444}
+[data-theme="dark"] .pill.active{color:#4ade80;border-color:#166534}
+[data-theme="dark"] .pill.trial{color:#93c5fd;border-color:#1e3a8a}
+[data-theme="dark"] .pill.suspended,[data-theme="dark"] .pill.cancelled,[data-theme="dark"] .pill.expired{color:#fca5a5;border-color:#7f1d1d}
+[data-theme="dark"] .pill.paid{color:#4ade80;border-color:#166534}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar input[type="text"],.toolbar input[type="search"]{width:min(320px,100%);border:1px solid var(--line-strong);border-radius:0;padding:9px 12px;font:inherit;font-size:.9rem;color:var(--ink);background:var(--card)}
+.toolbar input:focus{outline:none;border-color:var(--primary)}
+.toolbar .chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line-strong);background:var(--card);color:var(--muted);padding:6px 13px;border-radius:0;cursor:pointer;font:inherit;font-size:.76rem;font-family:'Fira Code',monospace;letter-spacing:.05em;transition:border-color .12s,background .12s,color .12s}
+.chip:hover{border-color:var(--primary);color:var(--primary)}
+.chip.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.pager{display:flex;align-items:center;gap:12px;justify-content:flex-end;margin-top:12px}
+.pager button{border:1px solid var(--line-strong);background:var(--card);color:var(--ink);padding:7px 14px;border-radius:0;cursor:pointer;font:inherit;font-size:.85rem}
+.pager button:disabled{opacity:.4;cursor:not-allowed}
+.pager button:not(:disabled):hover{border-color:var(--primary);color:var(--primary)}
+.pager .note{align-self:center}
+.detail-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+.back{border:none;background:transparent;color:var(--primary);font:inherit;font-size:.88rem;cursor:pointer;padding:0}
+.back:hover{text-decoration:underline}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:18px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+.grid2 .card{border-radius:0;border-top:2px solid var(--primary)}
+select{width:100%;border:1px solid var(--line-strong);border-radius:0;padding:11px 13px;font:inherit;font-size:.95rem;color:var(--ink);background:var(--card)}
+select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.save-row{display:flex;align-items:center;gap:12px;margin-top:18px}
+.ok-msg{color:#15803d;font-size:.85rem;font-family:'Fira Code',monospace}
+[data-theme="dark"] .ok-msg{color:#4ade80}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:.92rem}
+.kv dt{font-size:.66rem;align-self:center}
+.kv dd{font-weight:500;overflow-wrap:anywhere}
+#login{display:flex;justify-content:center;padding-top:9vh}
+#login .card{width:min(400px,100%);border-radius:0;border-top:2px solid var(--primary)}
+#login h1{margin-bottom:4px}
+.btn{border:1px solid var(--primary);background:var(--primary);color:#fff;padding:9px 20px;border-radius:0;cursor:pointer;font:inherit;font-size:.9rem;font-weight:500;transition:opacity .12s}
+.btn:hover{opacity:.9}
+.btn.outline{background:transparent;color:var(--primary)}
+.btn.sm{padding:5px 12px;font-size:.78rem}
+.btn.danger{border-color:#b91c1c;color:#b91c1c;background:transparent}
+.btn.danger:hover{background:#b91c1c;color:#fff}
+.msg.err{color:#b91c1c;font-size:.85rem;margin-top:8px}
+.hidden{display:none!important}
+label{display:block;font-size:.72rem;font-family:'Fira Code',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 5px}
+input[type="text"],input[type="search"],input[type="email"],input[type="password"],input[type="number"],input[type="date"]{width:100%;border:1px solid var(--line-strong);border-radius:0;padding:9px 12px;font:inherit;font-size:.9rem;color:var(--ink);background:var(--card);box-sizing:border-box}
+input:focus{outline:none;border-color:var(--primary)}
+.actions{margin-top:16px}
+.chart-bar{display:flex;align-items:flex-end;gap:4px;height:120px;margin-top:12px;padding:0 4px}
+.chart-bar .bar{flex:1;background:var(--primary);min-width:8px;border-radius:0 0 2px 2px;transition:height .3s;position:relative}
+.chart-bar .bar:hover{opacity:.8}
+.chart-bar .bar .tip{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-family:'Fira Code',monospace;font-size:.6rem;white-space:nowrap;color:var(--muted);padding:2px 0}
+.chart-row{display:flex;align-items:center;gap:10px;margin-top:6px;font-size:.82rem}
+.chart-row .bar-bg{flex:1;height:14px;background:var(--line);border-radius:2px;overflow:hidden}
+.chart-row .bar-fill{height:100%;background:var(--primary);border-radius:2px;transition:width .3s}
+.chart-row .bar-label{width:120px;font-family:'Fira Code',monospace;font-size:.7rem;color:var(--muted);text-align:end}
+.chart-row .bar-val{width:50px;font-family:'Fira Code',monospace;font-size:.7rem;text-align:end}
+.checkbox-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.bulk-bar{display:flex;gap:8px;align-items:center;padding:10px 14px;background:var(--card);border:1px solid var(--primary);margin-bottom:12px}
 </style>
 </head>
 <body>
@@ -160,13 +121,13 @@
       <svg class="mark" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="currentColor"><g transform="translate(4.8,4.8) scale(0.15)"><path d="M 268.32554 4.4726216 C 202.01816 1.3492603 133.77995 23.549043 79.516378 75.964191 C -78.193147 228.30154 14.3336 488.94189 234.28797 511.94002 C 402.2524 529.50214 544.94832 372.50758 510.13529 208.45237 C 483.98551 85.222448 378.83785 9.6782238 268.32554 4.4726216 z M 258.73799 292.75773 C 308.17368 293.27499 357.53892 311.28546 397.30776 346.69297 C 414.23674 361.76539 414.1738 360.818 399.36196 376.99318 C 365.71056 413.74198 323.59346 435.08974 275.80784 439.62113 C 211.91236 445.68017 149.13554 419.20695 108.89568 369.23654 C 101.25056 359.74273 101.235 359.77371 119.75189 343.78763 C 159.79748 309.21522 209.3023 292.24048 258.73799 292.75773 z " transform="matrix(0.49726755,0,0,0.50284557,-0.29677367,-2.1045067)"/></g></svg>
       <span class="wordmark">sera</span>
       <span class="rule" aria-hidden="true"></span>
-      <h1 data-i="title">Sera Operator Console</h1>
+      <h1 data-i="title">Operator Console</h1>
     </div>
     <div class="controls" id="headerControls" style="visibility:hidden">
       <div class="lang-group" role="group" aria-label="Language">
         <button type="button" class="lang-btn" data-l="en">EN</button>
         <button type="button" class="lang-btn" data-l="fr">FR</button>
-        <button type="button" class="lang-btn" data-l="ar">ع</button>
+        <button type="button" class="lang-btn" data-l="ar">&#1593;</button>
       </div>
       <button type="button" class="theme-btn" id="themeBtn" aria-label="Switch color theme">
         <svg class="icon-sun" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 18C8.68629 18 6 15.3137 6 12C6 8.68629 8.68629 6 12 6C15.3137 6 18 8.68629 18 12C18 15.3137 15.3137 18 12 18ZM12 16C14.2091 16 16 14.2091 16 12C16 9.79086 14.2091 8 12 8C9.79086 8 8 9.79086 8 12C8 14.2091 9.79086 16 12 16ZM11 1H13V4H11V1ZM11 20H13V23H11V20ZM3.51472 4.92893L4.92893 3.51472L7.05025 5.63604L5.63604 7.05025L3.51472 4.92893ZM16.9497 18.364L18.364 16.9497L20.4853 19.0711L19.0711 20.4853L16.9497 18.364ZM19.0711 3.51472L20.4853 4.92893L18.364 7.05025L16.9497 5.63604L19.0711 3.51472ZM5.63604 16.9497L7.05025 18.364L4.92893 20.4853L3.51472 19.0711L5.63604 16.9497ZM23 11V13H20V11H23ZM4 11V13H1V11H4Z"/></svg>
@@ -176,7 +137,6 @@
     </div>
   </header>
 
-  <!-- login -->
   <main id="login">
     <div class="card">
       <p class="kicker" data-i="kicker">Platform</p>
@@ -185,87 +145,84 @@
       <input id="email" dir="ltr" type="email" autocomplete="username">
       <label for="password" data-i="password">Password</label>
       <input id="password" dir="ltr" type="password" autocomplete="current-password">
-      <div class="actions">
-        <button class="btn" id="loginBtn" data-i="signin">Sign in</button>
-      </div>
+      <div class="actions"><button class="btn" id="loginBtn" data-i="signin">Sign in</button></div>
       <div class="msg err hidden" id="loginErr"></div>
     </div>
   </main>
 
-  <!-- app -->
   <main id="app" class="hidden">
-    <div class="tabs">
+    <div class="tabs" id="mainTabs">
       <button type="button" class="tab on" id="tabOverview"><span class="idx">01</span><span data-i="tab_overview">Overview</span></button>
       <button type="button" class="tab" id="tabClinics"><span class="idx">02</span><span data-i="tab_clinics">Clinics</span></button>
+      <button type="button" class="tab" id="tabRevenue"><span class="idx">03</span><span data-i="tab_revenue">Revenue</span></button>
+      <button type="button" class="tab" id="tabPlans"><span class="idx">04</span><span data-i="tab_plans">Plans</span></button>
+      <button type="button" class="tab" id="tabInvoices"><span class="idx">05</span><span data-i="tab_invoices">Invoices</span></button>
+      <button type="button" class="tab" id="tabAnalytics"><span class="idx">06</span><span data-i="tab_analytics">Analytics</span></button>
+      <button type="button" class="tab" id="tabHealth"><span class="idx">07</span><span data-i="tab_health">Health</span></button>
+      <button type="button" class="tab" id="tabAudit"><span class="idx">08</span><span data-i="tab_audit">Audit</span></button>
+      <button type="button" class="tab" id="tabAnnounce"><span class="idx">09</span><span data-i="tab_announce">Announcements</span></button>
     </div>
 
-    <!-- overview -->
+    <!-- 01 overview -->
     <section id="viewOverview">
       <div class="stats" id="statGrid"></div>
       <p class="section-label"><b>01</b><span data-i="recent_signups">Recent signups</span></p>
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th data-i="th_clinic">Clinic</th>
-              <th data-i="th_address">Address</th>
-              <th data-i="th_status">Status</th>
-              <th data-i="th_created">Created</th>
-            </tr>
-          </thead>
-          <tbody id="recentBody"></tbody>
-        </table>
-      </div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th data-i="th_clinic">Clinic</th><th data-i="th_address">Address</th>
+        <th data-i="th_status">Status</th><th data-i="th_created">Created</th>
+      </tr></thead><tbody id="recentBody"></tbody></table></div>
     </section>
 
-    <!-- clinics -->
+    <!-- 02 clinics -->
     <section id="viewClinics" class="hidden">
       <div class="toolbar">
-        <input type="search" id="search" data-i-ph="search_ph" placeholder="Search name or address…">
+        <input type="search" id="search" data-i-ph="search_ph" placeholder="Search name or address...">
         <div class="chips" id="statusChips"></div>
+        <button type="button" class="btn sm outline" id="exportBtn" data-i="export_csv">Export CSV</button>
       </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th data-i="th_clinic">Clinic</th>
-              <th data-i="th_address">Address</th>
-              <th data-i="th_status">Status</th>
-              <th data-i="th_plan">Plan</th>
-              <th data-i="th_users">Users</th>
-              <th data-i="th_patients">Patients</th>
-              <th data-i="th_appts">Appts</th>
-              <th data-i="th_created">Created</th>
-            </tr>
-          </thead>
-          <tbody id="tenantsBody"></tbody>
-        </table>
+      <div class="bulk-bar hidden" id="bulkBar">
+        <span id="bulkCount" class="num"></span>
+        <button type="button" class="btn sm" id="bulkActivate" data-i="bulk_activate">Activate</button>
+        <button type="button" class="btn sm" id="bulkSuspend" data-i="bulk_suspend">Suspend</button>
+        <button type="button" class="btn sm outline" id="bulkDeselect" data-i="bulk_deselect">Deselect</button>
       </div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th style="width:30px"><input type="checkbox" id="selectAll"></th>
+        <th data-i="th_clinic">Clinic</th><th data-i="th_address">Address</th>
+        <th data-i="th_status">Status</th><th data-i="th_plan">Plan</th>
+        <th data-i="th_users">Users</th><th data-i="th_patients">Patients</th>
+        <th data-i="th_appts">Appts</th><th data-i="th_created">Created</th>
+      </tr></thead><tbody id="tenantsBody"></tbody></table></div>
       <div class="pager">
         <span class="note" id="pagerInfo"></span>
-        <button type="button" id="prevBtn" data-i="prev">‹ Prev</button>
-        <button type="button" id="nextBtn" data-i="next">Next ›</button>
+        <button type="button" id="prevBtn" data-i="prev">&#8249; Prev</button>
+        <button type="button" id="nextBtn" data-i="next">Next &#8250;</button>
       </div>
     </section>
 
     <!-- tenant detail -->
     <section id="viewDetail" class="hidden">
       <div class="detail-head">
-        <button type="button" class="back" id="backBtn">← <span data-i="back">Back to clinics</span></button>
-        <span class="pill" id="detailPill"></span>
+        <button type="button" class="back" id="backBtn">&larr; <span data-i="back">Back to clinics</span></button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button type="button" class="btn sm" id="impersonateBtn" data-i="impersonate">Login as admin</button>
+          <span class="pill" id="detailPill"></span>
+        </div>
       </div>
       <div class="grid2">
         <div class="card">
           <p class="section-label" style="margin-top:0"><b>01</b><span data-i="subscription">Subscription</span></p>
           <label for="editStatus" data-i="th_status">Status</label>
           <select id="editStatus"></select>
-          <label for="editPlan" data-i="th_plan">Plan</label>
+          <label for="editPlanId" data-i="plan_tier">Plan tier</label>
+          <select id="editPlanId"><option value="">— none —</option></select>
+          <label for="editPlan" data-i="th_plan">Plan label</label>
           <input id="editPlan" dir="ltr" placeholder="starter / clinic / enterprise">
           <label for="editEnds" data-i="trial_ends">Trial / subscription ends</label>
           <input id="editEnds" dir="ltr" type="date">
           <div class="save-row">
             <button class="btn" id="saveBtn" data-i="save">Save</button>
-            <span class="ok-msg hidden" id="saveOk" data-i="saved">Saved ✓</span>
+            <span class="ok-msg hidden" id="saveOk" data-i="saved">Saved &#10003;</span>
           </div>
           <div class="msg err hidden" id="detailErr"></div>
         </div>
@@ -275,28 +232,163 @@
         </div>
       </div>
       <p class="section-label"><b>03</b><span data-i="team">Team</span></p>
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th data-i="name">Name</th>
-              <th data-i="email">Email</th>
-              <th data-i="th_role">Role</th>
-              <th data-i="th_status">Status</th>
-              <th data-i="th_lastlogin">Last login</th>
-            </tr>
-          </thead>
-          <tbody id="usersBody"></tbody>
-        </table>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th data-i="name">Name</th><th data-i="email">Email</th>
+        <th data-i="th_role">Role</th><th data-i="th_status">Status</th><th data-i="th_lastlogin">Last login</th>
+      </tr></thead><tbody id="usersBody"></tbody></table></div>
+    </section>
+
+    <!-- 03 revenue -->
+    <section id="viewRevenue" class="hidden">
+      <div class="stats" id="revStats"></div>
+      <p class="section-label"><b>01</b><span data-i="monthly_revenue">Monthly Revenue</span></p>
+      <div class="chart-bar" id="revChart"></div>
+      <p class="section-label"><b>02</b><span data-i="top_tenants">Top tenants by revenue</span></p>
+      <div id="revPerTenant"></div>
+    </section>
+
+    <!-- 04 plans -->
+    <section id="viewPlans" class="hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <p class="section-label" style="margin:0;border:none;padding:0"><b>01</b><span data-i="plan_tiers">Plan tiers</span></p>
+        <button type="button" class="btn sm" id="addPlanBtn" data-i="add_plan">+ Add plan</button>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th data-i="th_name">Name</th><th data-i="th_label">Label</th>
+        <th data-i="monthly_price">Monthly (DZD)</th><th data-i="annual_price">Annual (DZD)</th>
+        <th data-i="max_users">Max users</th><th data-i="max_patients">Max patients</th>
+        <th data-i="th_status">Status</th><th></th>
+      </tr></thead><tbody id="plansBody"></tbody></table></div>
+      <div id="planForm" class="hidden" style="margin-top:20px">
+        <div class="grid2">
+          <div class="card" style="border-top:2px solid var(--primary)">
+            <p class="section-label" style="margin-top:0"><b>F</b><span data-i="plan_form_title">Plan details</span></p>
+            <label data-i="th_name">Name</label><input id="planName" dir="ltr">
+            <label data-i="th_label">Label</label><input id="planLabel" dir="ltr">
+            <label data-i="monthly_price">Monthly (DZD)</label><input id="planMonthly" type="number" dir="ltr">
+            <label data-i="annual_price">Annual (DZD)</label><input id="planAnnual" type="number" dir="ltr">
+            <label data-i="max_users">Max users</label><input id="planMaxUsers" type="number" dir="ltr">
+            <label data-i="max_patients">Max patients</label><input id="planMaxPatients" type="number" dir="ltr">
+            <div class="save-row">
+              <button class="btn" id="planSaveBtn" data-i="save">Save</button>
+              <button class="btn outline" id="planCancelBtn" data-i="cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 05 invoices -->
+    <section id="viewInvoices" class="hidden">
+      <div class="toolbar">
+        <div class="chips" id="invStatusChips"></div>
+        <button type="button" class="btn sm" id="newInvoiceBtn" data-i="new_invoice">+ New invoice</button>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th data-i="th_number">Number</th><th data-i="th_clinic">Clinic</th>
+        <th data-i="th_amount">Amount (DZD)</th><th data-i="th_status">Status</th>
+        <th data-i="th_period">Period</th><th data-i="th_created">Issued</th><th></th>
+      </tr></thead><tbody id="invoicesBody"></tbody></table></div>
+      <div class="pager">
+        <span class="note" id="invPagerInfo"></span>
+        <button type="button" id="invPrevBtn" data-i="prev">&#8249; Prev</button>
+        <button type="button" id="invNextBtn" data-i="next">Next &#8250;</button>
+      </div>
+      <div id="invoiceForm" class="hidden" style="margin-top:20px">
+        <div class="grid2">
+          <div class="card" style="border-top:2px solid var(--primary)">
+            <p class="section-label" style="margin-top:0"><b>F</b><span data-i="invoice_form">New invoice</span></p>
+            <label data-i="th_clinic">Clinic</label><select id="invTenant"></select>
+            <label data-i="th_amount">Amount (DZD)</label><input id="invAmount" type="number" dir="ltr">
+            <label data-i="period_start">Period start</label><input id="invPeriodStart" type="date">
+            <label data-i="period_end">Period end</label><input id="invPeriodEnd" type="date">
+            <label data-i="notes">Notes</label><input id="invNotes" dir="ltr">
+            <div class="save-row">
+              <button class="btn" id="invSaveBtn" data-i="save">Create</button>
+              <button class="btn outline" id="invCancelBtn" data-i="cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 analytics -->
+    <section id="viewAnalytics" class="hidden">
+      <div class="stats" id="analyticsStats"></div>
+      <p class="section-label"><b>01</b><span data-i="signup_trend">Signup trend</span></p>
+      <div class="chart-bar" id="signupChart"></div>
+      <p class="section-label"><b>02</b><span data-i="plan_distribution">Plan distribution</span></p>
+      <div id="planDistChart"></div>
+      <p class="section-label"><b>03</b><span data-i="status_funnel">Status funnel</span></p>
+      <div id="statusFunnel"></div>
+    </section>
+
+    <!-- 07 health -->
+    <section id="viewHealth" class="hidden">
+      <div class="stats" id="healthStats"></div>
+      <p class="section-label"><b>01</b><span data-i="hourly_traffic">Hourly traffic (24h)</span></p>
+      <div class="chart-bar" id="healthChart"></div>
+      <p class="section-label"><b>02</b><span data-i="top_endpoints">Top endpoints</span></p>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th data-i="th_method">Method</th><th data-i="th_path">Path</th>
+        <th data-i="th_count">Requests</th><th data-i="th_avg_ms">Avg (ms)</th>
+      </tr></thead><tbody id="healthEndpoints"></tbody></table></div>
+    </section>
+
+    <!-- 08 audit -->
+    <section id="viewAudit" class="hidden">
+      <div class="toolbar">
+        <input type="search" id="auditSearch" data-i-ph="audit_search_ph" placeholder="Filter by operator or action...">
+      </div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th data-i="th_time">Time</th><th data-i="th_operator">Operator</th>
+        <th data-i="th_action">Action</th><th data-i="th_target">Target</th>
+        <th data-i="th_details">Details</th>
+      </tr></thead><tbody id="auditBody"></tbody></table></div>
+      <div class="pager">
+        <span class="note" id="auditPagerInfo"></span>
+        <button type="button" id="auditPrevBtn" data-i="prev">&#8249; Prev</button>
+        <button type="button" id="auditNextBtn" data-i="next">Next &#8250;</button>
+      </div>
+    </section>
+
+    <!-- 09 announcements -->
+    <section id="viewAnnounce" class="hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <p class="section-label" style="margin:0;border:none;padding:0"><b>01</b><span data-i="sent_announcements">Sent announcements</span></p>
+        <button type="button" class="btn sm" id="newAnnounceBtn" data-i="new_announcement">+ New announcement</button>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th data-i="th_time">Time</th><th data-i="th_title">Title</th>
+        <th data-i="th_target">Target</th><th data-i="th_channel">Channel</th><th data-i="th_sent_by">Sent by</th>
+      </tr></thead><tbody id="announceBody"></tbody></table></div>
+      <div class="pager">
+        <span class="note" id="annPagerInfo"></span>
+        <button type="button" id="annPrevBtn" data-i="prev">&#8249; Prev</button>
+        <button type="button" id="annNextBtn" data-i="next">Next &#8250;</button>
+      </div>
+      <div id="announceForm" class="hidden" style="margin-top:20px">
+        <div class="grid2">
+          <div class="card" style="border-top:2px solid var(--primary)">
+            <p class="section-label" style="margin-top:0"><b>F</b><span data-i="compose_announcement">Compose announcement</span></p>
+            <label data-i="th_title">Title</label><input id="annTitle" dir="ltr">
+            <label data-i="th_body">Body</label><textarea id="annBody" rows="4" style="width:100%;border:1px solid var(--line-strong);border-radius:0;padding:9px 12px;font:inherit;font-size:.9rem;color:var(--ink);background:var(--card);resize:vertical"></textarea>
+            <label data-i="th_target">Target</label><select id="annTarget"><option value="announcement.target.all">All clinics</option><option value="announcement.target.selected">Selected clinics</option></select>
+            <label data-i="th_channel">Channel</label><select id="annChannel"><option value="announcement.channel.in_app">In-app</option><option value="announcement.channel.email">Email</option><option value="announcement.channel.both">Both</option></select>
+            <div class="save-row">
+              <button class="btn" id="annSaveBtn" data-i="send">Send</button>
+              <button class="btn outline" id="annCancelBtn" data-i="cancel">Cancel</button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
 
   <footer>
-    <span>sera · <span data-i="footer">operator console · internal use</span></span>
+    <span>sera &middot; <span data-i="footer">operator console &middot; internal use</span></span>
     <span class="note mono" id="sheetRef">OP-CONSOLE</span>
   </footer>
 </div>
-
 </body>
 </html>

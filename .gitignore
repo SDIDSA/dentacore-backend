@@ -141,3 +141,7 @@ vite.config.ts.timestamp-*
 # Built installer binaries (too large for git; served locally by the backend)
 updates/*.exe
 updates/*.exe.sha256
+
+# Dev stack binaries (downloaded by dev.ps1)
+.dev-tools/
+.prod-tools/

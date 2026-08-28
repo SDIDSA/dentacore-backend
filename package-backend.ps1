@@ -4,14 +4,14 @@
 
 .DESCRIPTION
   Builds a whitelist-based staging tree, stages the authored deployment assets
-  for BOTH targets (Linux: deploy/setup.sh / sera.service / nginx-sera.conf /
-  backup.sh / sera-backup.cron; Windows: deploy/setup.ps1 / backup.ps1, plus
+  for BOTH targets (Linux: deploy/sera.service / nginx-sera.conf /
+  backup.sh / sera-backup.cron; Windows: deploy/backup.ps1, plus
   README-HOSTED.txt — normalized to LF-only), validates every staged .js file
   with `node --check`, then compresses to dist\ and prints a SHA-256.
 
-  The zip is platform-neutral: everything inside deploys on an Ubuntu host
-  (deploy/setup.sh) or a Windows Server host (deploy/setup.ps1) per
-  docs/HOSTING.md (the packager itself is Windows PowerShell by design).
+  The zip is platform-neutral: prod.sh runs on Ubuntu, prod.ps1 on Windows.
+  First run handles full bootstrap (Node/PG install, DB provisioning, schema);
+  subsequent runs skip straight to startup per docs/HOSTING.md.
 
 .PARAMETER Version
   Version stamp for the artifact name. Default: parsed from ..\dentacore\pom.xml,
@@ -32,7 +32,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $ROOT = $PSScriptRoot
 
-# ── version resolution ─────────────────────────────────────────
+# ── version + name resolution (SSOT: pom.xml) ──────────────────
 if (-not $Version) {
     $Version = "0.0.0-dev"
     $pom = Join-Path $ROOT "..\dentacore\pom.xml"
@@ -41,6 +41,13 @@ if (-not $Version) {
              Select-Object -First 1
         if ($m) { $Version = $m.Matches[0].Groups[1].Value }
     }
+}
+$AppName = "Sera"
+$pom = Join-Path $ROOT "..\dentacore\pom.xml"
+if (Test-Path $pom) {
+    $nameMatch = Select-String -Path $pom -Pattern '<app\.name>([^<]+)</app\.name>' |
+                 Select-Object -First 1
+    if ($nameMatch) { $AppName = $nameMatch.Matches[0].Groups[1].Value }
 }
 $stamp = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 
@@ -61,7 +68,7 @@ try {
 
     # ── whitelisted payload ─────────────────────────────────────
     # Root files
-    foreach ($f in 'server.js', 'package.json', 'db.sql', 'seed.sql') {
+    foreach ($f in 'server.js', 'package.json', 'db.sql', 'seed.sql', 'prod.ps1', 'prod.sh') {
         Copy-ItemChecked (Join-Path $ROOT $f) $stage
     }
     if (Test-Path (Join-Path $ROOT 'package-lock.json')) {
@@ -77,7 +84,50 @@ try {
     Copy-ItemChecked (Join-Path $ROOT 'src') $stage
     Remove-Item -LiteralPath (Join-Path $stage 'src\__tests__') -Recurse -Force -ErrorAction SilentlyContinue
 
+    # Regenerate the site brand assets (favicon, task-icon.svg, brand-mark SVGs)
+    # from branding/identity.svg so the backend is branded from the SSOT, then
+    # stage the (rebranded) public/ tree. brand-site.ps1 is a repo-only build tool.
+    & (Join-Path $ROOT 'brand-site.ps1') -Root $ROOT
+
     foreach ($d in 'public') { Copy-ItemChecked (Join-Path $ROOT $d) $stage }
+
+    # ── stamp public/site-head.js with the app name + public/index.html with
+    #    version + bootstrapper links (APP_NAME is now externalized to
+    #    site-head.js for the production CSP; bootstrapper hrefs stay in html) ──
+    $stagedIndex = Join-Path $stage 'public\index.html'
+    # Constant bootstrapper asset name (no version) — /releases/latest/download/
+    # Sera-Bootstrapper.exe is a stable "always latest" URL, no version stamping.
+    $bootRegex = "${AppName}-Bootstrapper\.exe"
+    $bootName  = "${AppName}-Bootstrapper.exe"
+    $AppNameJs = $AppName.Replace('$','$$').Replace("'","\'")
+    foreach ($idx in @((Join-Path $ROOT 'public\index.html'), $stagedIndex)) {
+        if (-not (Test-Path -LiteralPath $idx)) { continue }
+        $html = [IO.File]::ReadAllText($idx)
+        $original = $html
+        # stamp the constant-name bootstrapper download URL (Sera-Bootstrapper.exe)
+        $bootCount = [regex]::Matches($html, $bootRegex).Count
+        if ($bootCount -gt 0) {
+            $html = [regex]::Replace($html, $bootRegex, { param($m) $bootName })
+        }
+        if ($html -ne $original) {
+            [IO.File]::WriteAllText($idx, $html, [Text.UTF8Encoding]::new($false))
+            $label = if ($idx -eq $stagedIndex) { "staged copy" } else { "source public/index.html" }
+            Write-Host "   Stamped $label (VERSION=$Version, $bootCount link(s))"
+        }
+    }
+    # stamp window.APP_NAME (now externalized to site-head.js)
+    foreach ($head in @((Join-Path $ROOT 'public\site-head.js'), (Join-Path $stage 'public\site-head.js'))) {
+        if (-not (Test-Path -LiteralPath $head)) { continue }
+        $js = [IO.File]::ReadAllText($head)
+        $stamped = [regex]::Replace($js,
+            "(window\.APP_NAME\s*=\s*')[^']*(')",
+            ('${1}' + $AppNameJs + '${2}'))
+        if ($stamped -ne $js) {
+            [IO.File]::WriteAllText($head, $stamped, [Text.UTF8Encoding]::new($false))
+            $label = if ($head -like "$stage*") { "staged copy" } else { "source public/site-head.js" }
+            Write-Host "   Stamped $label (APP_NAME=$AppName)"
+        }
+    }
 
     # scripts/: only runtime-relevant utilities
     New-Item -ItemType Directory -Path (Join-Path $stage 'scripts') -Force | Out-Null
@@ -85,9 +135,8 @@ try {
         Copy-ItemChecked (Join-Path $ROOT "scripts\$s") (Join-Path $stage 'scripts')
     }
 
-    # Runtime prerequisites (Node.js, PostgreSQL) are NOT bundled — setup.sh
-    # installs both via apt on the target host (security updates + systemd
-    # integration come from the distro packages).
+    # Runtime prerequisites (Node.js, PostgreSQL) are NOT bundled — prod.sh /
+    # prod.ps1 download + cache them self-contained into .prod-tools/ on first run
 
     New-Item -ItemType Directory -Path (Join-Path $stage 'deploy') -Force | Out-Null
 
@@ -97,7 +146,7 @@ Sera hosted backend package
 version : $Version
 built   : $stamp
 target  : Ubuntu 22.04/24.04 (+ any Node >= 20 host)
-deploy  : see deploy/setup.sh and README-HOSTED.txt
+deploy  : see prod.sh / prod.ps1 and README-HOSTED.txt
 "@
 
     # ── generated deploy assets (LF-only!) ──────────────────────
@@ -109,9 +158,9 @@ deploy  : see deploy/setup.sh and README-HOSTED.txt
     }
 
     # ── authored deploy assets (kept LF-only in the zip) ─────────
-    foreach ($a in 'deploy\setup.sh', 'deploy\sera.service', 'deploy\nginx-sera.conf',
+    foreach ($a in 'deploy\sera.service', 'deploy\nginx-sera.conf',
                    'deploy\backup.sh', 'deploy\sera-backup.cron',
-                   'deploy\setup.ps1', 'deploy\backup.ps1', 'README-HOSTED.txt') {
+                   'deploy\backup.ps1', 'README-HOSTED.txt') {
         $p = Join-Path $stage $a
         New-Item -ItemType Directory -Path (Split-Path $p -Parent) -Force | Out-Null
         Copy-ItemChecked (Join-Path $ROOT $a) (Split-Path $p -Parent)
@@ -121,6 +170,14 @@ deploy  : see deploy/setup.sh and README-HOSTED.txt
     }
 
     Write-LF 'HOSTED-BUILD.txt' $manifest
+
+    # normalize LF on prod.sh (root-level bash script)
+    $prodSh = Join-Path $stage 'prod.sh'
+    if (Test-Path -LiteralPath $prodSh) {
+        [IO.File]::WriteAllText($prodSh,
+            ([IO.File]::ReadAllText($prodSh) -replace "`r`n", "`n"),
+            [Text.UTF8Encoding]::new($false))
+    }
 
     # ── validation gates ────────────────────────────────────────
     Write-Host "-- validating staged JavaScript --"
@@ -132,9 +189,10 @@ deploy  : see deploy/setup.sh and README-HOSTED.txt
     Write-Host ("   {0} files OK" -f $jsFiles.Count)
 
     # LF purity on shell/unit assets
-    foreach ($lf in 'deploy/setup.sh', 'deploy/sera.service', 'deploy/nginx-sera.conf',
+    foreach ($lf in 'deploy/sera.service', 'deploy/nginx-sera.conf',
                    'deploy/backup.sh', 'deploy/sera-backup.cron',
-                   'deploy/setup.ps1', 'deploy/backup.ps1',
+                   'deploy/backup.ps1',
+                   'prod.sh',
                    'README-HOSTED.txt', 'HOSTED-BUILD.txt') {
         $bytes = [IO.File]::ReadAllBytes((Join-Path $stage $lf))
         if ($bytes -contains [byte]13) { throw "CR found in $lf (must be LF-only)" }
@@ -143,7 +201,7 @@ deploy  : see deploy/setup.sh and README-HOSTED.txt
 
     # required files sanity
     foreach ($req in 'server.js', 'package.json', 'db.sql', 'src\app.js',
-                     'public\book.html', 'deploy\setup.sh') {
+                     'public\book.html', 'prod.sh') {
         if (-not (Test-Path (Join-Path $stage $req))) { throw "staged file missing: $req" }
     }
 

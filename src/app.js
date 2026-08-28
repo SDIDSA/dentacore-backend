@@ -33,6 +33,7 @@ const platformRoutes = require('./routes/platform');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const { apiLimiter, mutationLimiter } = require('./middleware/rateLimiter');
+const apiUsageLogger = require('./middleware/apiUsageLogger');
 
 const app = express();
 
@@ -40,15 +41,24 @@ const app = express();
 // and req.ip see real client IPs from X-Forwarded-For instead of 127.0.0.1.
 app.set('trust proxy', 1);
 
+// CSP: helmet defaults with one adjustment (production only; dev disables CSP):
+// `upgrade-insecure-requests` is dropped when serving direct HTTP-only on port 80
+// (no proxy/TLS) — otherwise the browser rewrites every http:// asset to https://
+// and breaks the page. helmet semantics: `null` removes a directive (`[]` would
+// still emit it bare).
+const onPort80 = String(process.env.PORT || '').trim().split(',').includes('80');
+const cspDirectives = onPort80 ? { 'upgrade-insecure-requests': null } : {};
+
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: process.env.NODE_ENV === 'development' ? false : { directives: cspDirectives },
 }));
 function defaultAllowedOrigins() {
   if (process.env.NODE_ENV === 'production') {
     console.warn('CORS_ORIGIN not set in production — all cross-origin requests will be blocked. Set CORS_ORIGIN to your frontend URL.');
     return [];
   }
-  return ['http://localhost:4000', 'http://localhost:5173'];
+  return ['http://localhost:4000', 'http://localhost:5173', 'http://localhost']; // localhost:80 (hosted HTTP-only test)
 }
 
 const allowedOrigins = process.env.CORS_ORIGIN
@@ -88,6 +98,7 @@ app.use((req, res, next) => {
 });
 
 app.use(auditLogger.middleware());
+app.use(apiUsageLogger);
 
 const { getIO } = require('./socket');
 app.use((req, res, next) => {
