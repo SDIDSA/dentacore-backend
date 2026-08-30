@@ -61,14 +61,14 @@ beforeAll(async () => {
       .insertInto('users')
       .values({
         tenant_id: tenant2Id,
-        role_id: role.id,
         email: email2,
         password_hash: bcrypt.hashSync(password2, 10),
         full_name: `Regression Admin ${suffix}`,
         phone: uniquePhone(),
       })
-      .returningAll()
+      .returning('id')
       .execute();
+    await db.insertInto('user_roles').values({ user_id: user2[0].id, role_id: role.id }).execute();
 
     const user2Login = await request(app)
       .post('/api/v1/auth/login')

@@ -66,16 +66,6 @@ COMMENT ON COLUMN roles.role_key IS 'Unique translation key for frontend mapping
 
 CREATE INDEX IF NOT EXISTS idx_roles_key ON roles(role_key);
 
--- Role seeds (idempotent). These used to live only in seed.sql, which left a
--- fresh schema (db.sql without --seed) with ZERO roles - signup and user
--- creation would fail.
-INSERT INTO roles (role_key, description) VALUES
-    ('auth.role.admin', 'System Administrator with full access'),
-    ('auth.role.dentist', 'Licensed dentist with clinical access'),
-    ('auth.role.receptionist', 'Front desk staff for appointments and billing'),
-    ('auth.role.platform_admin', 'Platform owner - manages all tenants (Sera operator)')
-ON CONFLICT (role_key) DO NOTHING;
-
 -- ============================================================================
 -- 3. GEOGRAPHIC DATA - ALGERIA (Global)
 -- ============================================================================
@@ -117,7 +107,6 @@ CREATE INDEX IF NOT EXISTS idx_payment_methods_active ON payment_methods(is_acti
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
@@ -139,9 +128,30 @@ COMMENT ON COLUMN users.tenant_id IS 'Isolates users per tenant';
 COMMENT ON COLUMN users.phone IS 'Algerian format: +213XXXXXXXXX';
 
 CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_users_role ON users(role_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(tenant_id, email);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(tenant_id, status_key);
+
+-- Multi-role cleanup: the legacy users.role_id column was removed (roles now live
+-- solely in user_roles). db.sql is idempotent and never drops columns on its own,
+-- so drop it here from any database provisioned before that change.
+ALTER TABLE users DROP COLUMN IF EXISTS role_id;
+
+-- ============================================================================
+-- 5b. USER ↔ ROLE (many-to-many) — the SOLE source of a user's roles.
+--     A user may hold any number of roles (e.g. a solo-dentist owner who is
+--     both admin and dentist). All roles are equal; there is no primary.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
+    assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, role_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_roles_user ON user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id);
+
+COMMENT ON TABLE user_roles IS 'Sole source of a user''s roles; all roles equal (no primary)';
 
 
 
@@ -1363,7 +1373,8 @@ $$ LANGUAGE plpgsql;
 -- ============================================================================
 
 \echo 'Creating get_user_by_email function...'
-CREATE OR REPLACE FUNCTION get_user_by_email(p_email TEXT)
+DROP FUNCTION IF EXISTS get_user_by_email(p_email TEXT) CASCADE;
+CREATE FUNCTION get_user_by_email(p_email TEXT)
 RETURNS TABLE (
     id UUID,
     email VARCHAR,
@@ -1372,7 +1383,7 @@ RETURNS TABLE (
     status_key VARCHAR,
     last_login_at TIMESTAMPTZ,
     tenant_id UUID,
-    role_key VARCHAR
+    role_keys TEXT[]
 ) AS $$
 BEGIN
     RETURN QUERY
@@ -1384,9 +1395,12 @@ BEGIN
         u.status_key,
         u.last_login_at,
         u.tenant_id,
-        r.role_key
+        ARRAY(
+            SELECT rl.role_key FROM user_roles ur
+                JOIN roles rl ON rl.id = ur.role_id
+                WHERE ur.user_id = u.id
+        )::TEXT[]
     FROM users u
-    JOIN roles r ON u.role_id = r.id
     WHERE u.email = p_email;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -1702,7 +1716,7 @@ GROUP BY tenant_id, DATE_TRUNC('month', appointment_date), status_key
 ORDER BY month DESC;
 
 -- ============================================================================
--- 20. PLATFORM PLANS (Global — SaaS subscription tiers)
+-- 20. PLATFORM PLANS (Global â€” SaaS subscription tiers)
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS platform_plans (
@@ -1721,13 +1735,6 @@ CREATE TABLE IF NOT EXISTS platform_plans (
 );
 
 COMMENT ON TABLE platform_plans IS 'SaaS subscription tiers managed by the platform operator';
-
-INSERT INTO platform_plans (name, label, monthly_price_dzd, annual_price_dzd, max_users, max_patients, features, sort_order) VALUES
-    ('free',       'Free',       0,      0,      2,    50,   '["basic appointments","patient records"]', 0),
-    ('starter',    'Starter',    15000,  150000, 5,    500,  '["appointments","patients","prescriptions","basic reports"]', 1),
-    ('clinic',     'Clinic',     35000,  350000, 15,   5000, '["all starter","billing","inventory","x-rays","treatment plans","advanced reports"]', 2),
-    ('enterprise', 'Enterprise', 75000,  750000, 999,  99999,'["all clinic","audit logs","multi-branch","priority support"]', 3)
-ON CONFLICT (name) DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_platform_plans_active ON platform_plans(is_active);
 
@@ -1821,7 +1828,7 @@ CREATE TRIGGER trg_prune_api_usage AFTER INSERT ON api_usage_logs
     FOR EACH STATEMENT EXECUTE FUNCTION fn_prune_api_usage();
 
 -- ============================================================================
--- 24. PLATFORM ANNOUNCEMENTS (operator → clinic notifications)
+-- 24. PLATFORM ANNOUNCEMENTS (operator â†’ clinic notifications)
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS platform_announcements (
@@ -1861,7 +1868,7 @@ CREATE TABLE IF NOT EXISTS announcement_reads (
 
 CREATE INDEX IF NOT EXISTS idx_announce_reads_tenant ON announcement_reads(tenant_id);
 
--- Add plan FK to tenants (nullable — existing tenants have no plan assigned yet)
+-- Add plan FK to tenants (nullable â€” existing tenants have no plan assigned yet)
 DO $$ BEGIN
     ALTER TABLE tenants ADD COLUMN plan_id UUID REFERENCES platform_plans(id) ON DELETE SET NULL;
 EXCEPTION WHEN duplicate_column THEN NULL;
@@ -1883,7 +1890,7 @@ BEGIN
     RAISE NOTICE 'Tenant Tables: users, patients, appointments, etc.';
     RAISE NOTICE 'Hybrid Tables: treatment_categories';
     RAISE NOTICE '============================================';
-    RAISE NOTICE 'Next Step: Run seed.sql (optional demo data)';
+    RAISE NOTICE 'Next Step: Run seed-prod.sql (required system seed: roles, plans, categories)';
+    RAISE NOTICE 'Optional: Run seed.sql for demo data (3 clinics)';
     RAISE NOTICE '============================================';
 END $$;
-

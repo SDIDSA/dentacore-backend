@@ -21,7 +21,7 @@
         done_note:'Arrive 5 minutes early. To reschedule, call the clinic and give this patient number.',
         err_generic:'Something went wrong — please try again.', err_slot:'That time was just taken. Pick another.',
         err_limit:'You already have an upcoming booking with this phone number.',
-        err_phone:'Please enter your phone as +213XXXXXXXXX.', err_name:'Please enter your full name.',
+        err_phone:'Enter a valid Algerian phone (e.g. 0549 468 120 or +213549468120).', err_name:'Please enter your full name.',
         sending:'Sending…', min:'min', aria_theme:'Switch color theme', aria_lang:'Language' },
       fr: { doc_title:'Prendre rendez-vous', kicker:'Rendez-vous en ligne', loading:'chargement du cabinet…',
         notfound:'Ce lien de réservation n\u2019est pas valide. Vérifiez l\u2019adresse ou contactez directement le cabinet.',
@@ -33,7 +33,7 @@
         done_note:'Arrivez 5 minutes en avance. Pour modifier, appelez le cabinet et donnez ce numéro de patient.',
         err_generic:'Une erreur est survenue — réessayez.', err_slot:'Ce créneau vient d\u2019être pris. Choisissez-en un autre.',
         err_limit:'Vous avez déjà un rendez-vous à venir avec ce numéro.',
-        err_phone:'Saisissez votre téléphone au format +213XXXXXXXXX.', err_name:'Saisissez votre nom complet.',
+        err_phone:'Saisissez un téléphone algérien valide (ex. 0549 468 120 ou +213549468120).', err_name:'Saisissez votre nom complet.',
         sending:'Envoi…', min:'min', aria_theme:'Changer de thème', aria_lang:'Langue' },
       ar: { doc_title:'حجز موعد', kicker:'الحجز عبر الإنترنت', loading:'جارٍ تحميل العيادة…',
         notfound:'رابط الحجز غير صالح. تحقق من العنوان أو اتصل بالعيادة مباشرة.',
@@ -44,7 +44,7 @@
         when:'الموعد', dentist:'الطبيب', duration:'المدة',
         done_note:'يرجى الحضور قبل ٥ دقائق. لتغيير الموعد، اتصل بالعيادة وأعطِ رقم المريض.',
         err_generic:'حدث خطأ — حاول مجدداً.', err_slot:'تم حجز هذا الوقت للتو. اختر وقتاً آخر.',
-        err_limit:'لديك موعد قادم بهذا الرقم بالفعل.', err_phone:'أدخل هاتفك بالصيغة +213XXXXXXXXX.',
+        err_limit:'لديك موعد قادم بهذا الرقم بالفعل.', err_phone:'أدخل رقم هاتف جزائري صالح (مثل 0549 468 120 أو +213549468120).',
         err_name:'أدخل اسمك الكامل.', sending:'جارٍ الإرسال…', min:'د', aria_theme:'تغيير المظهر', aria_lang:'اللغة' }
     };
 
@@ -232,9 +232,9 @@
       $('submitBtn').addEventListener('click', function () {
         hide('formErr');
         var name = $('fullName').value.trim();
-        var phone = $('phone').value.replace(/[\s.-]/g, '');
+        var phone = normalizeDZPhone($('phone').value);
         if (name.length < 2) return formError('err_name');
-        if (!/^\+213[0-9]{9}$/.test(phone)) return formError('err_phone');
+        if (!phone) return formError('err_phone');
         if (!state.dentistId || !state.date || !state.slot) return formError('err_generic');
 
         var when = state.date + 'T' +

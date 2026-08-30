@@ -15,7 +15,7 @@ setup.sh handles everything:
 
 Options:
   --systemd       Install and enable the sera systemd service
-  --port N        Override the listening port (default: 4000)
+  --port N        Override the listening port (default: 80; 4000 behind nginx/Caddy or under --systemd)
   --seed          Also load seed.sql demo data
   --backup-cron   Nightly pg_dump + retention + audit trim (optionally rclone offsite)
 

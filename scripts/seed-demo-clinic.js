@@ -40,7 +40,6 @@ const db = require('../src/config/database');
       .insertInto('users')
       .values({
         tenant_id: tenant.id,
-        role_id: roleId['auth.role.dentist'],
         email: d.email,
         password_hash: bcrypt.hashSync(crypto.randomUUID(), 10),
         full_name: d.name,
@@ -48,6 +47,7 @@ const db = require('../src/config/database');
       })
       .returningAll()
       .execute();
+    await db.insertInto('user_roles').values({ user_id: u.id, role_id: roleId['auth.role.dentist'] }).execute();
 
     // Sun–Thu 08:30-12:00 & 13:30-17:00, plus Sat morning (prototype variety)
     for (let dow = 0; dow <= 4; dow++) {

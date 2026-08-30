@@ -8,6 +8,7 @@ const db = require('../config/database');
 const { sql } = require('kysely');
 const { authenticate } = require('../middleware/auth');
 const logger = require('../config/logger');
+const { primaryRoleKey } = require('../utils/roleUtil');
 
 const router = express.Router();
 
@@ -60,7 +61,8 @@ router.post('/login', loginLimiter,
             jti: crypto.randomUUID(),
             id: user.id,
             email: user.email,
-            role_key: user.role_key,
+            role_key: primaryRoleKey(user.role_keys),
+            role_keys: user.role_keys,
             tenant_id: user.tenant_id
           },
           process.env.JWT_SECRET,
@@ -130,7 +132,8 @@ router.post('/login', loginLimiter,
         refreshToken,
         id: user.id,
         fullName: user.full_name,
-        roleKey: user.role_key,
+        roleKey: primaryRoleKey(user.role_keys),
+        roleKeys: user.role_keys,
         tenantId: user.tenant_id
       });
 
@@ -145,16 +148,15 @@ router.get('/validate', authenticate, async (req, res, next) => {
   try {
     const user = await db
       .selectFrom('users')
-      .innerJoin('roles', 'users.role_id', 'roles.id')
       .select([
         'users.id',
         'users.full_name',
         'users.status_key',
         'users.tenant_id',
-        'roles.role_key'
+        sql`ARRAY(SELECT rl.role_key FROM user_roles ur JOIN roles rl ON rl.id = ur.role_id WHERE ur.user_id = users.id)`.as('role_keys')
       ])
-      .where('users.id', '=', req.user.id)
-      .where('users.tenant_id', '=', req.user.tenant_id)
+        .where('users.id', '=', req.user.id)
+        .where('users.tenant_id', '=', req.tenantId)
       .executeTakeFirst();
 
     if (!user) {
@@ -174,7 +176,8 @@ router.get('/validate', authenticate, async (req, res, next) => {
       refreshToken,
       id: user.id,
       fullName: user.full_name,
-      roleKey: user.role_key,
+      roleKey: primaryRoleKey(user.role_keys),
+      roleKeys: user.role_keys,
       tenantId: user.tenant_id
     });
   } catch (e) {

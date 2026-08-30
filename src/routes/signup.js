@@ -94,17 +94,22 @@ router.post('/',
           .returningAll()
           .execute();
 
-        await trx
+        const [newUser] = await trx
           .insertInto('users')
           .values({
             tenant_id: tenant.id,
-            role_id: role.id,
             email,
             password_hash: bcrypt.hashSync(password, 10),
             full_name,
             phone,
             status_key: 'user.status.active',
           })
+          .returning('id')
+          .execute();
+
+        await trx
+          .insertInto('user_roles')
+          .values({ user_id: newUser.id, role_id: role.id })
           .execute();
 
         return {

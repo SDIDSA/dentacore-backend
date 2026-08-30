@@ -60,8 +60,12 @@ const PLATFORM_SUBDOMAIN = 'sera-platform';
   if (existing) {
     if (existing.tenant_id === tenant.id) {
       await db.updateTable('users')
-        .set({ role_id: role.id, password_hash: bcrypt.hashSync(password, 10), status_key: 'user.status.active' })
+        .set({ password_hash: bcrypt.hashSync(password, 10), status_key: 'user.status.active' })
         .where('id', '=', existing.id)
+        .execute();
+      await db.insertInto('user_roles')
+        .values({ user_id: existing.id, role_id: role.id })
+        .onConflictDoNothing()
         .execute();
       console.log(`platform admin credentials reset for ${email}`);
     } else {
@@ -70,16 +74,19 @@ const PLATFORM_SUBDOMAIN = 'sera-platform';
       process.exit(1);
     }
   } else {
-    await db.insertInto('users')
+    const [newUser] = await db.insertInto('users')
       .values({
         tenant_id: tenant.id,
-        role_id: role.id,
         email,
         password_hash: bcrypt.hashSync(password, 10),
         full_name: fullName || 'Sera Operator',
         phone: `+213${String(Date.now()).slice(-9)}`,
         status_key: 'user.status.active',
       })
+      .returningAll()
+      .execute();
+    await db.insertInto('user_roles')
+      .values({ user_id: newUser.id, role_id: role.id })
       .execute();
     console.log(`platform admin created: ${email}`);
   }

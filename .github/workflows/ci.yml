@@ -44,6 +44,9 @@ jobs:
       - name: Apply schema (db.sql)
         run: PGPASSWORD=dentacore_test psql -h localhost -U dentacore -d dentacore_test -v ON_ERROR_STOP=1 -f db.sql
 
+      - name: Apply production seed (seed-prod.sql)
+        run: PGPASSWORD=dentacore_test psql -h localhost -U dentacore -d dentacore_test -v ON_ERROR_STOP=1 -f seed-prod.sql
+
       - name: Apply seed (seed.sql)
         run: PGPASSWORD=dentacore_test psql -h localhost -U dentacore -d dentacore_test -v ON_ERROR_STOP=1 -f seed.sql
 

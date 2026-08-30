@@ -39,14 +39,14 @@ async function verifyGlobalEmail() {
             await db.transaction().execute(async (trx) => {
             await sql`SELECT set_config('app.current_tenant', ${tenantA_id}::text, true)`.execute(trx);
 
-            await trx.insertInto('users').values({
+            const u1 = await trx.insertInto('users').values({
                 tenant_id: tenantA_id,
                 email: email,
                 password_hash,
                 full_name: 'Test Global User',
-                role_id: 1, // Assumptions: role id 1 exists
                 status_key: 'user.status.active'
-            }).execute();
+            }).returning('id').executeTakeFirst();
+            await trx.insertInto('user_roles').values({ user_id: u1.id, role_id: 1 }).execute();
         });
         console.log(`✅ User created in Tenant A with email: ${email}`);
 
@@ -64,14 +64,14 @@ async function verifyGlobalEmail() {
         await db.transaction().execute(async (trx) => {
                 await sql`SELECT set_config('app.current_tenant', ${tenantB_id}::text, true)`.execute(trx);
 
-                await trx.insertInto('users').values({
+                const u2 = await trx.insertInto('users').values({
                     tenant_id: tenantB_id,
                     email: email, // SAME EMAIL
                     password_hash,
                     full_name: 'Duplicate User',
-                    role_id: 1,
                     status_key: 'user.status.active'
-                }).execute();
+                }).returning('id').executeTakeFirst();
+                await trx.insertInto('user_roles').values({ user_id: u2.id, role_id: 1 }).execute();
             });
             console.error('❌ FAIL: Duplicate email was allowed!');
         } catch (error) {

@@ -44,23 +44,23 @@ beforeAll(async () => {
       .insertInto('users')
       .values({
         tenant_id: tenant.id,
-        role_id: roleId['auth.role.dentist'],
         email: `doc-${suffix}@test.dz`,
         password_hash: bcrypt.hashSync(password, 10),
         full_name: `Dr. Portal ${suffix}`,
         phone: `+213${String(Date.now()).slice(-9)}`,
       })
-      .returningAll()
+      .returning('id')
       .execute();
+    await db.insertInto('user_roles').values({ user_id: dentist.id, role_id: roleId['auth.role.dentist'] }).execute();
 
-    await db.insertInto('users').values({
+    const [admin] = await db.insertInto('users').values({
       tenant_id: tenant.id,
-      role_id: roleId['auth.role.admin'],
       email: `admin-${suffix}@test.dz`,
       password_hash: bcrypt.hashSync(password, 10),
       full_name: `Portal Admin ${suffix}`,
       phone: `+213${String(Date.now() + 1).slice(-9)}`,
-    }).returningAll().execute();
+    }).returning('id').execute();
+    await db.insertInto('user_roles').values({ user_id: admin.id, role_id: roleId['auth.role.admin'] }).execute();
 
     // working hours for TOMORROW (Algiers): 09:00-12:00, 30-min slots
     const day = new Date(Date.now() + 86400000 + 3600000); // +1d, shifted to Algiers
@@ -92,14 +92,14 @@ beforeAll(async () => {
       .insertInto('users')
       .values({
         tenant_id: other.id,
-        role_id: roleId['auth.role.dentist'],
         email: `other-doc-${suffix}@test.dz`,
         password_hash: bcrypt.hashSync(password, 10),
         full_name: `Dr. Foreign ${suffix}`,
         phone: `+213${String(Date.now() + 2).slice(-9)}`,
       })
-      .returningAll()
+      .returning('id')
       .execute();
+    await db.insertInto('user_roles').values({ user_id: otherDentist.id, role_id: roleId['auth.role.dentist'] }).execute();
 
     ctx = {
       suffix,

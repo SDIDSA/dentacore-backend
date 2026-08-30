@@ -51,10 +51,9 @@ router.get(
     try {
       const dentists = await db
         .selectFrom('users as u')
-        .innerJoin('roles as r', 'u.role_id', 'r.id')
         .select(['u.id', 'u.full_name'])
         .where('u.tenant_id', '=', req.tenantId)
-        .where('r.role_key', '=', 'auth.role.dentist')
+        .where(sql`EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role_id = (SELECT id FROM roles WHERE role_key = 'auth.role.dentist'))`)
         .where('u.status_key', '=', 'user.status.active')
         .orderBy('u.full_name')
         .execute();
@@ -144,11 +143,10 @@ router.post(
       // 1. dentist must belong to THIS tenant and be an active dentist
       const dentist = await db
         .selectFrom('users as u')
-        .innerJoin('roles as r', 'u.role_id', 'r.id')
         .select(['u.id'])
         .where('u.id', '=', dentist_id)
         .where('u.tenant_id', '=', req.tenantId)
-        .where('r.role_key', '=', 'auth.role.dentist')
+        .where(sql`EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role_id = (SELECT id FROM roles WHERE role_key = 'auth.role.dentist'))`)
         .where('u.status_key', '=', 'user.status.active')
         .executeTakeFirst();
       if (!dentist) {

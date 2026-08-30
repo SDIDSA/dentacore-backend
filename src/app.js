@@ -1,6 +1,5 @@
 const crypto = require('node:crypto');
 const express = require('express');
-const cors = require('cors');
 const helmet = require('helmet');
 const errorHandler = require('./middleware/errorHandler');
 const auditLogger = require('./middleware/auditLogger');
@@ -55,7 +54,9 @@ app.use(helmet({
 }));
 function defaultAllowedOrigins() {
   if (process.env.NODE_ENV === 'production') {
-    console.warn('CORS_ORIGIN not set in production — all cross-origin requests will be blocked. Set CORS_ORIGIN to your frontend URL.');
+    // Production still serves the public site (signup/booking/marketing) from
+    // this same backend, so same-host origins are allowed automatically by the
+    // middleware below; CORS_ORIGIN is only needed for *other* frontend domains.
     return [];
   }
   return ['http://localhost:4000', 'http://localhost:5173', 'http://localhost']; // localhost:80 (hosted HTTP-only test)
@@ -65,18 +66,47 @@ const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
   : defaultAllowedOrigins();
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes('*')) {
-      return callback(null, true);
-    }
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-}));
+// Custom CORS: the public site is served by this same backend, so a request
+// whose Origin host matches the request Host is same-origin and always allowed
+// (no need to hardcode the deployment domain). Any explicitly listed origin in
+// CORS_ORIGIN (other frontend domains) is also allowed. Preflight OPTIONS are
+// answered directly. This replaces the `cors` package because its origin
+// callback cannot see req and therefore can't match the server's own host.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const host = req.headers.host;
+
+  function allow(o) {
+    res.setHeader('Access-Control-Allow-Origin', o);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  }
+
+  // No Origin header => same-origin browser fetch; nothing to do.
+  if (!origin) return next();
+
+  // Explicit allow-list (CORS_ORIGIN), incl. wildcard.
+  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+    allow(origin);
+    return next();
+  }
+
+  // Same-host: origin's host matches this server's Host (covers http/https and
+  // any port the deployment uses for the public site).
+  let sameHost = false;
+  try { sameHost = new URL(origin).host === host; } catch (_) { /* ignore */ }
+  if (sameHost) {
+    allow(origin);
+    return next();
+  }
+
+  // Rejected cross-origin: do not emit CORS headers so the browser blocks it.
+  logger.error('CORS rejected request', { origin, host, allowedOrigins });
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -164,6 +194,29 @@ if (process.env.NODE_ENV !== 'production') {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 }
+
+// Clean URLs: serve the public pages without the .html suffix and redirect
+// any legacy /foo.html request to its extensionless form (e.g. /book).
+const PUBLIC_PAGES = {
+  '/book': 'book.html',
+  '/signup': 'signup.html',
+  '/platform': 'platform.html'
+};
+app.get(Object.keys(PUBLIC_PAGES), (req, res) => {
+  res.sendFile(require('node:path').resolve('public', PUBLIC_PAGES[req.path]));
+});
+// Booking portal also accepts the pretty /book/<slug> form and rewrites it to
+// the query param the page reads (/book?clinic=<slug>), so either link works.
+app.get('/book/:clinic', (req, res) => {
+  res.redirect(301, '/book?clinic=' + encodeURIComponent(req.params.clinic));
+});
+app.use((req, res, next) => {
+  const m = /^\/(book|signup|platform)\.html(\?.*)?$/.exec(req.path);
+  if (m) {
+    return res.redirect(301, '/' + m[1] + (m[2] || ''));
+  }
+  next();
+});
 
 app.use(express.static('public'));
 

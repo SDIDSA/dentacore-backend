@@ -314,7 +314,7 @@
       else $('editPlanId').value = '';
       $('detailInfo').innerHTML =
         '<dt>' + esc(t('th_clinic')) + '</dt><dd>' + esc(tn.name) + '</dd>' +
-        '<dt>' + esc(t('th_address')) + '</dt><dd>sera.dz/book/' + esc(tn.subdomain) + '</dd>' +
+        '<dt>' + esc(t('th_address')) + '</dt><dd>' + window.location.origin + '/book?clinic=' + esc(tn.subdomain) + '</dd>' +
         '<dt>' + esc(t('stat_users')) + '</dt><dd>' + esc(tn.user_count) + '</dd>' +
         '<dt>' + esc(t('stat_patients')) + '</dt><dd>' + esc(tn.patient_count) + '</dd>' +
         '<dt>' + esc(t('stat_appts')) + '</dt><dd>' + esc(tn.appointment_count) + '</dd>' +

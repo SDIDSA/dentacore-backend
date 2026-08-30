@@ -122,8 +122,47 @@ ensure_pgsql() {
   echo "  PostgreSQL $PG_VERSION ready"
 }
 
+# Ensure the PostgreSQL binaries can actually load (they need libnuma.so.1 etc.
+# that minimal/cloud images often lack). Best-effort install when root+apt,
+# otherwise fail with a clear prerequisite message instead of a cryptic ldd error.
+ensure_pg_libs() {
+  local postgres_bin="$PG_DIR/bin/postgres"
+  [ -x "$postgres_bin" ] || return 0
+  local missing
+  missing=$(ldd "$postgres_bin" 2>/dev/null | awk -F'=> ' '/not found/{gsub(/[ \t]/,"",$1); print $1}' | sort -u)
+  [ -n "$missing" ] || return 0
+
+  echo "PostgreSQL is missing system libraries on this host:"
+  echo "$missing" | sed 's/^/   - /'
+
+  if [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] && command -v apt-get >/dev/null 2>&1; then
+    echo "Attempting to install runtime dependencies (libnuma1)..."
+    if apt-get update -qq >/dev/null 2>&1 && apt-get install -y libnuma1 >/dev/null 2>&1; then
+      missing=$(ldd "$postgres_bin" 2>/dev/null | awk -F'=> ' '/not found/{gsub(/[ \t]/,"",$1); print $1}' | sort -u)
+      [ -z "$missing" ] && { echo "   runtime dependencies installed"; return 0; }
+    fi
+  fi
+
+  echo "ERROR: missing shared libraries required by PostgreSQL:" >&2
+  echo "$missing" | sed 's/^/   - /' >&2
+  echo "       On Debian/Ubuntu install them, e.g.:  apt-get install -y libnuma1" >&2
+  echo "       then re-run prod.sh." >&2
+  exit 1
+}
+
 # ── main ────────────────────────────────────────────────────────
 echo "== Sera backend bootstrap + startup =="
+
+if [ "$WITH_SYSTEMD" != "yes" ] && [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ]; then
+  echo "ERROR: PostgreSQL cannot run as the root user." >&2
+  echo "       Run prod.sh as a normal (non-root) user, e.g.:" >&2
+  echo "         bash prod.sh --port 4000" >&2
+  echo "       To serve on the default privileged port 80 as that non-root user," >&2
+  echo "       grant node the bind capability once (as root):" >&2
+  echo "         sudo setcap cap_net_bind_service=+ep \$HOME/.../sera-backend/.prod-tools/node-*/bin/node" >&2
+  echo "       (or use --systemd, which runs the service unprivileged.)" >&2
+  exit 1
+fi
 
 ensure_node
 ensure_pgsql
@@ -131,6 +170,36 @@ export PATH="$NODE_DIR/bin:$PG_DIR/bin:$PATH"
 
 echo "   Node $(node -v) ready"
 echo "   PG   $(psql --version) ready"
+
+ensure_pg_libs
+
+# ── privileged port (ports < 1024) ─────────────────────────────
+# PostgreSQL refuses to run as root, so the script runs as a normal user.
+# To serve on a privileged port (default 80) we grant the node binary the
+# CAP_NET_BIND_SERVICE capability once (needs root: sudo setcap ...); the
+# capability then persists across runs. If it can't be granted, the node
+# server would fail to bind, so we error out early with the fix (or point at
+# the nginx/Caddy reverse-proxy path in docs/HOSTING.md).
+if [ "$PORT" -lt 1024 ] && [ "$(id -u 2>/dev/null || echo 1)" -ne 0 ]; then
+  node_bin="$NODE_DIR/bin/node"
+  node_real="$(readlink -f "$node_bin" 2>/dev/null || echo "$node_bin")"
+  if command -v setcap >/dev/null 2>&1 && [ -f "$node_real" ]; then
+    if ! setcap "cap_net_bind_service=+ep" "$node_real" 2>/dev/null; then
+      if command -v sudo >/dev/null 2>&1; then
+        sudo -n setcap "cap_net_bind_service=+ep" "$node_real" 2>/dev/null || true
+      fi
+    fi
+  fi
+  if ! getcap "$node_real" 2>/dev/null | grep -q 'cap_net_bind_service'; then
+    echo "ERROR: port $PORT is privileged; binding it requires CAP_NET_BIND_SERVICE or root." >&2
+    echo "       Grant the capability once (as root):" >&2
+    echo "         sudo setcap cap_net_bind_service=+ep $node_real" >&2
+    echo "       then re-run (the capability persists across runs)." >&2
+    echo "       Or front the backend with nginx/Caddy on :80 -> :4000 (recommended for prod)." >&2
+    exit 1
+  fi
+  echo "   node granted cap_net_bind_service (can bind :$PORT as non-root)"
+fi
 
 # ── create .env from template (first run) ──────────────────────
 if [ "$FIRST_RUN" = "yes" ]; then
@@ -155,13 +224,11 @@ else
   echo "-- .env already exists, skipping creation --"
 fi
 
-# ── apply explicit --port to .env ──────────────────────────────
-if [ "$PORT_SET" = "yes" ]; then
-  if grep -qE '^PORT=' .env; then
-    sed -i "s/^PORT=.*/PORT=${PORT}/" .env
-  else
-    printf 'PORT=%s\n' "${PORT}" >> .env
-  fi
+# ── apply effective PORT to .env (default 80, or --port override) ──
+if grep -qE '^PORT=' .env; then
+  sed -i "s/^PORT=.*/PORT=${PORT}/" .env
+else
+  printf 'PORT=%s\n' "${PORT}" >> .env
 fi
 
 # force local PG settings
@@ -177,7 +244,15 @@ DB_PASS="$(get_env DB_PASSWORD)"
 if [ ! -f "$PG_DATA/postgresql.conf" ]; then
   echo "-- initializing PostgreSQL data dir --"
   mkdir -p "$PG_DATA"
-  initdb -D "$PG_DATA" -U "$DB_USER" -E UTF8 --locale=C 2>/dev/null
+  set +e
+  initdb -D "$PG_DATA" -U "$DB_USER" -E UTF8 --locale=C 2>"/tmp/sera_initdb_err.txt"
+  init_rc=$?
+  set -e
+  if [ "$init_rc" -ne 0 ]; then
+    echo "ERROR: initdb failed" >&2
+    cat "/tmp/sera_initdb_err.txt" >&2
+    exit 1
+  fi
 
   sed -i "s/^[# ]*port[[:space:]]*=.*/port = $PG_PORT/" "$PG_DATA/postgresql.conf"
   echo "listen_addresses = '127.0.0.1'" >> "$PG_DATA/postgresql.conf"
@@ -195,19 +270,44 @@ if [ ! -f "$PG_DATA/postgresql.conf" ]; then
 fi
 
 # ── start PG ───────────────────────────────────────────────────
-pg_isready -h 127.0.0.1 -p $PG_PORT -q 2>/dev/null || {
-  echo "-- starting PostgreSQL --"
-  pg_ctl start -D "$PG_DATA" -l "$TOOLS_DIR/pg_ctl.log" -w >/dev/null 2>&1 || true
-  for i in $(seq 1 40); do
-    sleep 0.5
-    if pg_isready -h 127.0.0.1 -p $PG_PORT -q 2>/dev/null; then break; fi
-  done
-  if ! pg_isready -h 127.0.0.1 -p $PG_PORT -q 2>/dev/null; then
+# Clear a stale pid file left behind if a previous run was killed hard.
+if [ -f "$PG_DATA/postmaster.pid" ]; then
+  old_pid=$(head -1 "$PG_DATA/postmaster.pid" 2>/dev/null | tr -d ' ')
+  if [ -n "$old_pid" ] && ! kill -0 "$old_pid" 2>/dev/null; then
+    echo "   removing stale postmaster.pid (PID $old_pid not running)"
+    rm -f "$PG_DATA/postmaster.pid"
+  fi
+fi
+
+echo "-- starting PostgreSQL --"
+if pg_isready -h 127.0.0.1 -p $PG_PORT -q 2>/dev/null; then
+  echo "   PostgreSQL already running on 127.0.0.1:$PG_PORT"
+else
+  # Clear a stale pid file left behind if a previous run was killed hard.
+  if [ -f "$PG_DATA/postmaster.pid" ]; then
+    old_pid=$(head -1 "$PG_DATA/postmaster.pid" 2>/dev/null | tr -d ' ')
+    if [ -n "$old_pid" ] && ! kill -0 "$old_pid" 2>/dev/null; then
+      echo "   removing stale postmaster.pid (PID $old_pid not running)"
+      rm -f "$PG_DATA/postmaster.pid"
+    fi
+  fi
+
+  if ! pg_ctl start -D "$PG_DATA" -l "$TOOLS_DIR/pg_ctl.log" -w; then
     echo "ERROR: pg_ctl start failed" >&2
-    tail -20 "$TOOLS_DIR/pg_ctl.log" 2>/dev/null || true
+    tail -30 "$TOOLS_DIR/pg_ctl.log" 2>/dev/null
+    echo "       If port $PG_PORT is already in use, stop the other instance first." >&2
     exit 1
   fi
-}
+fi
+for i in $(seq 1 40); do
+  sleep 0.5
+  if pg_isready -h 127.0.0.1 -p $PG_PORT -q 2>/dev/null; then break; fi
+done
+if ! pg_isready -h 127.0.0.1 -p $PG_PORT -q 2>/dev/null; then
+  echo "ERROR: PostgreSQL did not become ready" >&2
+  tail -30 "$TOOLS_DIR/pg_ctl.log" 2>/dev/null
+  exit 1
+fi
 echo "   PostgreSQL running on 127.0.0.1:$PG_PORT"
 
 # ── create role + database (first run) ───────────────────────────
@@ -229,19 +329,51 @@ else
   echo "   database $DB_NAME already exists"
 fi
 
+# ── strip a leading UTF-8 BOM (psql chokes on it) ──────────────
+strip_bom() {
+  local f="$1"
+  if [ "$(head -c3 "$f")" = "$(printf '\xef\xbb\xbf')" ]; then
+    local t
+    t="$(mktemp)"
+    tail -c +4 "$f" > "$t"
+    echo "$t"
+  else
+    echo "$f"
+  fi
+}
+
 # ── apply base schema (idempotent) ─────────────────────────────
 echo "-- applying schema (db.sql) --"
+DBSQL=$(strip_bom db.sql)
 PGPASSWORD="$DB_PASS" psql -h 127.0.0.1 -p $PG_PORT -U "$DB_USER" -d "$DB_NAME" \
-  -v ON_ERROR_STOP=1 -f db.sql 2>/dev/null || {
+  -v ON_ERROR_STOP=1 -f "$DBSQL" 2>/tmp/sera_schema_err.txt || {
   echo "WARNING: schema apply returned non-zero (tables may already exist)"
+  echo "--- db.sql psql output (tail) ---"
+  tail -n 40 /tmp/sera_schema_err.txt
 }
 echo "   schema OK"
+
+# ── apply production system seed (idempotent: roles, plans, categories) ──
+# Own step so it always runs even if db.sql aborts on a re-apply.
+echo "-- applying production seed (seed-prod.sql) --"
+SEEDPRODSQL=$(strip_bom seed-prod.sql)
+PGPASSWORD="$DB_PASS" psql -h 127.0.0.1 -p $PG_PORT -U "$DB_USER" -d "$DB_NAME" \
+  -v ON_ERROR_STOP=1 -f "$SEEDPRODSQL" 2>/tmp/sera_seed_err.txt || {
+  echo "WARNING: seed-prod.sql apply returned non-zero"
+  echo "--- seed-prod.sql psql output (tail) ---"
+  tail -n 40 /tmp/sera_seed_err.txt
+}
+echo "   seed OK"
 
 # ── optional: seed data (--seed) ────────────────────────────────
 if [ "$WITH_SEED" = "yes" ]; then
   echo "   WARNING: --seed loads DEMO data with published passwords"
+  DEMOSQL=$(strip_bom seed.sql)
   PGPASSWORD="$DB_PASS" psql -h 127.0.0.1 -p $PG_PORT -U "$DB_USER" -d "$DB_NAME" \
-    -f seed.sql 2>/dev/null
+    -f "$DEMOSQL" 2>/tmp/sera_demo_err.txt || {
+    echo "--- seed.sql psql output (tail) ---"
+    tail -n 40 /tmp/sera_demo_err.txt
+  }
 fi
 
 # ── systemd unit (--systemd) ───────────────────────────────────

@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 
 # Load DB_PASSWORD from .env if available
 if [ -f ".env" ]; then
@@ -52,14 +52,14 @@ echo "Using port: $DB_PORT"
 echo "Using passwords from .env or interactive prompt (never logged)"
 echo
 
-echo "[1/6] Creating dentacore user (if not exists)..."
+echo "[1/7] Creating dentacore user (if not exists)..."
 export PGPASSWORD="$POSTGRES_PASSWORD"
 # SQL-escape single quotes in the password ('' doubling)
 DENTACORE_PW_SQL="${DENTACORE_PASSWORD//\'/\'\'}"
 if $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "CREATE USER dentacore WITH PASSWORD '$DENTACORE_PW_SQL';" 2>/dev/null; then
     echo "User 'dentacore' created successfully"
 else
-    # user already exists — rotate its password so a changed DB_PASSWORD
+    # user already exists â€” rotate its password so a changed DB_PASSWORD
     # in .env actually wins on re-run (matching recreate-db.cmd behavior)
     if $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "ALTER USER dentacore WITH PASSWORD '$DENTACORE_PW_SQL';"; then
         echo "User 'dentacore' already exists - password rotated to match .env"
@@ -70,7 +70,7 @@ else
 fi
 
 echo
-echo "[2/6] Dropping existing database..."
+echo "[2/7] Dropping existing database..."
 export PGPASSWORD="$POSTGRES_PASSWORD"
 if ! $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "DROP DATABASE IF EXISTS dentacore;"; then
     echo "ERROR: Failed to drop database"
@@ -78,7 +78,7 @@ if ! $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "DROP DATABASE IF EXIS
 fi
 
 echo
-echo "[3/6] Creating new database..."
+echo "[3/7] Creating new database..."
 export PGPASSWORD="$POSTGRES_PASSWORD"
 if ! $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "CREATE DATABASE dentacore OWNER dentacore;"; then
     echo "ERROR: Failed to create database"
@@ -86,7 +86,7 @@ if ! $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "CREATE DATABASE denta
 fi
 
 echo
-echo "[4/6] Granting privileges to dentacore user..."
+echo "[4/7] Granting privileges to dentacore user..."
 export PGPASSWORD="$POSTGRES_PASSWORD"
 if ! $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "GRANT ALL PRIVILEGES ON DATABASE dentacore TO dentacore;"; then
     echo "ERROR: Failed to grant privileges"
@@ -94,7 +94,7 @@ if ! $PSQL_PATH -U postgres -h localhost -p "$DB_PORT" -c "GRANT ALL PRIVILEGES 
 fi
 
 echo
-echo "[5/6] Executing database schema..."
+echo "[5/7] Executing database schema..."
 export PGPASSWORD="$DENTACORE_PASSWORD"
 if ! $PSQL_PATH -U dentacore -h localhost -p "$DB_PORT" -d dentacore -f db.sql; then
     echo "ERROR: Failed to execute database schema"
@@ -103,7 +103,16 @@ if ! $PSQL_PATH -U dentacore -h localhost -p "$DB_PORT" -d dentacore -f db.sql; 
 fi
 
 echo
-echo "[6/6] Executing seed data..."
+echo "[6/7] Executing production system seed (seed-prod.sql)..."
+export PGPASSWORD="$DENTACORE_PASSWORD"
+if ! $PSQL_PATH -U dentacore -h localhost -p "$DB_PORT" -d dentacore -f seed-prod.sql; then
+    echo "ERROR: Failed to execute production seed"
+    echo "Check if seed-prod.sql file exists and is readable"
+    exit 1
+fi
+
+echo
+echo "[7/7] Executing demo seed data (seed.sql)..."
 export PGPASSWORD="$DENTACORE_PASSWORD"
 if ! $PSQL_PATH -U dentacore -h localhost -p "$DB_PORT" -d dentacore -f seed.sql; then
     echo "ERROR: Failed to execute seed data"
@@ -125,7 +134,8 @@ echo
 echo "Database: dentacore"
 echo "Owner: dentacore"
 echo "Schema: Applied from db.sql"
-echo "Seed Data: Applied from seed.sql"
+echo "System Seed: Applied from seed-prod.sql (roles, plans, categories)"
+echo "Demo Seed: Applied from seed.sql"
 echo
 echo "Default Admin Credentials:"
 echo "Email: admin@elqods.dz"

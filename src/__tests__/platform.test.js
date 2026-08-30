@@ -38,14 +38,14 @@ beforeAll(async () => {
   const roles = await db.selectFrom('roles').select(['id', 'role_key']).execute();
   const roleId = Object.fromEntries(roles.map((r) => [r.role_key, r.id]));
 
-  await db.insertInto('users').values({
+  const [operator] = await db.insertInto('users').values({
     tenant_id: ptenant.id,
-    role_id: roleId['auth.role.platform_admin'],
     email: `operator-${suffix}@platform.test`,
     password_hash: bcrypt.hashSync('Platform@2026!', 10),
     full_name: 'Operator',
     phone: `+213${String(Date.now()).slice(-9)}`,
-  }).execute();
+  }).returning('id').execute();
+  await db.insertInto('user_roles').values({ user_id: operator.id, role_id: roleId['auth.role.platform_admin'] }).execute();
 
   // a regular clinic tenant
   const [clinic] = await db.insertInto('tenants').values({
@@ -55,14 +55,14 @@ beforeAll(async () => {
     subscription_plan: 'starter',
   }).returningAll().execute();
 
-  await db.insertInto('users').values({
+  const [clinicAdmin] = await db.insertInto('users').values({
     tenant_id: clinic.id,
-    role_id: roleId['auth.role.admin'],
     email: `padmin-${suffix}@test.dz`,
     password_hash: bcrypt.hashSync('Clinic@2026!', 10),
     full_name: 'Clinic Admin',
     phone: `+213${String(Date.now()).slice(-9)}`,
-  }).execute();
+  }).returning('id').execute();
+  await db.insertInto('user_roles').values({ user_id: clinicAdmin.id, role_id: roleId['auth.role.admin'] }).execute();
 
   ctx = {
     suffix,

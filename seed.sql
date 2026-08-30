@@ -258,7 +258,6 @@ BEGIN
     -- Create Admin User for Tenant 1
     INSERT INTO users (
         tenant_id,
-        role_id,
         email,
         password_hash,
         full_name,
@@ -268,7 +267,6 @@ BEGIN
         status_key
     ) VALUES (
         v_tenant_id,
-        v_admin_role_id,
         'admin@elqods.dz',
         crypt('Admin@2025!', gen_salt('bf')),
         'Dr. Karim Benali',
@@ -279,12 +277,13 @@ BEGIN
     )
     RETURNING id INTO v_admin_user_id;
 
+    INSERT INTO user_roles (user_id, role_id) VALUES (v_admin_user_id, v_admin_role_id);
+
     RAISE NOTICE 'Created Admin: admin@elqods.dz (Password: Admin@2025!)';
 
     -- Create Dentist User for Tenant 1
     INSERT INTO users (
         tenant_id,
-        role_id,
         email,
         password_hash,
         full_name,
@@ -294,7 +293,6 @@ BEGIN
         status_key
     ) VALUES (
         v_tenant_id,
-        v_dentist_role_id,
         'dentist@elqods.dz',
         crypt('Dentist@2025!', gen_salt('bf')),
         'Dr. Amina Zerrouki',
@@ -304,6 +302,8 @@ BEGIN
         'user.status.active'
     )
     RETURNING id INTO v_dentist_user_id;
+
+    INSERT INTO user_roles (user_id, role_id) VALUES (v_dentist_user_id, v_dentist_role_id);
 
     RAISE NOTICE 'Created Dentist: dentist@elqods.dz (Password: Dentist@2025!)';
 
@@ -486,17 +486,23 @@ BEGIN
     -- ========================================================================
     -- ADD 2 MORE DENTISTS + 1 RECEPTIONIST
     -- ========================================================================
-    INSERT INTO users (tenant_id, role_id, email, password_hash, full_name, phone, wilaya_id, address, status_key)
-    VALUES (v_tenant_id, v_dentist_role_id, 'dentist2@elqods.dz', crypt('Dentist@2025!', gen_salt('bf')), 'Dr. Samir Hadjadj', '+213555345678', 25, 'Rue des Freres Abbas, Constantine', 'user.status.active')
+    INSERT INTO users (tenant_id, email, password_hash, full_name, phone, wilaya_id, address, status_key)
+    VALUES (v_tenant_id, 'dentist2@elqods.dz', crypt('Dentist@2025!', gen_salt('bf')), 'Dr. Samir Hadjadj', '+213555345678', 25, 'Rue des Freres Abbas, Constantine', 'user.status.active')
     RETURNING id INTO v_dentist2_id;
 
-    INSERT INTO users (tenant_id, role_id, email, password_hash, full_name, phone, wilaya_id, address, status_key)
-    VALUES (v_tenant_id, v_dentist_role_id, 'dentist3@elqods.dz', crypt('Dentist@2025!', gen_salt('bf')), 'Dr. Fatima Bouzidi', '+213556456789', 25, 'Cite des Muriers, Constantine', 'user.status.active')
+    INSERT INTO user_roles (user_id, role_id) VALUES (v_dentist2_id, v_dentist_role_id);
+
+    INSERT INTO users (tenant_id, email, password_hash, full_name, phone, wilaya_id, address, status_key)
+    VALUES (v_tenant_id, 'dentist3@elqods.dz', crypt('Dentist@2025!', gen_salt('bf')), 'Dr. Fatima Bouzidi', '+213556456789', 25, 'Cite des Muriers, Constantine', 'user.status.active')
     RETURNING id INTO v_dentist3_id;
 
-    INSERT INTO users (tenant_id, role_id, email, password_hash, full_name, phone, wilaya_id, address, status_key)
-    VALUES (v_tenant_id, v_receptionist_role_id, 'reception@elqods.dz', crypt('Recept@2025!', gen_salt('bf')), 'Nadia Khelifi', '+213557567890', 25, 'Centre Ville, Constantine', 'user.status.active')
+    INSERT INTO user_roles (user_id, role_id) VALUES (v_dentist3_id, v_dentist_role_id);
+
+    INSERT INTO users (tenant_id, email, password_hash, full_name, phone, wilaya_id, address, status_key)
+    VALUES (v_tenant_id, 'reception@elqods.dz', crypt('Recept@2025!', gen_salt('bf')), 'Nadia Khelifi', '+213557567890', 25, 'Centre Ville, Constantine', 'user.status.active')
     RETURNING id INTO v_receptionist_id;
+
+    INSERT INTO user_roles (user_id, role_id) VALUES (v_receptionist_id, v_receptionist_role_id);
 
     RAISE NOTICE 'Created 2 more dentists (Samir, Fatima) + 1 receptionist (Nadia) for El-Qods';
 
@@ -666,8 +672,9 @@ BEGIN
             v_appt_timestamp := v_appt_date + make_interval(hours := v_hour, mins := v_minute);
             
             -- Pick random dentist via direct query
-            SELECT id INTO v_curr_dentist_id FROM users
-            WHERE tenant_id = v_tenant_id AND role_id = v_dentist_role_id
+            SELECT u.id INTO v_curr_dentist_id FROM users u
+            JOIN user_roles ur ON ur.user_id = u.id
+            WHERE u.tenant_id = v_tenant_id AND ur.role_id = v_dentist_role_id
             ORDER BY random() LIMIT 1;
             
             -- Pick random patient via direct query
@@ -765,7 +772,6 @@ BEGIN
     -- Create Admin User for Tenant 2
     INSERT INTO users (
         tenant_id,
-        role_id,
         email,
         password_hash,
         full_name,
@@ -774,7 +780,6 @@ BEGIN
         status_key
     ) VALUES (
         v_tenant_id,
-        v_admin_role_id,
         'admin@sourire.dz',
         crypt('Sourire@2025!', gen_salt('bf')),
         'Dr. Yasmine Khelifi',
@@ -783,6 +788,8 @@ BEGIN
         'user.status.active'
     )
     RETURNING id INTO v_admin_user_id;
+
+    INSERT INTO user_roles (user_id, role_id) VALUES (v_admin_user_id, v_admin_role_id);
 
     RAISE NOTICE 'Created Admin: admin@sourire.dz (Password: Sourire@2025!)';
 
@@ -890,7 +897,6 @@ BEGIN
     -- Create Dentist User (matching your original seed data)
     INSERT INTO users (
         tenant_id,
-        role_id,
         email,
         password_hash,
         full_name,
@@ -899,7 +905,6 @@ BEGIN
         status_key
     ) VALUES (
         v_tenant_id,
-        v_dentist_role_id,
         'dentist@teyar.dz',
         crypt('A1b2-A1b2', gen_salt('bf')),
         'Zinelabidine Teyar',
@@ -908,6 +913,8 @@ BEGIN
         'user.status.active'
     )
     RETURNING id INTO v_dentist_user_id;
+
+    INSERT INTO user_roles (user_id, role_id) VALUES (v_dentist_user_id, v_dentist_role_id);
 
     RAISE NOTICE 'Created Dentist: dentist@teyar.dz (Password: A1b2-A1b2)';
 

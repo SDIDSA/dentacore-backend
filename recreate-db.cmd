@@ -60,7 +60,7 @@ echo Using passwords from .env or interactive prompt (never logged)
 echo.
 
 echo.
-echo [1/6] Dropping existing database...
+echo [1/7] Dropping existing database...
 set PGPASSWORD=%POSTGRES_PASSWORD%
 %PSQL_PATH% -U postgres -p %DB_PORT% -c "DROP DATABASE IF EXISTS dentacore;"
 if %errorlevel% neq 0 (
@@ -69,7 +69,7 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo [2/6] recreating dentacore user (if not exists)...
+echo [2/7] recreating dentacore user (if not exists)...
 set PGPASSWORD=%POSTGRES_PASSWORD%
 REM SQL-escape single quotes in the password ('' doubling)
 set "DENTACORE_PW_SQL=!DENTACORE_PASSWORD:'=''!"
@@ -82,7 +82,7 @@ if %errorlevel% equ 0 (
 )
 
 echo.
-echo [3/6] Creating new database...
+echo [3/7] Creating new database...
 set PGPASSWORD=%POSTGRES_PASSWORD%
 %PSQL_PATH% -U postgres -p %DB_PORT% -c "CREATE DATABASE dentacore OWNER dentacore;"
 if %errorlevel% neq 0 (
@@ -92,7 +92,7 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [4/6] Granting privileges to dentacore user...
+echo [4/7] Granting privileges to dentacore user...
 set PGPASSWORD=%POSTGRES_PASSWORD%
 %PSQL_PATH% -U postgres -p %DB_PORT% -c "GRANT ALL PRIVILEGES ON DATABASE dentacore TO dentacore;"
 if %errorlevel% neq 0 (
@@ -102,7 +102,7 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [5/6] Executing database schema...
+echo [5/7] Executing database schema...
 set PGPASSWORD=%DENTACORE_PASSWORD%
 %PSQL_PATH% -U dentacore -d dentacore -p %DB_PORT% -f db.sql
 if %errorlevel% neq 0 (
@@ -113,7 +113,18 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [6/6] Executing seed data...
+echo [6/7] Executing production system seed (seed-prod.sql)...
+set PGPASSWORD=%DENTACORE_PASSWORD%
+%PSQL_PATH% -U dentacore -d dentacore -p %DB_PORT% -f seed-prod.sql
+if %errorlevel% neq 0 (
+    echo ERROR: Failed to execute production seed
+    echo Check if seed-prod.sql file exists and is readable
+    pause
+    exit /b 1
+)
+
+echo.
+echo [7/7] Executing demo seed data (seed.sql)...
 set PGPASSWORD=%DENTACORE_PASSWORD%
 %PSQL_PATH% -U dentacore -d dentacore -p %DB_PORT% -f seed.sql
 if %errorlevel% neq 0 (
@@ -137,7 +148,8 @@ echo.
 echo Database: dentacore
 echo Owner: dentacore
 echo Schema: Applied from db.sql
-echo Seed Data: Applied from seed.sql
+echo System Seed: Applied from seed-prod.sql (roles, plans, categories)
+echo Demo Seed: Applied from seed.sql
 echo.
 echo Default Admin Credentials:
 echo Email: admin@elqods.dz

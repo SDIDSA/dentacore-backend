@@ -4,7 +4,8 @@
 Maintenance and utility scripts for database management and seeding.
 
 ## Ownership
-- `recreate-db.cmd` / `recreate-db.sh` — Drop and recreate the database (schema + seed); live at the **project root**, not in `scripts/`
+- `recreate-db.cmd` / `recreate-db.sh` — Drop and recreate the database (schema + system seed + demo seed); live at the **project root**, not in `scripts/`
+- `seed-prod.sql` — Production **system seed** (idempotent): `roles`, `platform_plans`, global `treatment_categories`. Applied as its OWN psql step after `db.sql` in `prod.ps1` and `recreate-db.*` (and must be run on any already-provisioned DB, since `db.sql` is applied with `ON_ERROR_STOP=1` and aborts on re-apply before reaching any trailing seed). Distinct from `seed.sql` (demo data).
 - `seed-sql.js` — Runner that delegates to `recreate-db.cmd`/`.sh`
 - `seed.sql` — SQL seed data for 3 demo clinics (El-Qods ~100 patients/396 appointments, Sourire trial, Teyar personal)
 - `seed-demo-clinic.js` — Idempotent prototype seeder for the public booking portal: creates tenant `clinic-demo` with two dentists and Sun–Thu 08:30–12:00 / 13:30–17:00 (plus Sat morning) `working_hours`; prints the slug; loads its own dotenv

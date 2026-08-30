@@ -11,7 +11,32 @@ param(
     [string]$PgVersion = "18.6-1"
 )
 
+$ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = "Continue"
+
+function Get-RemoteFile {
+    param([string]$Uri, [string]$OutFile)
+    if (Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue) {
+        & curl.exe -L -f -o $OutFile $Uri
+        if ($LASTEXITCODE -ne 0) { throw "Download failed (curl exit $LASTEXITCODE): $Uri" }
+    } else {
+        Write-Host "  (curl.exe unavailable, using Invoke-WebRequest)" -ForegroundColor DarkGray
+        Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing
+    }
+}
+
+function Get-BomStrippedSql {
+    param([string]$Path)
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        $bytes = $bytes[3..($bytes.Length - 1)]
+        $tmp = Join-Path $env:TEMP ("sera_" + [System.IO.Path]::GetFileName($Path))
+        [System.IO.File]::WriteAllBytes($tmp, $bytes)
+        Write-Host "  (stripped UTF-8 BOM from $($Path | Split-Path -Leaf))" -ForegroundColor DarkGray
+        return $tmp
+    }
+    return $Path
+}
 $ToolsDir = Join-Path $PSScriptRoot ".dev-tools"
 $CacheDir = Join-Path $ToolsDir "cache"
 $NodeDir = Join-Path $ToolsDir "node-v$NodeVersion-win-x64"
@@ -24,7 +49,7 @@ function Ensure-Node {
     $zip = Join-Path $CacheDir "node-v$NodeVersion-win-x64.zip"
     if (-not (Test-Path $zip)) {
         $url = "https://nodejs.org/dist/v$NodeVersion/node-v$NodeVersion-win-x64.zip"
-        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+        Get-RemoteFile -Uri $url -OutFile $zip
         if ((Get-Item $zip).Length -lt 1MB) {
             Remove-Item $zip -Force
             Write-Host "ERROR: Node.js download failed (got HTML instead of zip)" -ForegroundColor Red; exit 1
@@ -45,7 +70,7 @@ function Ensure-Pgsql {
     $zip = Join-Path $CacheDir "pgsql-$PgVersion.zip"
     if (-not (Test-Path $zip)) {
         $url = "https://get.enterprisedb.com/postgresql/postgresql-$PgVersion-windows-x64-binaries.zip"
-        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+        Get-RemoteFile -Uri $url -OutFile $zip
         if ((Get-Item $zip).Length -lt 1MB) {
             Remove-Item $zip -Force
             Write-Host "ERROR: PostgreSQL download failed (got HTML instead of zip)" -ForegroundColor Red; exit 1
@@ -141,8 +166,15 @@ if ($dbExists -ne "1") {
 
 # -- apply schema --
 Write-Host "Applying schema..." -ForegroundColor Cyan
-& "$pgBin\psql.exe" -h 127.0.0.1 -p $PgPort -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $PSScriptRoot "db.sql") 2>$null
+$dbSql = Get-BomStrippedSql (Join-Path $PSScriptRoot "db.sql")
+& "$pgBin\psql.exe" -h 127.0.0.1 -p $PgPort -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -f $dbSql 2>$null
 if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: schema failed" -ForegroundColor Red; exit 1 }
+
+# -- apply production system seed (roles, plans, categories) --
+Write-Host "Applying production seed (seed-prod.sql)..." -ForegroundColor Cyan
+$seedProdSql = Get-BomStrippedSql (Join-Path $PSScriptRoot "seed-prod.sql")
+& "$pgBin\psql.exe" -h 127.0.0.1 -p $PgPort -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -f $seedProdSql 2>$null
+if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: seed-prod.sql failed" -ForegroundColor Red; exit 1 }
 
 # -- install npm deps if needed --
 if (-not (Test-Path (Join-Path $PSScriptRoot "node_modules\.package-lock.json"))) {

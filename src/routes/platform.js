@@ -7,6 +7,7 @@ const { body, param, query, validationResult } = require('express-validator');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const logger = require('../config/logger');
+const { primaryRoleKey } = require('../utils/roleUtil');
 const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -205,14 +206,16 @@ router.get('/tenants/:id',
       }
 
       const users = await db.selectFrom('users')
-        .innerJoin('roles', 'users.role_id', 'roles.id')
         .select([
           'users.id', 'users.email', 'users.full_name', 'users.status_key',
-          'users.last_login_at', 'users.created_at', 'roles.role_key',
+          'users.last_login_at', 'users.created_at',
+          sql`ARRAY(SELECT rl.role_key FROM user_roles ur JOIN roles rl ON rl.id = ur.role_id WHERE ur.user_id = users.id)`.as('role_keys'),
+          sql`ARRAY(SELECT ur.role_id FROM user_roles ur WHERE ur.user_id = users.id)`.as('role_ids'),
         ])
         .where('users.tenant_id', '=', req.params.id)
         .orderBy('users.created_at', 'asc')
-        .execute();
+        .execute()
+        .then((rows) => rows.map((u) => ({ ...u, role_key: primaryRoleKey(u.role_keys) })));
 
       // Revenue for this tenant
       const [revRow] = await db.selectFrom('platform_invoices')
@@ -772,16 +775,20 @@ router.post('/impersonate/:tenantId',
       const tenant = await db.selectFrom('tenants').selectAll().where('id', '=', req.params.tenantId).executeTakeFirst();
       if (!tenant) return error(res, 404, 'platform.error.tenant_not_found');
 
-      // Find the admin user for this tenant
+      // Find the admin user for this tenant (admin assigned via user_roles)
       const admin = await db.selectFrom('users')
-        .innerJoin('roles', 'users.role_id', 'roles.id')
-        .select(['users.id', 'users.email', 'users.full_name', 'roles.role_key'])
+        .select([
+          'users.id', 'users.email', 'users.full_name',
+          sql`ARRAY(SELECT rl.role_key FROM user_roles ur JOIN roles rl ON rl.id = ur.role_id WHERE ur.user_id = users.id)`.as('role_keys')
+        ])
         .where('users.tenant_id', '=', req.params.tenantId)
-        .where('roles.role_key', '=', 'auth.role.admin')
+        .where(sql`EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = users.id AND ur.role_id = (SELECT id FROM roles WHERE role_key = 'auth.role.admin'))`)
         .where('users.status_key', '=', 'user.status.active')
         .executeTakeFirst();
 
       if (!admin) return error(res, 404, 'platform.error.no_admin_user');
+
+      const adminRoleKey = primaryRoleKey(admin.role_keys);
 
       const crypto = require('node:crypto');
       const jwt = require('jsonwebtoken');
@@ -791,7 +798,8 @@ router.post('/impersonate/:tenantId',
           jti: crypto.randomUUID(),
           id: admin.id,
           email: admin.email,
-          role_key: admin.role_key,
+          role_key: adminRoleKey,
+          role_keys: admin.role_keys,
           tenant_id: tenant.id,
           impersonated_by: req.user.email,
         },
@@ -804,7 +812,7 @@ router.post('/impersonate/:tenantId',
       return res.json({
         token,
         tenant: { id: tenant.id, name: tenant.name, subdomain: tenant.subdomain },
-        user: { id: admin.id, email: admin.email, full_name: admin.full_name, role_key: admin.role_key },
+        user: { id: admin.id, email: admin.email, full_name: admin.full_name, role_key: adminRoleKey, role_keys: admin.role_keys },
       });
     } catch (e) { next(e); }
   }

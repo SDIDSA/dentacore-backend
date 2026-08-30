@@ -66,11 +66,16 @@ describe('POST /api/v1/signup', () => {
 
     const [user] = await db
       .selectFrom('users')
-      .innerJoin('roles', 'users.role_id', 'roles.id')
-      .select(['users.id', 'users.email', 'roles.role_key'])
+      .select(['users.id', 'users.email'])
       .where('users.tenant_id', '=', tenant.id)
       .execute();
-    expect(user.role_key).toBe('auth.role.admin');
+    const [userRole] = await db
+      .selectFrom('user_roles')
+      .innerJoin('roles', 'user_roles.role_id', 'roles.id')
+      .select('roles.role_key')
+      .where('user_roles.user_id', '=', user.id)
+      .execute();
+    expect(userRole.role_key).toBe('auth.role.admin');
     expect(user.email).toBe(data.email);
 
     const login = await request(app)
@@ -79,6 +84,54 @@ describe('POST /api/v1/signup', () => {
     expect(login.statusCode).toBe(200);
     expect(login.body.roleKey).toBe('auth.role.admin');
     expect(login.body.tenantId).toBe(tenant.id);
+  });
+
+  it('allows multi-role assignment and blocks removing the last admin', async () => {
+    if (!dbAvailable) return;
+    const data = payload();
+    const res = await request(app).post(base).send(data);
+    expect(res.statusCode).toBe(201);
+    const [tenant] = await db
+      .selectFrom('tenants').select('id').where('subdomain', '=', data.subdomain).execute();
+    createdTenants.push(tenant.id);
+
+    const login = await request(app)
+      .post('/api/v1/auth/login').send({ email: data.email, password: data.password });
+    const token = login.body.accessToken;
+
+    const rolesRes = await request(app)
+      .get('/api/v1/users/meta/roles').set('Authorization', `Bearer ${token}`);
+    const adminId = rolesRes.body.find((r) => r.role_key === 'auth.role.admin').id;
+    const dentistId = rolesRes.body.find((r) => r.role_key === 'auth.role.dentist').id;
+
+    // create a dentist-only user
+    const dentist = await request(app)
+      .post('/api/v1/users').set('Authorization', `Bearer ${token}`).send({
+        email: `dentist-${uuidv4().slice(0, 8)}@signup-test.dz`,
+        password: 'Dentist@2026!',
+        full_name: 'Solo Dentist',
+        phone: `+213${String(Date.now()).slice(-9)}`,
+        role_ids: [dentistId],
+      });
+    expect(dentist.statusCode).toBe(201);
+
+    // removing admin from the only admin user is blocked
+    const [adminUser] = await db
+      .selectFrom('users').select('id').where('tenant_id', '=', tenant.id)
+      .where('email', '=', data.email).execute();
+    const blocked = await request(app)
+      .patch(`/api/v1/users/${adminUser.id}`).set('Authorization', `Bearer ${token}`)
+      .send({ role_ids: [dentistId] });
+    expect(blocked.statusCode).toBe(400);
+    expect(blocked.body.error).toBe('user.error.last_admin');
+
+    // granting the admin a second (dentist) role is allowed — true multi-role
+    const multi = await request(app)
+      .patch(`/api/v1/users/${adminUser.id}`).set('Authorization', `Bearer ${token}`)
+      .send({ role_ids: [adminId, dentistId] });
+    expect(multi.statusCode).toBe(200);
+    expect(multi.body.role_keys).toEqual(
+      expect.arrayContaining(['auth.role.admin', 'auth.role.dentist']));
   });
 
   it('rejects a taken subdomain with 409', async () => {

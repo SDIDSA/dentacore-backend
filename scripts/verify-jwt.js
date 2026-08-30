@@ -55,10 +55,10 @@ async function verifyJWTFlow() {
                 email: email,
                 password_hash,
                 full_name: 'JWT Tester',
-                role_id: 1, // Admin
                 status_key: 'user.status.active'
             }).returning('id').executeTakeFirst();
             user_id = user.id;
+            await trx.insertInto('user_roles').values({ user_id: user.id, role_id: 1 }).execute();
         });
         console.log(`User created: ${email}`);
 

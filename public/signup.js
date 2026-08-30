@@ -23,7 +23,7 @@
         err_match: 'Passwords do not match.', err_fields: 'Please fill every field.',
         err_slug: 'Clinic address: lowercase letters, numbers and hyphens only.',
         err_email_fmt: 'Please enter a valid email address.',
-        err_phone: 'Please enter your phone as +213XXXXXXXXX.',
+        err_phone: 'Enter a valid Algerian phone (e.g. 0549 468 120 or +213549468120).',
         err_pw: 'Password must be at least 8 characters.',
         sending: 'Creating\u2026', done_kicker: 'Welcome aboard',
         done_ready: 'Your clinic is ready. Sign in from the desktop app with:',
@@ -47,7 +47,7 @@
         err_match: 'Les mots de passe ne correspondent pas.', err_fields: 'Veuillez remplir tous les champs.',
         err_slug: 'Adresse du cabinet : lettres minuscules, chiffres et tirets uniquement.',
         err_email_fmt: 'Veuillez saisir une adresse e-mail valide.',
-        err_phone: 'Saisissez votre t\u00e9l\u00e9phone au format +213XXXXXXXXX.',
+        err_phone: 'Saisissez un t\u00e9l\u00e9phone alg\u00e9rien valide (ex. 0549 468 120 ou +213549468120).',
         err_pw: 'Le mot de passe doit contenir au moins 8 caract\u00e8res.',
         sending: 'Cr\u00e9ation\u2026', done_kicker: 'Bienvenue',
         done_ready: 'Votre cabinet est pr\u00eat. Connectez-vous depuis l\u2019application avec :',
@@ -71,7 +71,7 @@
         err_match: 'كلمتا المرور غير متطابقتين.', err_fields: 'يرجى ملء جميع الحقول.',
         err_slug: 'عنوان العيادة: حروف صغيرة وأرقام وشرطات فقط.',
         err_email_fmt: 'يرجى إدخال بريد إلكتروني صحيح.',
-        err_phone: 'أدخل هاتفك بصيغة +213XXXXXXXXX.',
+        err_phone: 'أدخل رقم هاتف جزائري صالح (مثل 0549 468 120 أو +213549468120).',
         err_pw: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.',
         sending: 'جارٍ الإنشاء…', done_kicker: 'مرحباً بكم',
         done_ready: 'عيادتك جاهزة. سجّل الدخول من تطبيق سطح المكتب باستخدام:',
@@ -84,6 +84,12 @@
 
     var $ = function (id) { return document.getElementById(id); };
     var flow = $('flow'), done = $('done');
+
+    // Booking link base derived from the real origin, not a hardcoded domain
+    // (so it stays correct across hosted domains, dev, and clean URLs).
+    var bookBase = window.location.origin + '/book/';
+    var bookBaseEl = $('bookBase');
+    if (bookBaseEl) bookBaseEl.textContent = bookBase;
 
     function t(k) { var l = SITE.lang; return (T[l] && T[l][k]) || T.en[k] || k; }
 
@@ -133,7 +139,8 @@
       var slug = subdomain.value.trim();
       var fullName = $('fullName').value.trim();
       var email = $('email').value.trim().toLowerCase();
-      var phone = $('phone').value.replace(/\s+/g, '');
+      var phoneRaw = $('phone').value;
+      var phone = normalizeDZPhone(phoneRaw);
       var password = $('password').value;
       var password2 = $('password2').value;
 
@@ -142,7 +149,7 @@
       }
       if (!/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(slug)) { subdomain.classList.add('bad'); return showError('err_slug'); }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('email').classList.add('bad'); return showError('err_email_fmt'); }
-      if (!/^\+213[0-9]{9}$/.test(phone)) { $('phone').classList.add('bad'); return showError('err_phone'); }
+      if (!phone) { $('phone').classList.add('bad'); return showError('err_phone'); }
       if (password.length < 8) { $('password').classList.add('bad'); return showError('err_pw'); }
       if (password !== password2) { $('password').classList.add('bad'); $('password2').classList.add('bad'); return showError('err_match'); }
 
@@ -164,7 +171,7 @@
         if (res.ok) {
           $('doneEmail').textContent = email;
           $('doneClinic').textContent = res.body.tenant.name;
-          $('doneSlug').textContent = 'sera.dz/book/' + res.body.tenant.subdomain;
+          $('doneSlug').textContent = bookBase + '?clinic=' + res.body.tenant.subdomain;
           $('doneTrial').textContent = new Date(res.body.trial_ends_at)
             .toLocaleDateString(SITE.lang === 'ar' ? 'ar-DZ' : (SITE.lang === 'fr' ? 'fr-FR' : 'en-GB'));
           flow.classList.add('hidden');

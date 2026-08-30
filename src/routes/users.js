@@ -7,6 +7,7 @@ const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
+const { primaryRoleKey } = require('../utils/roleUtil');
 
 const router = express.Router();
 
@@ -19,6 +20,43 @@ router.use(authorize('auth.role.admin'));
 
 function escapeIlike(str) {
   return String(str).replace(/([\\%_])/g, '\\$1');
+}
+
+// A user "has" a role when it is assigned via user_roles (the sole source).
+function hasRoleSql(roleKey) {
+  return sql`EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = users.id AND ur.role_id = (SELECT id FROM roles WHERE role_key = ${roleKey}))`;
+}
+
+// Aggregated effective role keys (all equal, from user_roles) as a TEXT[].
+function roleKeysArray() {
+  return sql`ARRAY(SELECT rl.role_key FROM user_roles ur JOIN roles rl ON rl.id = ur.role_id WHERE ur.user_id = users.id)`.as('role_keys');
+}
+
+// Aggregated role ids (all equal, from user_roles) as an INT[].
+function roleIdsArray() {
+  return sql`ARRAY(SELECT ur.role_id FROM user_roles ur WHERE ur.user_id = users.id)`.as('role_ids');
+}
+
+// Attach a single display role derived from the role set (no primary concept).
+// Authorization always uses `role_keys`; `role_key`/`role_id` are display-only.
+function decorateUser(row) {
+  return {
+    ...row,
+    role_key: primaryRoleKey(row.role_keys),
+    role_id: Array.isArray(row.role_ids) && row.role_ids.length ? row.role_ids[0] : null
+  };
+}
+
+// True when the tenant would have zero admins left after excluding userId.
+async function isLastAdmin(tenantId, userId) {
+  const r = await db
+    .selectFrom('users')
+    .select(sql`COUNT(*)`.as('count'))
+    .where('users.tenant_id', '=', tenantId)
+    .where(hasRoleSql('auth.role.admin'))
+    .where('users.id', '!=', userId)
+    .executeTakeFirst();
+  return Number(r.count) === 0;
 }
 
 // Search users by query
@@ -71,7 +109,6 @@ router.get('/', async (req, res, next) => {
 
     let query = db
       .selectFrom('users')
-      .innerJoin('roles', 'users.role_id', 'roles.id')
       .select('users.id')
       .where('users.tenant_id', '=', req.tenantId);
 
@@ -91,7 +128,7 @@ router.get('/', async (req, res, next) => {
     }
 
     if (role) {
-      query = query.where('roles.role_key', '=', role);
+      query = query.where(hasRoleSql(role));
     }
 
     const users = await query
@@ -126,7 +163,6 @@ router.get('/batch', async (req, res, next) => {
 
     const users = await db
       .selectFrom('users')
-      .innerJoin('roles', 'users.role_id', 'roles.id')
       .leftJoin('wilayas', 'users.wilaya_id', 'wilayas.id')
       .select([
         'users.id',
@@ -139,15 +175,15 @@ router.get('/batch', async (req, res, next) => {
         'users.last_login_at',
         'users.created_at',
         'users.updated_at',
-        'roles.id as role_id',
-        'roles.role_key',
-        'wilayas.name_key as wilaya_name_key'
+        'wilayas.name_key as wilaya_name_key',
+        roleKeysArray(),
+        roleIdsArray()
       ])
       .where('users.id', 'in', idArray)
       .where('users.tenant_id', '=', req.tenantId)
       .execute();
 
-    res.json(users);
+    res.json(users.map(decorateUser));
   } catch (error) {
     next(error);
   }
@@ -173,7 +209,6 @@ router.get('/:id', async (req, res, next) => {
   try {
     let user = await db
       .selectFrom('users')
-      .innerJoin('roles', 'users.role_id', 'roles.id')
       .leftJoin('wilayas', 'users.wilaya_id', 'wilayas.id')
       .select([
         'users.id',
@@ -186,9 +221,9 @@ router.get('/:id', async (req, res, next) => {
         'users.last_login_at',
         'users.created_at',
         'users.updated_at',
-        'roles.id as role_id',
-        'roles.role_key',
-        'wilayas.name_key as wilaya_name_key'
+        'wilayas.name_key as wilaya_name_key',
+        roleKeysArray(),
+        roleIdsArray()
       ])
       .where('users.id', '=', req.params.id)
       .where('users.tenant_id', '=', req.tenantId)
@@ -207,9 +242,10 @@ router.get('/:id', async (req, res, next) => {
       if (!user) {
         return res.status(404).json({ error: 'user.error.not_found' });
       }
+      return res.json(user);
     }
 
-    res.json(user);
+    res.json(decorateUser(user));
   } catch (err) {
     next(err);
   }
@@ -221,7 +257,8 @@ router.post('/', createUserLimiter,
   body('password').isLength({ min: 8 }),
   body('full_name').trim().notEmpty(),
   body('phone').matches(/^\+213\d{9}$/),
-  body('role_id').isInt({ min: 1 }),
+  body('role_ids').isArray({ min: 1 }),
+  body('role_ids.*').isInt({ min: 1 }),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -230,7 +267,7 @@ router.post('/', createUserLimiter,
 
     try {
       const {
-        email, password, full_name, phone, role_id,
+        email, password, full_name, phone, role_ids,
         wilaya_id, address
       } = req.body;
 
@@ -258,49 +295,67 @@ router.post('/', createUserLimiter,
         return res.status(409).json({ error: 'user.error.phone_exists' });
       }
 
-      // Verify role exists
-      const role = await db
+      // Verify all roles exist
+      const roles = await db
         .selectFrom('roles')
-        .select('id')
-        .where('id', '=', role_id)
-        .executeTakeFirst();
+        .select(['id', 'role_key'])
+        .where('id', 'in', role_ids)
+        .execute();
 
-      if (!role) {
+      if (roles.length !== role_ids.length) {
         return res.status(400).json({ error: 'user.error.invalid_role' });
       }
 
       // Hash password
       const password_hash = await bcrypt.hash(password, 12);
 
-      // Create user
-      const newUser = await db
+      // Create user — all roles are equal and live in user_roles
+      const [newUser] = await db
         .insertInto('users')
         .values({
           email,
           password_hash,
           full_name,
           phone,
-          role_id,
           wilaya_id: wilaya_id || null,
           address: address || null,
           tenant_id: req.tenantId // Explicitly set tenant_id
         })
-        .returningAll()
+        .returning('id')
+        .execute();
+
+      await db
+        .insertInto('user_roles')
+        .values(role_ids.map((rid) => ({ user_id: newUser.id, role_id: rid })))
+        .execute();
+
+      const created = await db
+        .selectFrom('users')
+        .leftJoin('wilayas', 'users.wilaya_id', 'wilayas.id')
+        .select([
+          'users.id', 'users.email', 'users.full_name', 'users.phone',
+          'users.wilaya_id', 'users.address', 'users.status_key',
+          'users.last_login_at', 'users.created_at', 'users.updated_at',
+          'wilayas.name_key as wilaya_name_key',
+          roleKeysArray(),
+          roleIdsArray()
+        ])
+        .where('users.id', '=', newUser.id)
         .executeTakeFirst();
 
       // Audit log: User Created
-      delete newUser.password_hash;
+      delete created.password_hash;
       if (req.audit) {
         await req.audit.log({
           action: 'CREATE',
           entityType: 'users',
-          entityId: newUser.id,
+          entityId: created.id,
           tenantId: req.tenantId,
-          newValues: newUser
+          newValues: created
         }, db);
       }
 
-      res.status(201).json(newUser);
+      res.status(201).json(decorateUser(created));
     } catch (err) {
       next(err);
     }
@@ -312,7 +367,8 @@ router.patch('/:id',
   body('email').optional().isEmail().normalizeEmail(),
   body('full_name').optional().trim().notEmpty(),
   body('phone').optional().matches(/^\+213\d{9}$/),
-  body('role_id').optional().isInt({ min: 1 }),
+  body('role_ids').optional().isArray({ min: 1 }),
+  body('role_ids.*').optional().isInt({ min: 1 }),
   body('status_key').optional().isIn(['user.status.active', 'user.status.inactive', 'user.status.deleted']),
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -324,7 +380,7 @@ router.patch('/:id',
     try {
       const userId = req.params.id;
       const {
-        email, full_name, phone, role_id,
+        email, full_name, phone, role_ids,
         wilaya_id, address, status_key
       } = req.body;
 
@@ -372,16 +428,36 @@ router.patch('/:id',
         }
       }
 
-      // Verify role exists if provided
-      if (role_id) {
-        const role = await db
-          .selectFrom('roles')
-          .select('id')
-          .where('id', '=', role_id)
-          .executeTakeFirst();
+      // Resolve admin role id for last-admin guarding
+      const adminRole = await db
+        .selectFrom('roles')
+        .select('id')
+        .where('role_key', '=', 'auth.role.admin')
+        .executeTakeFirst();
+      const adminRoleId = adminRole?.id;
 
-        if (!role) {
+      // Verify all roles exist if provided
+      if (role_ids) {
+        const roles = await db
+          .selectFrom('roles')
+          .select(['id', 'role_key'])
+          .where('id', 'in', role_ids)
+          .execute();
+        if (roles.length !== role_ids.length) {
           return res.status(400).json({ error: 'user.error.invalid_role' });
+        }
+
+        // Prevent removing the last admin of the tenant
+        const isNowAdmin = role_ids.includes(adminRoleId);
+        const currentAdmin = await db
+          .selectFrom('users')
+          .select(sql`COUNT(*)`.as('c'))
+          .where('users.id', '=', userId)
+          .where(hasRoleSql('auth.role.admin'))
+          .executeTakeFirst();
+        const currentlyAdmin = Number(currentAdmin.c) > 0;
+        if (currentlyAdmin && !isNowAdmin && (await isLastAdmin(req.tenantId, userId))) {
+          return res.status(400).json({ error: 'user.error.last_admin' });
         }
       }
 
@@ -390,7 +466,6 @@ router.patch('/:id',
       if (email !== undefined) updateData.email = email;
       if (full_name !== undefined) updateData.full_name = full_name;
       if (phone !== undefined) updateData.phone = phone;
-      if (role_id !== undefined) updateData.role_id = role_id;
       if (wilaya_id !== undefined) updateData.wilaya_id = wilaya_id;
       if (address !== undefined) updateData.address = address;
       if (status_key !== undefined) updateData.status_key = status_key;
@@ -404,9 +479,36 @@ router.patch('/:id',
         .returningAll()
         .executeTakeFirst();
 
+      // Replace the user_roles assignment when roles were provided
+      if (role_ids !== undefined) {
+        await db
+          .deleteFrom('user_roles')
+          .where('user_id', '=', userId)
+          .execute();
+        await db
+          .insertInto('user_roles')
+          .values(role_ids.map((rid) => ({ user_id: userId, role_id: rid })))
+          .execute();
+      }
+
+      const updated = await db
+        .selectFrom('users')
+        .leftJoin('wilayas', 'users.wilaya_id', 'wilayas.id')
+        .select([
+          'users.id', 'users.email', 'users.full_name', 'users.phone',
+          'users.wilaya_id', 'users.address', 'users.status_key',
+          'users.last_login_at', 'users.created_at', 'users.updated_at',
+          'wilayas.name_key as wilaya_name_key',
+          roleKeysArray(),
+          roleIdsArray()
+        ])
+        .where('users.id', '=', userId)
+        .where('users.tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
       // Audit log: User Updated
       delete existingUser.password_hash;
-      delete updatedUser.password_hash;
+      delete updated.password_hash;
       if (req.audit) {
         await req.audit.log({
           action: 'UPDATE',
@@ -414,11 +516,11 @@ router.patch('/:id',
           entityId: userId,
           tenantId: req.tenantId,
           oldValues: existingUser,
-          newValues: updatedUser
+          newValues: updated
         }, db);
       }
 
-      res.json(updatedUser);
+      res.json(decorateUser(updated));
     } catch (err) {
       next(err);
     }
@@ -498,6 +600,17 @@ router.patch('/:id/status',
         return res.status(400).json({ error: 'user.error.cannot_change_own_status' });
       }
 
+      // Prevent removing the last admin of the tenant
+      const statusAdmin = await db
+        .selectFrom('users')
+        .select(sql`COUNT(*)`.as('c'))
+        .where('users.id', '=', userId)
+        .where(hasRoleSql('auth.role.admin'))
+        .executeTakeFirst();
+      if (Number(statusAdmin.c) > 0 && status_key !== 'user.status.active' && (await isLastAdmin(req.tenantId, userId))) {
+        return res.status(400).json({ error: 'user.error.last_admin' });
+      }
+
     let user = await db
       .selectFrom('users')
         .select(['id', 'status_key'])
@@ -546,6 +659,17 @@ router.delete('/:id', async (req, res, next) => {
     // Prevent admin from deleting themselves
     if (userId === req.user.id) {
       return res.status(400).json({ error: 'user.error.cannot_delete_self' });
+    }
+
+    // Prevent deleting the last admin of the tenant
+    const delAdmin = await db
+      .selectFrom('users')
+      .select(sql`COUNT(*)`.as('c'))
+      .where('users.id', '=', userId)
+      .where(hasRoleSql('auth.role.admin'))
+      .executeTakeFirst();
+    if (Number(delAdmin.c) > 0 && (await isLastAdmin(req.tenantId, userId))) {
+      return res.status(400).json({ error: 'user.error.last_admin' });
     }
 
     const user = await db

@@ -54,7 +54,7 @@ Ctrl+C stops PG gracefully. Data persists in `.prod-tools/pgsql/data/` across ru
 | Flag | Description |
 |------|-------------|
 | `--systemd` / `-Service` | Install and enable the `sera` service (systemd on Linux, Scheduled Task on Windows) |
-| `--port N` / `-Port N` | Override listening port (default: 4000) |
+| `--port N` / `-Port N` | Override listening port (default: 80; 4000 behind nginx/Caddy or under `--systemd`) |
 | `--seed` / `-Seed` | Load `seed.sql` demo data after schema |
 | `--backup-cron [rclone-remote]` / `-BackupCron` | Install backup task: nightly `pg_dump -Fc` + 14-day dump retention + optional rclone offsite copy + 180-day `audit_logs` trim |
 | `-Domain <name>` | (Windows) Install Caddy reverse proxy with auto-TLS for the given domain |

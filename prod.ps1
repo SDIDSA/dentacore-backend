@@ -34,6 +34,32 @@ param(
     [string]$CaddyVersion = "2.11.4"
 )
 
+$ProgressPreference = 'SilentlyContinue'
+
+function Get-RemoteFile {
+    param([string]$Uri, [string]$OutFile)
+    if (Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue) {
+        & curl.exe -L -f -o $OutFile $Uri
+        if ($LASTEXITCODE -ne 0) { throw "Download failed (curl exit $LASTEXITCODE): $Uri" }
+    } else {
+        Write-Host "  (curl.exe unavailable, using Invoke-WebRequest)" -ForegroundColor DarkGray
+        Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing
+    }
+}
+
+function Get-BomStrippedSql {
+    param([string]$Path)
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+        $bytes = $bytes[3..($bytes.Length - 1)]
+        $tmp = Join-Path $env:TEMP ("sera_" + [System.IO.Path]::GetFileName($Path))
+        [System.IO.File]::WriteAllBytes($tmp, $bytes)
+        Write-Host "  (stripped UTF-8 BOM from $($Path | Split-Path -Leaf))" -ForegroundColor DarkGray
+        return $tmp
+    }
+    return $Path
+}
+
 $ErrorActionPreference = "Continue"
 $ROOT = $PSScriptRoot
 $ENV_FILE = Join-Path $ROOT ".env"
@@ -124,13 +150,13 @@ function Ensure-Node {
     $zip = Join-Path $CACHE_DIR "node-v$NodeVersion-win-x64.zip"
     if (-not (Test-Path $zip)) {
         $url = "https://nodejs.org/dist/v$NodeVersion/node-v$NodeVersion-win-x64.zip"
-        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+        Get-RemoteFile -Uri $url -OutFile $zip
         if ((Get-Item $zip).Length -lt 1MB) {
             Remove-Item $zip -Force
             Write-Host "ERROR: Node.js download failed" -ForegroundColor Red; exit 1
         }
     }
-    Expand-Archive -Path $zip -DestinationPath $TOOLS_DIR -Force
+    tar -xf "$zip" -C "$TOOLS_DIR"
     if (-not (Test-Path "$NODE_DIR\node.exe")) {
         Write-Host "ERROR: Node.js extraction failed" -ForegroundColor Red; exit 1
     }
@@ -146,30 +172,23 @@ function Ensure-Pgsql {
     $zip = Join-Path $CACHE_DIR "pgsql-$PgVersion.zip"
     if (-not (Test-Path $zip)) {
         $url = "https://get.enterprisedb.com/postgresql/postgresql-$PgVersion-windows-x64-binaries.zip"
-        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+        Get-RemoteFile -Uri $url -OutFile $zip
         if ((Get-Item $zip).Length -lt 1MB) {
             Remove-Item $zip -Force
             Write-Host "ERROR: PostgreSQL download failed" -ForegroundColor Red; exit 1
         }
     }
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    Write-Host "  Extracting bin/ and lib/ only..." -ForegroundColor Cyan
+    Write-Host "  Extracting bin/lib/share..." -ForegroundColor Cyan
     New-Item -ItemType Directory -Force -Path $PG_DIR | Out-Null
-    $z = [System.IO.Compression.ZipFile]::OpenRead($zip)
-    $extracted = 0
-    foreach ($entry in $z.Entries) {
-        $full = $entry.FullName
-        if ($full -notmatch "^pgsql/(bin|lib|share)/") { continue }
-        $dest = Join-Path $PG_DIR ($full -replace "^pgsql/", "")
-        $destDir = Split-Path $dest -Parent
-        if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
-        if ($entry.Length -gt 0) {
-            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $dest, $true) | Out-Null
-        }
-        $extracted++
+    $pgTmp = Join-Path $TOOLS_DIR "pgsql-extract-tmp"
+    if (Test-Path $pgTmp) { Remove-Item -Recurse -Force $pgTmp }
+    New-Item -ItemType Directory -Force -Path $pgTmp | Out-Null
+    tar -xf "$zip" -C "$pgTmp" "pgsql/bin" "pgsql/lib" "pgsql/share"
+    foreach ($sub in @("bin", "lib", "share")) {
+        $src = Join-Path $pgTmp "pgsql\$sub"
+        if (Test-Path $src) { Move-Item -Force $src (Join-Path $PG_DIR $sub) }
     }
-    $z.Dispose()
-    Write-Host "  Extracted $extracted files" -ForegroundColor Green
+    Remove-Item -Recurse -Force $pgTmp
     if (-not (Test-Path "$PG_DIR\bin\pg_ctl.exe")) {
         Write-Host "ERROR: PostgreSQL extraction failed" -ForegroundColor Red; exit 1
     }
@@ -185,14 +204,14 @@ function Ensure-Caddy {
     $zip = Join-Path $CACHE_DIR "caddy-$CaddyVersion-windows-amd64.zip"
     if (-not (Test-Path $zip)) {
         $url = "https://github.com/caddyserver/caddy/releases/download/v$CaddyVersion/caddy_${CaddyVersion}_windows_amd64.zip"
-        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+        Get-RemoteFile -Uri $url -OutFile $zip
         if ((Get-Item $zip).Length -lt 1MB) {
             Remove-Item $zip -Force
             Write-Host "ERROR: Caddy download failed" -ForegroundColor Red; exit 1
         }
     }
     New-Item -ItemType Directory -Force -Path (Split-Path $CADDY_EXE -Parent) | Out-Null
-    Expand-Archive -Path $zip -DestinationPath (Split-Path $CADDY_EXE -Parent) -Force
+    tar -xf "$zip" -C (Split-Path $CADDY_EXE -Parent)
     if (-not (Test-Path $CADDY_EXE)) {
         Write-Host "ERROR: Caddy extraction failed" -ForegroundColor Red; exit 1
     }
@@ -207,6 +226,11 @@ Set-Location $ROOT
 Write-Sub "App root: $ROOT"
 
 # ── ensure binaries ────────────────────────────────────────────
+# Exclude the self-contained tools dir from Defender real-time scanning: each
+# extracted file would otherwise be scanned, which dominates first-run extraction
+# time for Node/PG/Caddy (the dir lives under the user profile, so it is scanned).
+$mpExcl = (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath
+if ($TOOLS_DIR -notin $mpExcl) { Add-MpPreference -ExclusionPath $TOOLS_DIR -ErrorAction SilentlyContinue }
 $nodeDir = Ensure-Node
 $pgDir = Ensure-Pgsql
 $pgBin = Join-Path $pgDir "bin"
@@ -288,7 +312,20 @@ if ($LASTEXITCODE -ne 0) {
         if ($LASTEXITCODE -eq 0) { break }
     }
     & "$pgBin\pg_isready.exe" -h 127.0.0.1 -p 5434 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: pg_ctl start failed" -ForegroundColor Red; exit 1 }
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: pg_ctl start failed" -ForegroundColor Red
+        $portCheck = (netstat -ano | Select-String ":5434")
+        if ($portCheck) {
+            Write-Host "WARNING: port 5434 appears to be in use (another PostgreSQL or process is holding it):" -ForegroundColor Yellow
+            $portCheck | ForEach-Object { Write-Host "  $_" }
+            Write-Host "  Free port 5434 (stop the other instance) before running prod.ps1." -ForegroundColor Yellow
+        }
+        if (Test-Path $PG_LOG) {
+            Write-Host "--- pg_ctl.log (tail) ---" -ForegroundColor Yellow
+            Get-Content $PG_LOG -Tail 30 | ForEach-Object { Write-Host $_ }
+        }
+        exit 1
+    }
     $pgStarted = $true
     Write-Sub "PostgreSQL running on 127.0.0.1:5434"
 } else {
@@ -332,17 +369,43 @@ if (-not $dbExists) {
 
 # ── apply base schema (idempotent) ──────────────────────────────
 Write-Step "Applying schema (db.sql)"
-& "$pgBin\psql.exe" -h 127.0.0.1 -p 5434 -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $ROOT "db.sql") 2>$null
+$schemaErr = Join-Path $env:TEMP "sera_schema_err.txt"
+$dbSql = Get-BomStrippedSql (Join-Path $ROOT "db.sql")
+& "$pgBin\psql.exe" -h 127.0.0.1 -p 5434 -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -f $dbSql 2> $schemaErr
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "WARNING: schema apply returned non-zero (tables may already exist)" -ForegroundColor Yellow
+    Write-Host "WARNING: schema apply returned non-zero" -ForegroundColor Yellow
+    Write-Host "--- db.sql psql output (tail) ---" -ForegroundColor Yellow
+    Get-Content $schemaErr -Tail 40 | ForEach-Object { Write-Host $_ }
 } else {
     Write-Sub "schema OK"
+}
+
+# ── apply production system seed (idempotent: roles, plans, categories) ──
+# Run as its OWN step so it always executes even if the db.sql apply above
+# aborts on a re-apply (db.sql uses ON_ERROR_STOP=1 and stops at the first
+# already-existing object). Safe to run on every start.
+Write-Step "Applying production seed (seed-prod.sql)"
+$seedErr = Join-Path $env:TEMP "sera_seed_err.txt"
+$seedProdSql = Get-BomStrippedSql (Join-Path $ROOT "seed-prod.sql")
+& "$pgBin\psql.exe" -h 127.0.0.1 -p 5434 -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -f $seedProdSql 2> $seedErr
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "WARNING: seed-prod.sql apply returned non-zero" -ForegroundColor Yellow
+    Write-Host "--- seed-prod.sql psql output (tail) ---" -ForegroundColor Yellow
+    Get-Content $seedErr -Tail 40 | ForEach-Object { Write-Host $_ }
+} else {
+    Write-Sub "seed OK"
 }
 
 # ── optional: seed data (-Seed) ──────────────────────────────────
 if ($Seed) {
     Write-Host "   WARNING: -Seed loads DEMO data with published passwords" -ForegroundColor Yellow
-    & "$pgBin\psql.exe" -h 127.0.0.1 -p 5434 -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $ROOT "seed.sql") 2>$null
+    $demoErr = Join-Path $env:TEMP "sera_demo_err.txt"
+    $demoSql = Get-BomStrippedSql (Join-Path $ROOT "seed.sql")
+    & "$pgBin\psql.exe" -h 127.0.0.1 -p 5434 -U $DbUser -d $DbName -v ON_ERROR_STOP=1 -f $demoSql 2> $demoErr
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "--- seed.sql psql output (tail) ---" -ForegroundColor Yellow
+        Get-Content $demoErr -Tail 40 | ForEach-Object { Write-Host $_ }
+    }
 }
 
 # ── optional: API service as Scheduled Task (-Service) ────────────

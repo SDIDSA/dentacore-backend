@@ -68,7 +68,7 @@ try {
 
     # ── whitelisted payload ─────────────────────────────────────
     # Root files
-    foreach ($f in 'server.js', 'package.json', 'db.sql', 'seed.sql', 'prod.ps1', 'prod.sh') {
+    foreach ($f in 'server.js', 'package.json', 'db.sql', 'seed-prod.sql', 'seed.sql', 'prod.ps1', 'prod.sh') {
         Copy-ItemChecked (Join-Path $ROOT $f) $stage
     }
     if (Test-Path (Join-Path $ROOT 'package-lock.json')) {

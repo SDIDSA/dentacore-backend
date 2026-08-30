@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const { sql } = require('kysely');
 const db = require('../config/database');
 const log = require('../utils/logger');
+const { primaryRoleKey } = require('../utils/roleUtil');
 
 function generateJti() {
   return crypto.randomUUID();
@@ -80,7 +81,8 @@ const authenticate = async (req, res, next) => {
             jti: accessJti,
             id: user.id,
             email: user.email,
-            role_key: user.role_key,
+            role_key: primaryRoleKey(user.role_keys),
+            role_keys: user.role_keys,
             tenant_id: user.tenant_id
           },
           process.env.JWT_SECRET,
@@ -107,7 +109,8 @@ const authenticate = async (req, res, next) => {
           jti: accessJti,
           id: user.id,
           email: user.email,
-          role_key: user.role_key,
+          role_key: primaryRoleKey(user.role_keys),
+          role_keys: user.role_keys,
           tenant_id: user.tenant_id
         };
         req.tenantId = user.tenant_id;
@@ -126,7 +129,8 @@ const authenticate = async (req, res, next) => {
 
 const authorize = (...roles) => {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role_key)) {
+    const userRoles = req.user?.role_keys;
+    if (!userRoles || !roles.some((r) => userRoles.includes(r))) {
       return res.status(403).json({ error: 'auth.error.forbidden' });
     }
     next();

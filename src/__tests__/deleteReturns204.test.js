@@ -141,7 +141,7 @@ describe('DELETE endpoints return 204 with an empty body', () => {
         password: 'Delete@204pass',
         full_name: 'Delete204 Regression User',
         phone: `+213${String(Date.now()).slice(-9)}`,
-        role_id: receptionistRoleId,
+        role_ids: [receptionistRoleId],
       });
     expect(create.statusCode).toBe(201);
 
