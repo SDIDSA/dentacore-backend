@@ -1,219 +1,19 @@
+﻿-- ============================================================================
+-- Sera DEMO seed (sample clinic data)
 -- ============================================================================
--- SEED DATA FOR MULTI-TENANT ALGERIAN DENTAL MANAGEMENT SYSTEM
--- ============================================================================
-
--- ============================================================================
--- 1. SYSTEM ROLES (Global)
--- ============================================================================
-
-INSERT INTO roles (role_key, description) VALUES
-('auth.role.admin', 'System Administrator with full access'),
-('auth.role.dentist', 'Licensed dentist with clinical access'),
-('auth.role.receptionist', 'Front desk staff for appointments and billing');
-
--- ============================================================================
--- 2. ALGERIAN WILAYAS (58 Provinces) - Global
--- ============================================================================
-
-INSERT INTO wilayas (id, code, name_key) VALUES
-(1, '01', 'geo.wilaya.01'),    -- Adrar
-(2, '02', 'geo.wilaya.02'),    -- Chlef
-(3, '03', 'geo.wilaya.03'),    -- Laghouat
-(4, '04', 'geo.wilaya.04'),    -- Oum El Bouaghi
-(5, '05', 'geo.wilaya.05'),    -- Batna
-(6, '06', 'geo.wilaya.06'),    -- Béjaïa
-(7, '07', 'geo.wilaya.07'),    -- Biskra
-(8, '08', 'geo.wilaya.08'),    -- Béchar
-(9, '09', 'geo.wilaya.09'),    -- Blida
-(10, '10', 'geo.wilaya.10'),   -- Bouira
-(11, '11', 'geo.wilaya.11'),   -- Tamanrasset
-(12, '12', 'geo.wilaya.12'),   -- Tébessa
-(13, '13', 'geo.wilaya.13'),   -- Tlemcen
-(14, '14', 'geo.wilaya.14'),   -- Tiaret
-(15, '15', 'geo.wilaya.15'),   -- Tizi Ouzou
-(16, '16', 'geo.wilaya.16'),   -- Algiers
-(17, '17', 'geo.wilaya.17'),   -- Djelfa
-(18, '18', 'geo.wilaya.18'),   -- Jijel
-(19, '19', 'geo.wilaya.19'),   -- Sétif
-(20, '20', 'geo.wilaya.20'),   -- Saïda
-(21, '21', 'geo.wilaya.21'),   -- Skikda
-(22, '22', 'geo.wilaya.22'),   -- Sidi Bel Abbès
-(23, '23', 'geo.wilaya.23'),   -- Annaba
-(24, '24', 'geo.wilaya.24'),   -- Guelma
-(25, '25', 'geo.wilaya.25'),   -- Constantine
-(26, '26', 'geo.wilaya.26'),   -- Médéa
-(27, '27', 'geo.wilaya.27'),   -- Mostaganem
-(28, '28', 'geo.wilaya.28'),   -- M'Sila
-(29, '29', 'geo.wilaya.29'),   -- Mascara
-(30, '30', 'geo.wilaya.30'),   -- Ouargla
-(31, '31', 'geo.wilaya.31'),   -- Oran
-(32, '32', 'geo.wilaya.32'),   -- El Bayadh
-(33, '33', 'geo.wilaya.33'),   -- Illizi
-(34, '34', 'geo.wilaya.34'),   -- Bordj Bou Arréridj
-(35, '35', 'geo.wilaya.35'),   -- Boumerdès
-(36, '36', 'geo.wilaya.36'),   -- El Tarf
-(37, '37', 'geo.wilaya.37'),   -- Tindouf
-(38, '38', 'geo.wilaya.38'),   -- Tissemsilt
-(39, '39', 'geo.wilaya.39'),   -- El Oued
-(40, '40', 'geo.wilaya.40'),   -- Khenchela
-(41, '41', 'geo.wilaya.41'),   -- Souk Ahras
-(42, '42', 'geo.wilaya.42'),   -- Tipaza
-(43, '43', 'geo.wilaya.43'),   -- Mila
-(44, '44', 'geo.wilaya.44'),   -- Aïn Defla
-(45, '45', 'geo.wilaya.45'),   -- Naâma
-(46, '46', 'geo.wilaya.46'),   -- Aïn Témouchent
-(47, '47', 'geo.wilaya.47'),   -- Ghardaïa
-(48, '48', 'geo.wilaya.48'),   -- Relizane
-(49, '49', 'geo.wilaya.49'),   -- Timimoun
-(50, '50', 'geo.wilaya.50'),   -- Bordj Badji Mokhtar
-(51, '51', 'geo.wilaya.51'),   -- Ouled Djellal
-(52, '52', 'geo.wilaya.52'),   -- Béni Abbès
-(53, '53', 'geo.wilaya.53'),   -- In Salah
-(54, '54', 'geo.wilaya.54'),   -- In Guezzam
-(55, '55', 'geo.wilaya.55'),   -- Touggourt
-(56, '56', 'geo.wilaya.56'),   -- Djanet
-(57, '57', 'geo.wilaya.57'),   -- El M'Ghair
-(58, '58', 'geo.wilaya.58');   -- El Meniaa
-
--- ============================================================================
--- 3. PAYMENT METHODS (Global - Algeria)
+-- Demo data for three sample clinics (El-Qods, Sourire, Teyar): tenants, users,
+-- patients, appointments, billing, inventory, x-rays, and more. This file contains
+-- NO system/reference data (roles, plans, wilayas, payment methods, global
+-- treatment/inventory categories) - all of that lives in seed-prod.sql and MUST
+-- be applied BEFORE this file. prod.ps1 / prod.sh apply seed-prod.sql on every
+-- start, then load this file via -Seed / --seed.
+--
+-- Dev/CI only. NOT applied to production tenants.
+--
+-- Usage:
+--   psql -h <host> -p <port> -U <user> -d <db> -f seed.sql
 -- ============================================================================
 
-INSERT INTO payment_methods (method_key, description, is_active) VALUES
-('pay.method.cash', 'Cash payment in Algerian Dinar', TRUE),
-('pay.method.cib', 'CIB (Carte Interbancaire) - Algerian debit/credit card', TRUE),
-('pay.method.baridimob', 'BaridiMob - Mobile payment via Algérie Poste', TRUE),
-('pay.method.edahabia', 'Edahabia - Postal card payment', TRUE),
-('pay.method.bank_transfer', 'Bank transfer to clinic account', TRUE),
-('pay.method.check', 'Bank check payment', TRUE),
-('pay.method.satim', 'SATIM - Electronic payment terminal', TRUE);
-
--- ============================================================================
--- 4. GLOBAL TREATMENT CATEGORIES (Available to All Tenants)
--- ============================================================================
-
--- Root Categories (Global - tenant_id = NULL)
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active) VALUES
-(NULL, 'cat.preventive', NULL, 'Preventive dental care', TRUE),
-(NULL, 'cat.restorative', NULL, 'Restorative procedures', TRUE),
-(NULL, 'cat.surgery', NULL, 'Oral and maxillofacial surgery', TRUE),
-(NULL, 'cat.orthodontics', NULL, 'Orthodontic treatments', TRUE),
-(NULL, 'cat.endodontics', NULL, 'Root canal treatments', TRUE),
-(NULL, 'cat.periodontics', NULL, 'Gum disease treatments', TRUE),
-(NULL, 'cat.prosthodontics', NULL, 'Dental prosthetics', TRUE),
-(NULL, 'cat.cosmetic', NULL, 'Cosmetic dentistry', TRUE);
-
--- Sub-categories (Global)
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.preventive.cleaning', id, 'Professional teeth cleaning', TRUE
-FROM treatment_categories WHERE category_key = 'cat.preventive' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.preventive.fluoride', id, 'Fluoride treatment', TRUE
-FROM treatment_categories WHERE category_key = 'cat.preventive' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.preventive.sealants', id, 'Dental sealants', TRUE
-FROM treatment_categories WHERE category_key = 'cat.preventive' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.restorative.filling', id, 'Dental fillings (composite/amalgam)', TRUE
-FROM treatment_categories WHERE category_key = 'cat.restorative' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.restorative.crown', id, 'Dental crowns', TRUE
-FROM treatment_categories WHERE category_key = 'cat.restorative' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.restorative.bridge', id, 'Dental bridges', TRUE
-FROM treatment_categories WHERE category_key = 'cat.restorative' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.surgery.extraction', id, 'Tooth extraction (simple/surgical)', TRUE
-FROM treatment_categories WHERE category_key = 'cat.surgery' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.surgery.implant', id, 'Dental implant placement', TRUE
-FROM treatment_categories WHERE category_key = 'cat.surgery' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.surgery.wisdom_tooth', id, 'Wisdom tooth removal', TRUE
-FROM treatment_categories WHERE category_key = 'cat.surgery' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.endodontics.root_canal', id, 'Root canal therapy', TRUE
-FROM treatment_categories WHERE category_key = 'cat.endodontics' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.orthodontics.braces', id, 'Traditional metal braces', TRUE
-FROM treatment_categories WHERE category_key = 'cat.orthodontics' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.orthodontics.clear_aligners', id, 'Clear aligners (Invisalign-type)', TRUE
-FROM treatment_categories WHERE category_key = 'cat.orthodontics' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.cosmetic.whitening', id, 'Teeth whitening', TRUE
-FROM treatment_categories WHERE category_key = 'cat.cosmetic' AND tenant_id IS NULL;
-
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.cosmetic.veneers', id, 'Dental veneers', TRUE
-FROM treatment_categories WHERE category_key = 'cat.cosmetic' AND tenant_id IS NULL;
-
--- ============================================================================
--- 4.1. GLOBAL INVENTORY CATEGORIES (Available to All Tenants)
--- ============================================================================
-
--- Root Inventory Categories (Global - tenant_id = NULL)
-INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active) VALUES
-(NULL, 'inv.consumables', NULL, 'Consumable dental supplies', TRUE),
-(NULL, 'inv.materials', NULL, 'Dental materials and compounds', TRUE),
-(NULL, 'inv.pharmaceuticals', NULL, 'Medications and pharmaceuticals', TRUE),
-(NULL, 'inv.instruments', NULL, 'Dental instruments and tools', TRUE);
-
--- Sub-categories for Consumables
-INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'inv.consumables.gloves', id, 'Examination and surgical gloves', TRUE
-FROM inventory_categories WHERE category_key = 'inv.consumables' AND tenant_id IS NULL;
-
-INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'inv.consumables.masks', id, 'Surgical and protective masks', TRUE
-FROM inventory_categories WHERE category_key = 'inv.consumables' AND tenant_id IS NULL;
-
-INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'inv.consumables.cotton', id, 'Cotton products and gauze', TRUE
-FROM inventory_categories WHERE category_key = 'inv.consumables' AND tenant_id IS NULL;
-
--- Sub-categories for Materials
-INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'inv.materials.composite', id, 'Composite resins and fillings', TRUE
-FROM inventory_categories WHERE category_key = 'inv.materials' AND tenant_id IS NULL;
-
-INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'inv.materials.impression', id, 'Impression materials', TRUE
-FROM inventory_categories WHERE category_key = 'inv.materials' AND tenant_id IS NULL;
-
-INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'inv.materials.cement', id, 'Dental cements and bonding agents', TRUE
-FROM inventory_categories WHERE category_key = 'inv.materials' AND tenant_id IS NULL;
-
--- Sub-categories for Pharmaceuticals
-INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'inv.pharmaceuticals.anesthetics', id, 'Local anesthetics', TRUE
-FROM inventory_categories WHERE category_key = 'inv.pharmaceuticals' AND tenant_id IS NULL;
-
--- Sub-categories for Instruments
-INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'inv.instruments.hand', id, 'Hand instruments and tools', TRUE
-FROM inventory_categories WHERE category_key = 'inv.instruments' AND tenant_id IS NULL;
-
-INSERT INTO inventory_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'inv.instruments.rotary', id, 'Rotary instruments and burs', TRUE
-FROM inventory_categories WHERE category_key = 'inv.instruments' AND tenant_id IS NULL;
-
--- ============================================================================
--- 5. SAMPLE TENANTS (SaaS Onboarding Simulation)
--- ============================================================================
 
 -- Tenant 1: Cabinet Dentaire El-Qods (Constantine)
 DO $$
@@ -298,7 +98,7 @@ BEGIN
         'Dr. Amina Zerrouki',
         '+213551234567',
         25, -- Constantine
-        'Cité El-Bir, Constantine',
+        'CitÃ© El-Bir, Constantine',
         'user.status.active'
     )
     RETURNING id INTO v_dentist_user_id;
@@ -334,7 +134,7 @@ BEGIN
         '+213770123456',
         'ahmed.boudiaf@email.dz',
         25, -- Constantine
-        'Cité Zouaghi, Constantine',
+        'CitÃ© Zouaghi, Constantine',
         'Fatima Boudiaf',
         '+213771234567',
         'Hypertension under control with medication',

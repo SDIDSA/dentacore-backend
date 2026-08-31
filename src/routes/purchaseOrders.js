@@ -531,12 +531,12 @@ router.patch('/:id/receive',
             throw err;
           }
 
-          const newReceived = existing.quantity_received + incoming.quantity_received;
+          const newReceived = Number(existing.quantity_received) + Number(incoming.quantity_received);
           await trx
             .updateTable('purchase_order_items')
             .set({
               quantity_received: newReceived,
-              total_cost_dzd: newReceived * existing.unit_cost_dzd
+              total_cost_dzd: newReceived * Number(existing.unit_cost_dzd)
             })
             .where('id', '=', existing.id)
             .where('tenant_id', '=', req.tenantId)

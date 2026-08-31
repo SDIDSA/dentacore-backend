@@ -470,14 +470,17 @@ router.patch('/:id',
       if (address !== undefined) updateData.address = address;
       if (status_key !== undefined) updateData.status_key = status_key;
 
-      // Update user
-      const updatedUser = await db
-        .updateTable('users')
-        .set(updateData)
-        .where('id', '=', userId)
-        .where('tenant_id', '=', req.tenantId)
-        .returningAll()
-        .executeTakeFirst();
+      // Update user (skip the scalar UPDATE when only roles changed; an
+      // empty SET would emit broken SQL and 500)
+      if (Object.keys(updateData).length > 0) {
+        await db
+          .updateTable('users')
+          .set(updateData)
+          .where('id', '=', userId)
+          .where('tenant_id', '=', req.tenantId)
+          .returningAll()
+          .executeTakeFirst();
+      }
 
       // Replace the user_roles assignment when roles were provided
       if (role_ids !== undefined) {

@@ -77,6 +77,27 @@ try {
     if (Test-Path (Join-Path $ROOT '.env.example')) {
         Copy-Item (Join-Path $ROOT '.env.example') (Join-Path $stage '.env.example') -Force
     }
+
+    # ── stamp .env.example with real Cloudinary creds from .env ──
+    $envFile = Join-Path $ROOT '.env'
+    $stagedEnvExample = Join-Path $stage '.env.example'
+    if ((Test-Path $envFile) -and (Test-Path $stagedEnvExample)) {
+        $envContent = [IO.File]::ReadAllLines($envFile)
+        $exampleLines = [IO.File]::ReadAllLines($stagedEnvExample)
+        foreach ($var in @('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')) {
+            $envVal = ($envContent | Where-Object { $_ -match "^${var}=" }) | ForEach-Object { ($_ -split '=', 2)[1] } | Select-Object -First 1
+            if ($envVal) {
+                for ($i = 0; $i -lt $exampleLines.Count; $i++) {
+                    if ($exampleLines[$i] -match "^${var}=.*") {
+                        $exampleLines[$i] = "${var}=${envVal}"
+                        break
+                    }
+                }
+            }
+        }
+        [IO.File]::WriteAllText($stagedEnvExample, ($exampleLines -join "`n"), [Text.UTF8Encoding]::new($false))
+        Write-Host "   Stamped .env.example with production Cloudinary creds from .env"
+    }
     New-Item -ItemType Directory -Path (Join-Path $stage 'docs') -Force | Out-Null
     Copy-ItemChecked (Join-Path $ROOT 'docs\HOSTING.md') (Join-Path $stage 'docs')
 
