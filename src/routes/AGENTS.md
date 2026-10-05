@@ -48,6 +48,7 @@ Express route handlers for the API: 19 authenticated entity modules + 2 public m
 - **Money integrity**: payment create/PATCH/DELETE recompute invoice `paid_amount_dzd`/`payment_status_key` inside a transaction with row locks; PATCH enforces the same overpayment guard as POST; the direct `PATCH invoices/:id/payment` endpoint rejects `paid_amount_dzd > total_dzd` (same invariant); RX numbers generated inside a transaction under `pg_advisory_xact_lock` (+ UNIQUE `(tenant_id, prescription_number)` backstop)
 - **Search hygiene**: full-text search uses `plainto_tsquery('simple', …)`; non-search `ilike` filters escape `%`, `_`, `\` from user input
 - CSV exports neutralize formula injection via `sanitizeCsvValue` (`utils/csv.js`) on user-entered fields
+- **Audit action contract (durable)**: `req.audit.log` emits only `CREATE` / `UPDATE` / `DELETE` — specialized mutations log as `UPDATE` and carry the distinction in `old_values`/`new_values` (expense/PO status endpoints: `status_key` change; PO receive-items: `items_received` present; inventory adjust-stock: `current_stock` delta + `adjustment`/`reason`). Never introduce new action strings; the frontend derives subtypes from the diff.
 
 ## Work Guidance
 

@@ -493,7 +493,7 @@ router.post('/items/:id/adjust-stock',
       // Log the adjustment
       if (req.audit) {
         await req.audit.log({
-          action: 'STOCK_ADJUSTMENT',
+          action: 'UPDATE',
           entityType: 'inventory_items',
           entityId: item.id,
           tenantId: req.tenantId,

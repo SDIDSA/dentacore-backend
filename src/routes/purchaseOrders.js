@@ -455,7 +455,7 @@ router.patch('/:id/status',
 
       if (req.audit) {
         await req.audit.log({
-          action: 'UPDATE_STATUS',
+          action: 'UPDATE',
           entityType: 'purchase_orders',
           entityId: updated.id,
           tenantId: req.tenantId,
@@ -607,7 +607,7 @@ router.patch('/:id/receive',
 
       if (req.audit) {
         await req.audit.log({
-          action: 'RECEIVE_ITEMS',
+          action: 'UPDATE',
           entityType: 'purchase_orders',
           entityId: updated.id,
           tenantId: req.tenantId,

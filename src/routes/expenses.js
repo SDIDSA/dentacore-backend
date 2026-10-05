@@ -437,7 +437,7 @@ router.patch('/:id/status',
 
       if (req.audit) {
         await req.audit.log({
-          action: 'UPDATE_STATUS',
+          action: 'UPDATE',
           entityType: 'expenses',
           entityId: updated.id,
           tenantId: req.tenantId,

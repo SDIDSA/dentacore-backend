@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- Sera DEMO seed (sample clinic data)
 -- ============================================================================
 -- Demo data for three sample clinics (El-Qods, Sourire, Teyar): tenants, users,
@@ -98,7 +98,7 @@ BEGIN
         'Dr. Amina Zerrouki',
         '+213551234567',
         25, -- Constantine
-        'CitÃ© El-Bir, Constantine',
+        'Cité El-Bir, Constantine',
         'user.status.active'
     )
     RETURNING id INTO v_dentist_user_id;
@@ -134,7 +134,7 @@ BEGIN
         '+213770123456',
         'ahmed.boudiaf@email.dz',
         25, -- Constantine
-        'CitÃ© Zouaghi, Constantine',
+        'Cité Zouaghi, Constantine',
         'Fatima Boudiaf',
         '+213771234567',
         'Hypertension under control with medication',
@@ -1803,40 +1803,47 @@ BEGIN
 
     -- ========================================================================
     -- 6.9: AUDIT LOGS (15 entries across tenants)
+    -- Actions are constrained to CREATE / UPDATE / DELETE (see the audit
+    -- action contract); the specific subtype is derived from entity_type and
+    -- the old_values/new_values diff, exactly as every entity detects it.
     -- ========================================================================
     INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address)
     VALUES
-    (v_tid, v_admin, 'user.login', 'user', v_admin, NULL,
-     '{"last_login": "2026-06-13 08:30:00"}'::jsonb, '192.168.1.100'::inet),
-    (v_tid, v_dent1, 'user.login', 'user', v_dent1, NULL,
-     '{"last_login": "2026-06-13 07:30:00"}'::jsonb, '192.168.1.101'::inet),
-    (v_tid, v_admin, 'patient.create', 'patient', v_pat1, NULL,
-     '{"full_name": "Ahmed Boudiaf", "status": "active"}'::jsonb, '10.0.0.1'::inet),
-    (v_tid, v_dent1, 'appointment.create', 'appointment', NULL, NULL,
-     '{"status": "scheduled", "duration": 30}'::jsonb, '10.0.0.1'::inet),
-    (v_tid, v_dent2, 'appointment.update', 'appointment', NULL,
-     '{"status": "scheduled"}'::jsonb, '{"status": "confirmed"}'::jsonb, '10.0.0.2'::inet),
-    (v_tid, v_recep, 'invoice.create', 'invoice', NULL, NULL,
-     '{"total": 8500, "status": "unpaid"}'::jsonb, '10.0.0.3'::inet),
-    (v_tid, v_admin, 'payment.create', 'payment', NULL, NULL,
-     '{"amount": 8500, "method": "cash"}'::jsonb, '10.0.0.1'::inet),
-    (v_tid, v_dent1, 'treatment.create', 'treatment_record', NULL, NULL,
-     '{"diagnosis": "Dental caries", "cost": 8500}'::jsonb, '10.0.0.1'::inet),
-    (v_tid, v_dent3, 'treatment.update', 'treatment_record', NULL,
+    (v_tid, v_admin, 'UPDATE', 'users', v_admin, NULL,
+     '{"last_login_at": "2026-06-12 09:00:00"}'::jsonb, '192.168.1.100'::inet),
+    (v_tid, v_dent1, 'UPDATE', 'users', v_dent1, NULL,
+     '{"last_login_at": "2026-06-12 08:00:00"}'::jsonb, '192.168.1.101'::inet),
+    (v_tid, v_admin, 'CREATE', 'patients', v_pat1, NULL,
+     '{"full_name": "Ahmed Boudiaf", "status_key": "patient.status.active"}'::jsonb, '10.0.0.1'::inet),
+    (v_tid, v_dent1, 'CREATE', 'appointments', NULL, NULL,
+     '{"status_key": "appt.status.scheduled", "duration": 30}'::jsonb, '10.0.0.1'::inet),
+    (v_tid, v_dent2, 'UPDATE', 'appointments', NULL,
+     '{"status_key": "appt.status.scheduled"}'::jsonb, '{"status_key": "appt.status.confirmed"}'::jsonb, '10.0.0.2'::inet),
+    (v_tid, v_recep, 'CREATE', 'invoices', NULL, NULL,
+     '{"payment_status_key": "invoice.status.unpaid", "total_dzd": 8500}'::jsonb, '10.0.0.3'::inet),
+    (v_tid, v_admin, 'CREATE', 'payments', NULL, NULL,
+     '{"amount_dzd": 8500, "method": "pay.method.cash"}'::jsonb, '10.0.0.1'::inet),
+    (v_tid, v_dent1, 'CREATE', 'treatment_records', NULL, NULL,
+     '{"diagnosis": "Dental caries", "estimated_cost_dzd": 8500}'::jsonb, '10.0.0.1'::inet),
+    (v_tid, v_dent3, 'UPDATE', 'treatment_records', NULL,
      '{"diagnosis": "Caries"}'::jsonb, '{"diagnosis": "Dental caries on tooth 16"}'::jsonb, '10.0.0.4'::inet),
-    (v_tid, v_admin, 'inventory.update', 'inventory_item', NULL,
+    (v_tid, v_admin, 'UPDATE', 'inventory_items', NULL,
      '{"current_stock": 25}'::jsonb, '{"current_stock": 20}'::jsonb, '10.0.0.1'::inet);
-    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, ip_address)
-    SELECT v_sid, v_s_admin, 'user.login', 'user', '10.0.1.1'::inet;
-    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, ip_address)
-    SELECT v_sid, v_s_admin, 'patient.create', 'patient', '10.0.1.1'::inet;
-    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, ip_address)
-    SELECT v_tid3, v_t_dent, 'user.login', 'user', '10.0.2.1'::inet;
-    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, ip_address)
-    SELECT v_tid3, v_t_dent, 'invoice.payment', 'payment', '10.0.2.1'::inet;
-    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, new_values, ip_address)
-    SELECT v_tid3, v_t_dent, 'treatment.create', 'treatment_record',
-           '{"diagnosis": "Root canal", "tooth": "36"}'::jsonb, '10.0.2.1'::inet;
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address)
+    SELECT v_sid, v_s_admin, 'UPDATE', 'users', v_s_admin,
+           '{"last_login_at": "2026-06-11 10:00:00"}'::jsonb, '10.0.1.1'::inet;
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, new_values, ip_address)
+    SELECT v_sid, v_s_admin, 'CREATE', 'patients', v_spat,
+           '{"full_name": "Sourire patient"}'::jsonb, '10.0.1.1'::inet;
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address)
+    SELECT v_tid3, v_t_dent, 'UPDATE', 'users', v_t_dent,
+           '{"last_login_at": "2026-06-11 09:00:00"}'::jsonb, '10.0.2.1'::inet;
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address)
+    SELECT v_tid3, v_t_dent, 'CREATE', 'payments', NULL,
+           '{"amount_dzd": 4500, "method": "pay.method.cash"}'::jsonb, '10.0.2.1'::inet;
+    INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address)
+    SELECT v_tid3, v_t_dent, 'CREATE', 'treatment_records', NULL,
+           '{"diagnosis": "Root canal", "tooth_number": "36"}'::jsonb, '10.0.2.1'::inet;
 
     RAISE NOTICE '6.9: Created 15 audit log entries';
 

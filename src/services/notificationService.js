@@ -67,9 +67,10 @@ async function checkUpcomingAppointments(tenantId) {
 
 function buildReminderMessage(apt) {
   const date = new Date(apt.appointment_date);
-  const time = date.toLocaleTimeString('fr-DZ', { hour: '2-digit', minute: '2-digit' });
+  const time = date.toLocaleTimeString('fr-DZ', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   const day = date.toLocaleDateString('fr-DZ', { weekday: 'long', day: 'numeric', month: 'long' });
-  return `Rappel: votre rendez-vous chez le dentiste est le ${day} à ${time}. Motif: ${apt.reason || 'Consultation'}. Dr. ${apt.dentist_name}`;
+  const dentistName = String(apt.dentist_name || '').replace(/^Dr\.\s+/i, '');
+  return `Rappel: votre rendez-vous chez le dentiste est le ${day} à ${time}. Motif: ${apt.reason || 'Consultation'}. Dr. ${dentistName}`;
 }
 
 async function sendEmailNotification(recipient, subject, message) {

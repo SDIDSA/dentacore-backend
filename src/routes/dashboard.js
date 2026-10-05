@@ -245,6 +245,64 @@ router.get('/appointments/today', async (req, res, next) => {
 
 
 
+// This-week reference summary for the Recent Activity panel
+// (no-shows, new patients, average visit length, outstanding invoices)
+router.get('/summary', authorize('auth.role.admin'), async (req, res, next) => {
+  try {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setHours(0, 0, 0, 0);
+    const weekday = startOfWeek.getDay() || 7;
+    startOfWeek.setDate(startOfWeek.getDate() - (weekday - 1));
+
+    const weekStart = startOfWeek.toISOString();
+    const weekEnd = now.toISOString();
+
+    const outstandingStatuses = [
+      'invoice.status.unpaid',
+      'invoice.status.partial',
+      'invoice.status.overdue',
+    ];
+
+    const [noShows, newPatients, visits, outstanding] = await Promise.all([
+      db.selectFrom('appointments')
+        .select(db.fn.count('id').as('count'))
+        .where('tenant_id', '=', req.tenantId)
+        .where('appointment_date', '>=', weekStart)
+        .where('appointment_date', '<=', weekEnd)
+        .where('status_key', '=', 'appt.status.no_show')
+        .executeTakeFirst(),
+      db.selectFrom('patients')
+        .select(db.fn.count('id').as('count'))
+        .where('tenant_id', '=', req.tenantId)
+        .where('created_at', '>=', weekStart)
+        .where('created_at', '<=', weekEnd)
+        .executeTakeFirst(),
+      db.selectFrom('appointments')
+        .select(db.fn.avg('duration_minutes').as('avg'))
+        .where('tenant_id', '=', req.tenantId)
+        .where('appointment_date', '>=', weekStart)
+        .where('appointment_date', '<=', weekEnd)
+        .where('status_key', '=', 'appt.status.completed')
+        .executeTakeFirst(),
+      db.selectFrom('invoices')
+        .select(db.fn.count('id').as('count'))
+        .where('tenant_id', '=', req.tenantId)
+        .where('payment_status_key', 'in', outstandingStatuses)
+        .executeTakeFirst(),
+    ]);
+
+    res.json({
+      no_shows: Number(noShows?.count || 0),
+      new_patients: Number(newPatients?.count || 0),
+      avg_visit_minutes: Math.round(Number(visits?.avg || 0)),
+      outstanding_invoices: Number(outstanding?.count || 0),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Get recent activity for dashboard
 router.get('/recent-activity', authorize('auth.role.admin'), async (req, res, next) => {
 
