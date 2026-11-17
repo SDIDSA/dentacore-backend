@@ -8,6 +8,7 @@ const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const db = require('../config/database');
 const logger = require('../config/logger');
+const { EMAIL_NORMALIZE } = require('../utils/email');
 
 const router = express.Router();
 
@@ -39,7 +40,7 @@ router.post('/',
   body('subdomain').isString().trim().toLowerCase().isLength({ min: 1, max: 63 })
     .custom((v) => SUBDOMAIN_RE.test(v) && !RESERVED_SUBDOMAINS.has(v)),
   body('full_name').isString().trim().isLength({ min: 2, max: 255 }),
-  body('email').isEmail().normalizeEmail(),
+  body('email').isEmail().normalizeEmail(EMAIL_NORMALIZE),
   body('password').isString().isLength({ min: 8, max: 128 }),
   body('phone').isString().trim().custom((v) => PHONE_RE.test(v)),
   async (req, res, next) => {

@@ -9,6 +9,7 @@ const db = require('../config/database');
 const { syncDentistHours } = require('../utils/clinicHours');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 const { primaryRoleKey } = require('../utils/roleUtil');
+const { EMAIL_NORMALIZE } = require('../utils/email');
 
 const router = express.Router();
 
@@ -254,7 +255,7 @@ router.get('/:id', async (req, res, next) => {
 
 // Create new user
 router.post('/', createUserLimiter,
-  body('email').isEmail().normalizeEmail(),
+  body('email').isEmail().normalizeEmail(EMAIL_NORMALIZE),
   body('password').isLength({ min: 8 }),
   body('full_name').trim().notEmpty(),
   body('phone').matches(/^\+213\d{9}$/),
@@ -368,7 +369,7 @@ router.post('/', createUserLimiter,
 
 // Update user
 router.patch('/:id',
-  body('email').optional().isEmail().normalizeEmail(),
+  body('email').optional().isEmail().normalizeEmail(EMAIL_NORMALIZE),
   body('full_name').optional().trim().notEmpty(),
   body('phone').optional().matches(/^\+213\d{9}$/),
   body('role_ids').optional().isArray({ min: 1 }),

@@ -14,7 +14,9 @@ const db = require('../src/config/database');
 const PLATFORM_SUBDOMAIN = 'sera-platform';
 
 (async () => {
-  const [email, password, fullName] = process.argv.slice(2);
+  const [rawEmail, password, fullName] = process.argv.slice(2);
+  // same canonical form the login route looks up (lowercase, otherwise as typed)
+  const email = rawEmail ? rawEmail.trim().toLowerCase() : rawEmail;
   if (!email || !password) {
     console.error('Usage: node scripts/create-platform-admin.js <email> <password> [full name]');
     console.error('Password must be at least 8 characters.');
