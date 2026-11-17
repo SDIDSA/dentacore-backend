@@ -83,7 +83,11 @@ afterAll(async () => {
 describe('DELETE endpoints return 204 with an empty body', () => {
   it('DELETE /api/v1/appointments/:id returns 204 empty', async () => {
     if (!dbAvailable) return;
-    const apptDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    // Far outside the seeded schedule (seed.sql books within a few months of NOW()) and at
+    // 02:17 UTC, so the dentist-overlap guard (409) can't fire on a time-dependent clash.
+    const d = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000);
+    d.setUTCHours(2, 17, 0, 0);
+    const apptDate = d.toISOString();
     const create = await request(app)
       .post('/api/v1/appointments')
       .set('Authorization', `Bearer ${adminToken}`)

@@ -1,6 +1,26 @@
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const request = require('supertest');
+
+// Never talk to the real Cloudinary from tests: CI has fake credentials (the
+// upload 500'd there) and a developer .env holds the production account.
+jest.mock('../config/cloudinary', () => {
+  const { PassThrough } = require('stream');
+  return {
+    uploader: {
+      upload_stream: (opts, cb) => {
+        const stream = new PassThrough();
+        stream.on('finish', () => cb(null, {
+          public_id: `${opts.folder}/${opts.public_id}`,
+          secure_url: `https://res.cloudinary.test/${opts.folder}/${opts.public_id}.jpg`,
+        }));
+        stream.resume();
+        return stream;
+      },
+      destroy: jest.fn(async () => ({ result: 'ok' })),
+    },
+  };
+});
 const crypto = require('crypto');
 const app = require('../app');
 const { TEST_ADMIN_EMAIL, TEST_ADMIN_PASSWORD } = require('./helpers/config');
