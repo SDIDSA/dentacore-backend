@@ -1830,19 +1830,19 @@ BEGIN
     (v_tid, v_admin, 'UPDATE', 'inventory_items', NULL,
      '{"current_stock": 25}'::jsonb, '{"current_stock": 20}'::jsonb, '10.0.0.1'::inet);
     INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address)
-    SELECT v_sid, v_s_admin, 'UPDATE', 'users', v_s_admin,
+    SELECT v_sid, v_s_admin, 'UPDATE', 'users', v_s_admin, NULL,
            '{"last_login_at": "2026-06-11 10:00:00"}'::jsonb, '10.0.1.1'::inet;
     INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, new_values, ip_address)
     SELECT v_sid, v_s_admin, 'CREATE', 'patients', v_spat,
            '{"full_name": "Sourire patient"}'::jsonb, '10.0.1.1'::inet;
     INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address)
-    SELECT v_tid3, v_t_dent, 'UPDATE', 'users', v_t_dent,
+    SELECT v_tid3, v_t_dent, 'UPDATE', 'users', v_t_dent, NULL,
            '{"last_login_at": "2026-06-11 09:00:00"}'::jsonb, '10.0.2.1'::inet;
     INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address)
-    SELECT v_tid3, v_t_dent, 'CREATE', 'payments', NULL,
+    SELECT v_tid3, v_t_dent, 'CREATE', 'payments', NULL, NULL,
            '{"amount_dzd": 4500, "method": "pay.method.cash"}'::jsonb, '10.0.2.1'::inet;
     INSERT INTO audit_logs (tenant_id, user_id, action, entity_type, entity_id, old_values, new_values, ip_address)
-    SELECT v_tid3, v_t_dent, 'CREATE', 'treatment_records', NULL,
+    SELECT v_tid3, v_t_dent, 'CREATE', 'treatment_records', NULL, NULL,
            '{"diagnosis": "Root canal", "tooth_number": "36"}'::jsonb, '10.0.2.1'::inet;
 
     RAISE NOTICE '6.9: Created 15 audit log entries';

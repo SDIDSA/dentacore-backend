@@ -29,18 +29,27 @@ async function checkUpcomingAppointments(tenantId) {
 
   const sent = [];
   for (const apt of appointments) {
+    // one reminder attempt per appointment (the 24h look-ahead window would
+    // otherwise re-select it every scheduler tick)
     const existing = await db
       .selectFrom('notifications')
       .select('id')
       .where('appointment_id', '=', apt.id)
       .where('type', '=', 'reminder')
-      .where('sent_at', '>=', new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString())
       .executeTakeFirst();
 
     if (existing) continue;
+    if (!apt.patient_email && !apt.patient_phone) continue;
 
+    const title = 'Rappel de rendez-vous';
     const message = buildReminderMessage(apt);
     const channel = apt.patient_email ? 'email' : 'sms';
+
+    // Actually deliver it. Email goes through SMTP; there is no SMS provider
+    // integration yet, so SMS reminders are recorded as failed (never as sent).
+    const result = channel === 'email'
+      ? await sendEmailNotification(apt.patient_email, title, message)
+      : { delivered: false, reason: 'SMS provider not configured' };
 
     await db
       .insertInto('notifications')
@@ -51,15 +60,19 @@ async function checkUpcomingAppointments(tenantId) {
         type: 'reminder',
         channel,
         recipient: apt.patient_email || apt.patient_phone,
-        title: 'Rappel de rendez-vous',
+        title,
         message,
-        status: 'sent',
-        sent_at: new Date(),
+        status: result.delivered ? 'sent' : 'failed',
+        sent_at: result.delivered ? new Date() : null,
       })
       .execute();
 
-    logger.info('Reminder sent', { appointmentId: apt.id, patient: apt.patient_name, channel });
-    sent.push({ appointmentId: apt.id, channel, message });
+    if (result.delivered) {
+      logger.info('Reminder sent', { appointmentId: apt.id, channel });
+      sent.push({ appointmentId: apt.id, channel, message });
+    } else {
+      logger.warn('Reminder not delivered', { appointmentId: apt.id, channel, reason: result.reason });
+    }
   }
 
   return sent;

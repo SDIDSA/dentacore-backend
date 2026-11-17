@@ -6,13 +6,14 @@ Express route handlers for the API: 19 authenticated entity modules + 2 public m
 ## Ownership
 - `appointments.js` — Appointment scheduling CRUD
 - `auditLogs.js` — Audit log retrieval (read-only)
-- `auth.js` — Login, token refresh, logout
+- `auth.js` — Login, token refresh, logout, self-service `PATCH /password` (any role; requires `current_password`, rejects an unchanged password, rate-limited)
+- `clinic.js` — The caller's own clinic: `GET /` profile (any staff), `PATCH /` name/address/phone/email (admin; non-name fields in `tenants.settings.profile`), `GET /working-hours` (any staff), `PUT /working-hours` (admin) → `utils/clinicHours.js`
 - `dashboard.js` — Dashboard aggregation endpoints
 - `expenses.js` — Expense tracking CRUD
 - `inventory.js` — Inventory items, categories, suppliers, stats, alerts
 - `invoices.js` — Invoice and billing CRUD
 - `media.js` — File/image upload and management via Cloudinary
-- `notifications.js` — Notification creation and retrieval
+- `notifications.js` — Notification creation and retrieval; `GET /` and `GET /unread-count` accept `?exclude_types=a,b` (per-user mutes from the desktop client; `^[a-z_]+$` entries only)
 - `odontogram.js` — Dental chart data CRUD
 - `patients.js` — Patient CRUD + import/export CSV
 - `payments.js` — Payment recording CRUD
@@ -24,7 +25,7 @@ Express route handlers for the API: 19 authenticated entity modules + 2 public m
 - `reports.js` — Aggregated report endpoints
 - `treatmentPlans.js` — Treatment plan CRUD with status workflow
 - `treatments.js` — Individual treatment record CRUD
-- `users.js` — User/staff account CRUD
+- `users.js` — User/staff account CRUD (admin-only, incl. `PATCH /:id/password` to reset someone else's password); create / role change / status change call `syncDentistHours` so dentists' `working_hours` follow the clinic hours
 - `xrays.js` — X-ray image CRUD
 
 ## Local Contracts
