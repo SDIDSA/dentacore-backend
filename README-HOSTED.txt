@@ -1,43 +1,43 @@
-Sera hosted backend — quick start
+Sera hosted backend - quick start
+(full procedure: docs/HOSTING.md in this zip; release process: docs/DEPLOYMENT.md in the source tree)
 
-[Ubuntu 22.04/24.04]
+Everything is self-contained: prod.sh / prod.ps1 download their own Node.js and
+PostgreSQL into .prod-tools/ - nothing is apt/winget-installed except what is noted.
 
-  1. unzip sera-backend-<version>.zip
+[Ubuntu 22.04 / 24.04]  (needs: curl, unzip; nginx + certbot for TLS)
+
+  1. sudo mkdir -p /opt && cd /opt && sudo unzip sera-backend-<version>.zip
   2. cd sera-backend
-  3. sudo bash deploy/setup.sh --systemd
+  3. sudo bash prod.sh --systemd --backup-cron [rclone-remote:bucket/sera]
+  4. curl http://127.0.0.1:4000/health
+  5. nginx + certbot in front (deploy/nginx-sera.conf, see docs/HOSTING.md)
 
-setup.sh handles everything:
-  - Installs Node.js 22 (via nodesource) if missing or < 20
-  - Installs PostgreSQL if missing, starts the service
-  - Creates the database + role, applies the schema
-  - Generates .env with auto-generated secrets (DB_PASSWORD, JWT keys)
-  - Optionally installs a systemd service (--systemd)
+  --systemd       create the 'sera' user, bootstrap as that user (binaries, .env
+                  secrets, DB, schema, deps), install + start the sera service on :4000
+  --backup-cron   nightly pg_dump -Fc to /var/backups/sera, 14-day retention,
+                  180-day audit_logs trim, optional rclone offsite copy
+  --port N        listening port (default 4000 under --systemd, 80 otherwise)
+  --seed          demo data with PUBLISHED passwords - never on a production box
 
-Options:
-  --systemd       Install and enable the sera systemd service
-  --port N        Override the listening port (default: 80; 4000 behind nginx/Caddy or under --systemd)
-  --seed          Also load seed.sql demo data
-  --backup-cron   Nightly pg_dump + retention + audit trim (optionally rclone offsite)
+  Foreground test (no service, as a normal user):  bash prod.sh --port 4000
 
-[Windows Server 2019+ / Windows 10+]
+[Windows Server 2019+ / Windows 10+]  (elevated PowerShell)
 
-  1. unzip sera-backend-<version>.zip
-  2. cd sera-backend
-  3. powershell -NoProfile -ExecutionPolicy Bypass -File deploy\setup.ps1 -Service
+  1. Expand-Archive sera-backend-<version>.zip C:\ ; cd C:\sera-backend
+  2. powershell -NoProfile -ExecutionPolicy Bypass -File prod.ps1 -Service -BackupCron -Domain api.example.com
+  3. curl http://127.0.0.1:4000/health
 
-setup.ps1 handles everything (winget installs of Node.js/PostgreSQL when missing,
-secrets generation, role + database creation, idempotent schema, Scheduled Task
-service). The postgres superuser password is only prompted for when the role or
-database must be created.
+  -Service        register the 'Sera' SYSTEM Scheduled Task (starts PG + API at boot,
+                  logs\service.log)
+  -BackupCron     'Sera-Backup' task, nightly 02:30 -> C:\ProgramData\Sera\backups
+  -Domain NAME    Caddy reverse proxy with automatic Let's Encrypt TLS (port 4000 behind it)
+  -Port N         listening port (default 80 without -Domain)
+  -Seed           demo data with PUBLISHED passwords - never on a production box
 
-Options:
-  -Service        Register the API as a SYSTEM Scheduled Task (auto-start)
-  -Port N         Override the listening port (default: 4000)
-  -Seed           Also load seed.sql demo data
-  -BackupCron     Nightly pg_dump + retention + audit trim (SYSTEM task, 02:30)
-  -OffsiteRemote  rclone destination for offsite dump copies
-
-Health:            curl http://localhost:4000/health
-Site:              http://<host>:4000/          (marketing + signup)
-Booking portal:    http://<host>:4000/book.html?clinic=<slug>
-Full runbook:      docs/HOSTING.md
+After install:
+  - edit .env: CORS_ORIGIN, CLOUDINARY_* (X-ray uploads), SMTP_* (reminders), ERROR_WEBHOOK_URL
+    then restart (systemctl restart sera / schtasks /End + /Run /TN Sera)
+  - create the operator account:
+      .prod-tools/node-v22.16.0-linux-x64/bin/node scripts/create-platform-admin.js <email> <password>
+  - site:     https://<domain>/          booking portal: https://<domain>/book?clinic=<slug>
+  - health:   https://<domain>/health    operator console: https://<domain>/platform

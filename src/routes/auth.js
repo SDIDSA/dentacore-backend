@@ -186,6 +186,62 @@ router.get('/validate', authenticate, async (req, res, next) => {
   }
 });
 
+// Self-service password change (any signed-in staff member). The admin-only
+// PATCH /users/:id/password is for resetting someone else's password; this one
+// requires the caller's current password.
+const passwordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'auth.error.too_many_attempts' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+router.patch('/password', authenticate, passwordLimiter,
+  body('current_password').isString().notEmpty(),
+  body('new_password').isString().isLength({ min: 8, max: 128 }),
+  async (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'validation.error', details: errors.array() });
+    }
+    try {
+      const { current_password, new_password } = req.body;
+      const user = await db
+        .selectFrom('users')
+        .select(['id', 'password_hash'])
+        .where('id', '=', req.user.id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+      if (!user) return error(res, 404, 'user.error.not_found');
+
+      if (!(await bcrypt.compare(current_password, user.password_hash))) {
+        return error(res, 400, 'auth.error.wrong_current_password');
+      }
+      if (await bcrypt.compare(new_password, user.password_hash)) {
+        return error(res, 400, 'auth.error.password_unchanged');
+      }
+
+      await db
+        .updateTable('users')
+        .set({ password_hash: await bcrypt.hash(new_password, 12) })
+        .where('id', '=', user.id)
+        .execute();
+
+      if (req.audit) {
+        await req.audit.log({
+          action: 'UPDATE', entityType: 'users', entityId: user.id, tenantId: req.tenantId,
+          oldValues: { password_changed: false }, newValues: { password_changed: true },
+        }, db);
+      }
+      res.status(204).end();
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
 // Logout - revoke tokens
 router.post('/logout', authenticate, async (req, res, next) => {
   try {

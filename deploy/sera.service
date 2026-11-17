@@ -1,6 +1,10 @@
+# Sera API systemd unit - rendered + installed by `sudo bash prod.sh --systemd`
+# (placeholders filled by prod.sh; do not install this file by hand).
+# Node.js and PostgreSQL are the self-contained binaries under .prod-tools/.
 [Unit]
-Description=Sera API (Node.js/Express)
-After=network.target postgresql.service
+Description=Sera API (Node.js/Express + self-contained PostgreSQL)
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -8,9 +12,16 @@ User=__SVC_USER__
 WorkingDirectory=__APP_DIR__
 EnvironmentFile=__APP_DIR__/.env
 Environment=NODE_ENV=production
-ExecStart=/usr/bin/node server.js
+Environment=PORT=__PORT__
+Environment=DB_HOST=127.0.0.1
+Environment=DB_PORT=__PG_PORT__
+Environment=npm_config_cache=__TOOLS_DIR__/npm-cache
+ExecStartPre=/bin/sh -c '__PG_BIN__/pg_isready -q -h 127.0.0.1 -p __PG_PORT__ || __PG_BIN__/pg_ctl start -D __PG_DATA__ -l __TOOLS_DIR__/pg_ctl.log -w'
+ExecStart=__NODE_BIN__ server.js
+ExecStopPost=__PG_BIN__/pg_ctl stop -D __PG_DATA__ -m fast -w
 Restart=always
-RestartSec=3
+RestartSec=5
+TimeoutStartSec=120
 StandardOutput=journal
 StandardError=journal
 

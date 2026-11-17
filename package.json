@@ -4,7 +4,7 @@
   "description": "Node.js backend for Algerian Dental Management System",
   "main": "server.js",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "scripts": {
     "start": "node server.js",
@@ -34,6 +34,7 @@
     "kysely": "^0.29.2",
     "libphonenumber-js": "^1.13.12",
     "multer": "^2.1.1",
+    "nodemailer": "^6.10.1",
     "pg": "^8.11.3",
     "socket.io": "^4.8.3",
     "swagger-jsdoc": "^6.3.0",

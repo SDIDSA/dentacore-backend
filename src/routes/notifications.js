@@ -10,13 +10,25 @@ router.use(authenticate);
 
 const MAX_LIMIT = 500;
 
+// ?exclude_types=low_stock,reminder — per-user mutes from the desktop client's
+// notification settings (applied to both the list and the unread badge)
+function excludedTypes(req) {
+  return String(req.query.exclude_types || '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => /^[a-z_]{1,50}$/.test(t));
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const limit = Math.min(Number.parseInt(req.query.limit) || 50, MAX_LIMIT);
-    const notifications = await db
+    const excluded = excludedTypes(req);
+    let query = db
       .selectFrom('notifications')
       .selectAll()
-      .where('tenant_id', '=', req.tenantId)
+      .where('tenant_id', '=', req.tenantId);
+    if (excluded.length) query = query.where('type', 'not in', excluded);
+    const notifications = await query
       .orderBy('created_at', 'desc')
       .limit(limit)
       .execute();
@@ -140,12 +152,14 @@ router.post('/delete-batch', async (req, res, next) => {
 // Get unread count
 router.get('/unread-count', async (req, res, next) => {
   try {
-    const result = await db
+    const excluded = excludedTypes(req);
+    let query = db
       .selectFrom('notifications')
       .select(db.fn.count('id').as('count'))
       .where('tenant_id', '=', req.tenantId)
-      .where('status', '=', 'unread')
-      .executeTakeFirst();
+      .where('status', '=', 'unread');
+    if (excluded.length) query = query.where('type', 'not in', excluded);
+    const result = await query.executeTakeFirst();
 
     res.json({ count: Number.parseInt(result?.count || '0') });
   } catch (error) {

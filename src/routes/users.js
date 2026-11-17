@@ -6,6 +6,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const conflictResolution = require('../middleware/conflictResolution');
 const { sql } = require('kysely');
 const db = require('../config/database');
+const { syncDentistHours } = require('../utils/clinicHours');
 const { parsePagination, wrapPaginatedResponse } = require('../utils/paginate');
 const { primaryRoleKey } = require('../utils/roleUtil');
 
@@ -329,6 +330,9 @@ router.post('/', createUserLimiter,
         .values(role_ids.map((rid) => ({ user_id: newUser.id, role_id: rid })))
         .execute();
 
+      // new dentists inherit the clinic's opening hours (public booking portal slots)
+      await syncDentistHours(db, req.tenantId, newUser.id);
+
       const created = await db
         .selectFrom('users')
         .leftJoin('wilayas', 'users.wilaya_id', 'wilayas.id')
@@ -493,6 +497,9 @@ router.patch('/:id',
           .values(role_ids.map((rid) => ({ user_id: userId, role_id: rid })))
           .execute();
       }
+      if (role_ids !== undefined || status_key !== undefined) {
+        await syncDentistHours(db, req.tenantId, userId);
+      }
 
       const updated = await db
         .selectFrom('users')
@@ -632,6 +639,7 @@ router.patch('/:id/status',
         .where('tenant_id', '=', req.tenantId)
         .returningAll()
         .executeTakeFirst();
+      await syncDentistHours(db, req.tenantId, userId);
 
       // Audit log: Status Updated
       if (req.audit) {

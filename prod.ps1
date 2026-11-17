@@ -108,7 +108,7 @@ function Stop-Pg {
     if (-not (Test-Path "$pgBin\pg_ctl.exe")) { return }
     Write-Host "Stopping PostgreSQL..." -ForegroundColor Yellow
     & "$pgBin\pg_ctl.exe" stop -D $PG_DATA -m fast -w 2>$null
-    $pgStarted = $false
+    $script:pgStarted = $false
 }
 
 function Write-Step($t) {
@@ -408,6 +408,14 @@ if ($Seed) {
     }
 }
 
+# ── install npm deps if needed ──────────────────────────────────
+if (-not (Test-Path (Join-Path $ROOT "node_modules\.package-lock.json"))) {
+    Write-Host "Installing dependencies..." -ForegroundColor Cyan
+    npm ci --omit=dev --no-audit --no-fund
+    if ($LASTEXITCODE -ne 0) { npm install --prefix $ROOT --omit=dev --no-audit --no-fund }
+    if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: npm dependency install failed" -ForegroundColor Red; exit 1 }
+}
+
 # ── optional: API service as Scheduled Task (-Service) ────────────
 if ($Service) {
     Write-Step "Installing Sera service (Scheduled Task)"
@@ -419,12 +427,17 @@ set NODE_ENV=production
 set PORT=$Port
 set DB_HOST=127.0.0.1
 set DB_PORT=5434
-"$pgBin\pg_ctl.exe" start -D "$PG_DATA" -l "$PG_LOG"
-"$nodeDir\npm.cmd" start
+"$pgBin\pg_isready.exe" -q -h 127.0.0.1 -p 5434 || "$pgBin\pg_ctl.exe" start -D "$PG_DATA" -l "$PG_LOG" -w
+"$nodeDir\node.exe" server.js >> "$ROOT\logs\service.log" 2>&1
 "@ | Set-Content -Path $runner -Encoding Ascii
 
     New-Item -ItemType Directory -Force (Join-Path $ROOT "logs") | Out-Null
     schtasks /Create /F /TN "Sera" /RU SYSTEM /RL HIGHEST /SC ONSTART /TR "`"$runner`"" | Out-Null
+    # Hand PostgreSQL over to the task: stop the instance this run started, then
+    # (re)start the task, which brings up PG + node itself. The foreground server
+    # at the end is skipped so nothing competes for the port.
+    schtasks /End /TN "Sera" 2>$null | Out-Null
+    Stop-Pg
     schtasks /Run /TN "Sera" | Out-Null
     Write-Sub "service installed: schtasks /Query /TN Sera  (logs\service.log)"
 }
@@ -467,13 +480,6 @@ $Domain {
     Write-Sub "https://$Domain -> http://localhost:$Port"
 }
 
-# ── install npm deps if needed ──────────────────────────────────
-if (-not (Test-Path (Join-Path $ROOT "node_modules\.package-lock.json"))) {
-    Write-Host "Installing dependencies..." -ForegroundColor Cyan
-    npm ci --omit=dev 2>$null
-    if ($LASTEXITCODE -ne 0) { npm install --prefix $ROOT --omit=dev 2>$null }
-}
-
 Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
 
 # ── banner ──────────────────────────────────────────────────────
@@ -490,7 +496,11 @@ Write-Host "==================================" -ForegroundColor Green
 Write-Host ""
 
 # ── start server ────────────────────────────────────────────────
-& node server.js
+if ($Service) {
+    Write-Host "Running as the 'Sera' Scheduled Task (logs\service.log); no foreground server started." -ForegroundColor Green
+} else {
+    & node server.js
+}
 
 } finally {
     Stop-Pg

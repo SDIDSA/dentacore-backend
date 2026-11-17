@@ -8,15 +8,23 @@
 # data persists across runs.
 #
 # Flags:
-#   --systemd              Register a systemd service (auto-start on boot)
+#   --systemd              (root) Bootstrap as the service user + install/start the
+#                          `sera` systemd service (auto-start on boot), then exit
+#   --backup-cron [remote] (root) Install the nightly backup cron, then exit
 #   --port PORT            Override listening port (default: 80; 4000 under --systemd)
-#   --seed                 Load seed.sql demo data
-#   --backup-cron [remote] Install nightly backup cron
+#   --seed                 Load seed.sql demo data (published passwords - never in prod)
+#   --bootstrap-only       Provision everything (binaries, .env, DB, schema, deps)
+#                          then stop PG and exit without starting the server
 #
 # Usage:
-#   bash prod.sh                       # direct HTTP-only on port 80 (run as root)
-#   bash prod.sh --systemd --seed      # TLS: nginx 443 -> backend on 4000
-#   bash prod.sh --backup-cron rclone-remote:bucket/sera
+#   bash prod.sh --port 4000                       # foreground, as a normal user
+#   sudo bash prod.sh --systemd                    # production: service on :4000 behind nginx
+#   sudo bash prod.sh --backup-cron remote:bucket/sera
+#   sudo bash prod.sh --systemd --backup-cron      # both in one go
+#
+# PostgreSQL refuses to run as root, so root never touches PG itself: under
+# --systemd it creates the service user (SVC_USER, default `sera`), hands it the
+# app dir, and re-runs this script as that user with --bootstrap-only.
 #
 set -euo pipefail
 
@@ -26,6 +34,7 @@ PORT_SET=no
 WITH_SYSTEMD=no
 WITH_SEED=no
 WITH_BACKUP_CRON=no
+BOOTSTRAP_ONLY=no
 OFFSITE_REMOTE="${OFFSITE_REMOTE:-}"
 NODE_VERSION="${NODE_VERSION:-22.16.0}"
 PG_VERSION="${PG_VERSION:-18.6}"
@@ -34,6 +43,7 @@ while [ $# -gt 0 ]; do
     --systemd) WITH_SYSTEMD=yes ;;
     --port)    PORT="$2"; PORT_SET=yes; shift ;;
     --seed)    WITH_SEED=yes ;;
+    --bootstrap-only) BOOTSTRAP_ONLY=yes ;;
     --backup-cron)
       WITH_BACKUP_CRON=yes
       if [ -n "${2:-}" ] && [ "${2:-}" != --* ]; then OFFSITE_REMOTE="$2"; shift; fi
@@ -69,7 +79,10 @@ PG_PORT=5434
 sql_escape() { printf '%s' "$1" | sed "s/'/''/g"; }
 get_env() { grep -E "^${1}=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '\r'; }
 
+PG_STARTED=no
 pg_stop() {
+  # only stop an instance this run started (never pull PG out from under a running service)
+  [ "$PG_STARTED" = "yes" ] || return 0
   if [ -x "$PG_DIR/bin/pg_ctl" ] && [ -d "$PG_DATA" ]; then
     echo "Stopping PostgreSQL..."
     "$PG_DIR/bin/pg_ctl" stop -D "$PG_DATA" -m fast -w 2>/dev/null || true
@@ -153,16 +166,80 @@ ensure_pg_libs() {
 # ── main ────────────────────────────────────────────────────────
 echo "== Sera backend bootstrap + startup =="
 
-if [ "$WITH_SYSTEMD" != "yes" ] && [ "$(id -u 2>/dev/null || echo 1)" -eq 0 ]; then
+IS_ROOT=no
+[ "$(id -u 2>/dev/null || echo 1)" -eq 0 ] && IS_ROOT=yes
+SVC_USER="${SVC_USER:-sera}"
+
+# ── privileged actions (root): service user, systemd unit, backup cron ──
+if [ "$WITH_SYSTEMD" = "yes" ] || [ "$WITH_BACKUP_CRON" = "yes" ]; then
+  if [ "$IS_ROOT" != "yes" ]; then
+    echo "ERROR: --systemd / --backup-cron install system files; run with sudo." >&2
+    exit 1
+  fi
+  id -u "$SVC_USER" >/dev/null 2>&1 || useradd -r -m -d "/home/$SVC_USER" -s /usr/sbin/nologin "$SVC_USER"
+  chown -R "$SVC_USER":"$SVC_USER" "$SCRIPT_DIR"
+
+  if [ "$WITH_SYSTEMD" = "yes" ]; then
+    # PostgreSQL needs libnuma on minimal/cloud images; install it while we are root.
+    if command -v apt-get >/dev/null 2>&1 && ! ldconfig -p 2>/dev/null | grep -q 'libnuma.so.1'; then
+      echo "-- installing libnuma1 (PostgreSQL runtime dependency) --"
+      apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq libnuma1 >/dev/null 2>&1 || true
+    fi
+
+    echo "-- bootstrapping as $SVC_USER --"
+    boot_args=(--bootstrap-only --port "$PORT")
+    [ "$WITH_SEED" = "yes" ] && boot_args+=(--seed)
+    runuser -u "$SVC_USER" -- env NODE_VERSION="$NODE_VERSION" PG_VERSION="$PG_VERSION" \
+      bash "$SCRIPT_DIR/prod.sh" "${boot_args[@]}"
+
+    echo "-- installing systemd service --"
+    sed -e "s|__APP_DIR__|${SCRIPT_DIR}|g" \
+        -e "s|__SVC_USER__|${SVC_USER}|g" \
+        -e "s|__PORT__|${PORT}|g" \
+        -e "s|__PG_PORT__|${PG_PORT}|g" \
+        -e "s|__PG_BIN__|${PG_DIR}/bin|g" \
+        -e "s|__PG_DATA__|${PG_DATA}|g" \
+        -e "s|__TOOLS_DIR__|${TOOLS_DIR}|g" \
+        -e "s|__NODE_BIN__|${NODE_DIR}/bin/node|g" \
+        deploy/sera.service > /etc/systemd/system/sera.service
+    systemctl daemon-reload
+    systemctl enable sera >/dev/null 2>&1
+    systemctl restart sera
+    echo "   service installed + started: systemctl status sera / journalctl -u sera -f"
+    echo "   API on http://127.0.0.1:$PORT - front it with nginx + certbot (docs/HOSTING.md)"
+  fi
+
+  if [ "$WITH_BACKUP_CRON" = "yes" ]; then
+    echo "-- installing nightly backup cron --"
+    install -d -o "$SVC_USER" -g "$SVC_USER" /var/backups/sera
+    touch /var/log/sera-backup.log
+    chown "$SVC_USER":"$SVC_USER" /var/log/sera-backup.log
+    sed -e "s|__APP_DIR__|${SCRIPT_DIR}|g" \
+        -e "s|__SVC_USER__|${SVC_USER}|g" \
+        -e "s|__OFFSITE__|${OFFSITE_REMOTE}|g" \
+        deploy/sera-backup.cron > /etc/cron.d/sera-backup
+    chmod 644 /etc/cron.d/sera-backup
+    echo "   backup cron installed: /etc/cron.d/sera-backup -> /var/backups/sera (user $SVC_USER)"
+    if [ -n "$OFFSITE_REMOTE" ]; then
+      echo "   offsite destination: $OFFSITE_REMOTE"
+    else
+      echo "   WARNING: no offsite remote - dumps stay local only."
+    fi
+  fi
+  trap - EXIT
+  exit 0
+fi
+
+if [ "$IS_ROOT" = "yes" ]; then
   echo "ERROR: PostgreSQL cannot run as the root user." >&2
-  echo "       Run prod.sh as a normal (non-root) user, e.g.:" >&2
-  echo "         bash prod.sh --port 4000" >&2
-  echo "       To serve on the default privileged port 80 as that non-root user," >&2
-  echo "       grant node the bind capability once (as root):" >&2
-  echo "         sudo setcap cap_net_bind_service=+ep \$HOME/.../sera-backend/.prod-tools/node-*/bin/node" >&2
-  echo "       (or use --systemd, which runs the service unprivileged.)" >&2
+  echo "       Production: sudo bash prod.sh --systemd   (runs as the '$SVC_USER' service user)" >&2
+  echo "       Foreground test: run as a normal user, e.g.  bash prod.sh --port 4000" >&2
   exit 1
 fi
+
+# npm cache inside the app dir (service users may have no writable home)
+export npm_config_cache="$TOOLS_DIR/npm-cache"
+mkdir -p "$TOOLS_DIR"
 
 ensure_node
 ensure_pgsql
@@ -180,7 +257,7 @@ ensure_pg_libs
 # capability then persists across runs. If it can't be granted, the node
 # server would fail to bind, so we error out early with the fix (or point at
 # the nginx/Caddy reverse-proxy path in docs/HOSTING.md).
-if [ "$PORT" -lt 1024 ] && [ "$(id -u 2>/dev/null || echo 1)" -ne 0 ]; then
+if [ "$BOOTSTRAP_ONLY" != "yes" ] && [ "$PORT" -lt 1024 ]; then
   node_bin="$NODE_DIR/bin/node"
   node_real="$(readlink -f "$node_bin" 2>/dev/null || echo "$node_bin")"
   if command -v setcap >/dev/null 2>&1 && [ -f "$node_real" ]; then
@@ -231,6 +308,8 @@ else
   printf 'PORT=%s\n' "${PORT}" >> .env
 fi
 
+chmod 600 .env   # secrets: owner-only on every run (also fixes older installs)
+
 # force local PG settings
 sed -i "s/^DB_HOST=.*/DB_HOST=127.0.0.1/" .env 2>/dev/null || echo "DB_HOST=127.0.0.1" >> .env
 sed -i "s/^DB_PORT=.*/DB_PORT=${PG_PORT}/" .env 2>/dev/null || echo "DB_PORT=${PG_PORT}" >> .env
@@ -245,12 +324,12 @@ if [ ! -f "$PG_DATA/postgresql.conf" ]; then
   echo "-- initializing PostgreSQL data dir --"
   mkdir -p "$PG_DATA"
   set +e
-  initdb -D "$PG_DATA" -U "$DB_USER" -E UTF8 --locale=C 2>"/tmp/sera_initdb_err.txt"
+  initdb -D "$PG_DATA" -U "$DB_USER" -E UTF8 --locale=C 2>"$TOOLS_DIR/initdb_err.txt"
   init_rc=$?
   set -e
   if [ "$init_rc" -ne 0 ]; then
     echo "ERROR: initdb failed" >&2
-    cat "/tmp/sera_initdb_err.txt" >&2
+    cat "$TOOLS_DIR/initdb_err.txt" >&2
     exit 1
   fi
 
@@ -298,6 +377,7 @@ else
     echo "       If port $PG_PORT is already in use, stop the other instance first." >&2
     exit 1
   fi
+  PG_STARTED=yes
 fi
 for i in $(seq 1 40); do
   sleep 0.5
@@ -346,10 +426,10 @@ strip_bom() {
 echo "-- applying schema (db.sql) --"
 DBSQL=$(strip_bom db.sql)
 PGPASSWORD="$DB_PASS" psql -h 127.0.0.1 -p $PG_PORT -U "$DB_USER" -d "$DB_NAME" \
-  -v ON_ERROR_STOP=1 -f "$DBSQL" 2>/tmp/sera_schema_err.txt || {
+  -v ON_ERROR_STOP=1 -f "$DBSQL" 2>"$TOOLS_DIR/schema_err.txt" || {
   echo "WARNING: schema apply returned non-zero (tables may already exist)"
   echo "--- db.sql psql output (tail) ---"
-  tail -n 40 /tmp/sera_schema_err.txt
+  tail -n 40 "$TOOLS_DIR/schema_err.txt"
 }
 echo "   schema OK"
 
@@ -358,10 +438,10 @@ echo "   schema OK"
 echo "-- applying production seed (seed-prod.sql) --"
 SEEDPRODSQL=$(strip_bom seed-prod.sql)
 PGPASSWORD="$DB_PASS" psql -h 127.0.0.1 -p $PG_PORT -U "$DB_USER" -d "$DB_NAME" \
-  -v ON_ERROR_STOP=1 -f "$SEEDPRODSQL" 2>/tmp/sera_seed_err.txt || {
+  -v ON_ERROR_STOP=1 -f "$SEEDPRODSQL" 2>"$TOOLS_DIR/seed_err.txt" || {
   echo "WARNING: seed-prod.sql apply returned non-zero"
   echo "--- seed-prod.sql psql output (tail) ---"
-  tail -n 40 /tmp/sera_seed_err.txt
+  tail -n 40 "$TOOLS_DIR/seed_err.txt"
 }
 echo "   seed OK"
 
@@ -370,71 +450,21 @@ if [ "$WITH_SEED" = "yes" ]; then
   echo "   WARNING: --seed loads DEMO data with published passwords"
   DEMOSQL=$(strip_bom seed.sql)
   PGPASSWORD="$DB_PASS" psql -h 127.0.0.1 -p $PG_PORT -U "$DB_USER" -d "$DB_NAME" \
-    -f "$DEMOSQL" 2>/tmp/sera_demo_err.txt || {
+    -f "$DEMOSQL" 2>"$TOOLS_DIR/demo_err.txt" || {
     echo "--- seed.sql psql output (tail) ---"
-    tail -n 40 /tmp/sera_demo_err.txt
+    tail -n 40 "$TOOLS_DIR/demo_err.txt"
   }
-fi
-
-# ── systemd unit (--systemd) ───────────────────────────────────
-if [ "$WITH_SYSTEMD" = "yes" ]; then
-  echo "-- installing systemd service --"
-  SVC_USER="${SVC_USER:-sera}"
-  id -u "$SVC_USER" >/dev/null 2>&1 || useradd -r -s /usr/sbin/nologin "$SVC_USER"
-  chown -R "$SVC_USER":"$SVC_USER" "$SCRIPT_DIR"
-  cat > /etc/systemd/system/sera.service <<UNIT
-[Unit]
-Description=Sera API
-After=network.target
-
-[Service]
-Type=simple
-User=$SVC_USER
-WorkingDirectory=$SCRIPT_DIR
-Environment=NODE_ENV=production
-Environment=PORT=$PORT
-Environment=DB_HOST=127.0.0.1
-Environment=DB_PORT=$PG_PORT
-EnvironmentFile=$SCRIPT_DIR/.env
-ExecStartPre=$PG_DIR/bin/pg_ctl start -D $PG_DATA -l $TOOLS_DIR/pg_ctl.log -w
-ExecStop=$PG_DIR/bin/pg_ctl stop -D $PG_DATA -m fast -w
-ExecStart=$NODE_DIR/bin/node server.js
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-  systemctl daemon-reload
-  systemctl enable --now sera
-  echo "-- service installed: systemctl status sera --"
-fi
-
-# ── nightly backup + maintenance cron (--backup-cron) ───────────
-if [ "$WITH_BACKUP_CRON" = "yes" ]; then
-  echo "-- installing nightly backup cron --"
-  SVC_USER="${SVC_USER:-sera}"
-  id -u "$SVC_USER" >/dev/null 2>&1 || useradd -r -s /usr/sbin/nologin "$SVC_USER"
-  install -d -o "$SVC_USER" -g "$SVC_USER" /var/backups/sera
-  touch /var/log/sera-backup.log
-  chown "$SVC_USER":"$SVC_USER" /var/log/sera-backup.log
-  sed -e "s|__APP_DIR__|${SCRIPT_DIR}|g" \
-      -e "s|__SVC_USER__|${SVC_USER}|g" \
-      -e "s|__OFFSITE__|${OFFSITE_REMOTE}|g" \
-      deploy/sera-backup.cron > /etc/cron.d/sera-backup
-  chmod 644 /etc/cron.d/sera-backup
-  echo "-- backup cron installed: /etc/cron.d/sera-backup -> /var/backups/sera (user $SVC_USER)"
-  if [ -n "$OFFSITE_REMOTE" ]; then
-    echo "   offsite destination: $OFFSITE_REMOTE"
-  else
-    echo "   WARNING: no offsite remote — dumps stay local only."
-  fi
 fi
 
 # ── install npm deps if needed ──────────────────────────────────
 if [ ! -f "$SCRIPT_DIR/node_modules/.package-lock.json" ]; then
   echo "-- installing production dependencies --"
-  npm ci --omit=dev 2>/dev/null || npm install --omit=dev 2>/dev/null
+  npm ci --omit=dev --no-audit --no-fund || npm install --omit=dev --no-audit --no-fund
+fi
+
+if [ "$BOOTSTRAP_ONLY" = "yes" ]; then
+  echo "-- bootstrap complete (PostgreSQL will stop; the service starts it) --"
+  exit 0
 fi
 
 # ── banner ──────────────────────────────────────────────────────
@@ -443,7 +473,7 @@ echo "=================================="
 echo "  Sera backend"
 echo "  PostgreSQL: 127.0.0.1:$PG_PORT"
 echo "  API:        http://localhost:$PORT"
-if [ "$PORT" = "80" ] && [ "$WITH_SYSTEMD" != "yes" ]; then echo "  Public:     http://<your-public-ip>/ (HTTP-only, site + API same-origin)"; fi
+if [ "$PORT" = "80" ]; then echo "  Public:     http://<your-public-ip>/ (HTTP-only, site + API same-origin)"; fi
 echo "  Node:       v$NODE_VERSION (local)"
 echo "  Ctrl+C to stop"
 echo "=================================="

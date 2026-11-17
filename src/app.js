@@ -28,6 +28,7 @@ const odontogramRoutes = require('./routes/odontogram');
 const publicBookingRoutes = require('./routes/publicBookings');
 const signupRoutes = require('./routes/signup');
 const platformRoutes = require('./routes/platform');
+const clinicRoutes = require('./routes/clinic');
 
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
@@ -136,8 +137,18 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Liveness + DB readiness: 503 when PostgreSQL is unreachable so uptime monitors
+// (and the deploy checks in docs/HOSTING.md) catch a dead database, not just a dead node.
+app.get('/health', async (req, res) => {
+  const timestamp = new Date().toISOString();
+  try {
+    const { sql } = require('kysely');
+    await sql`SELECT 1`.execute(require('./config/database'));
+    res.json({ status: 'ok', db: 'ok', timestamp });
+  } catch (err) {
+    logger.error('Health check: database unreachable', { message: err.message });
+    res.status(503).json({ status: 'degraded', db: 'down', timestamp });
+  }
 });
 
 app.get('/api/version', (req, res) => {
@@ -161,6 +172,7 @@ app.use('/api/v1/prescriptions', mutationLimiter);
 app.use('/api/v1/notifications', mutationLimiter);
 app.use('/api/v1/odontogram', mutationLimiter);
 app.use('/api/v1/users', mutationLimiter);
+app.use('/api/v1/clinic', mutationLimiter);
 
 // API v1 routes
 app.use('/api/v1/auth', authRoutes);
@@ -170,6 +182,7 @@ app.use('/api/v1/patients', patientRoutes);
 app.use('/api/v1/appointments', appointmentRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/clinic', clinicRoutes);
 app.use('/api/v1/inventory', inventoryRoutes);
 app.use('/api/v1/treatments', treatmentRoutes);
 app.use('/api/v1/payments', paymentRoutes);
