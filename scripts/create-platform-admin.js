@@ -67,7 +67,7 @@ const PLATFORM_SUBDOMAIN = 'sera-platform';
         .execute();
       await db.insertInto('user_roles')
         .values({ user_id: existing.id, role_id: role.id })
-        .onConflictDoNothing()
+        .onConflict((oc) => oc.doNothing())
         .execute();
       console.log(`platform admin credentials reset for ${email}`);
     } else {
