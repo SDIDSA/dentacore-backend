@@ -152,7 +152,7 @@ try {
 
     # scripts/: only runtime-relevant utilities
     New-Item -ItemType Directory -Path (Join-Path $stage 'scripts') -Force | Out-Null
-    foreach ($s in 'verify-multitenancy.js', 'test-db-connection.js') {
+    foreach ($s in 'verify-multitenancy.js', 'test-db-connection.js', 'create-platform-admin.js') {
         Copy-ItemChecked (Join-Path $ROOT "scripts\$s") (Join-Path $stage 'scripts')
     }
 

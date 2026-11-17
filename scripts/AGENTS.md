@@ -21,6 +21,7 @@ Maintenance and utility scripts for database management and seeding.
 - Seeded admin credentials: `admin@elqods.dz` / `Admin@2025!` and `admin@sourire.dz` / `Sourire@2025!` (the old `admin@dental-clinic.dz` / `Admin@123456` values printed by deploy scripts were stale and have been corrected)
 - Schema is in `db.sql`, seed data in `seed.sql` (both at project root)
 - All scripts are run from project root
+- The hosted zip (`package-backend.ps1`) ships only `create-platform-admin.js`, `test-db-connection.js` and `verify-multitenancy.js`; a script the server docs tell operators to run must be in that list
 
 ## Work Guidance
 
