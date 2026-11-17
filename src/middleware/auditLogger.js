@@ -7,29 +7,44 @@ const MAX_QUEUE_SIZE = 1000;
 let queue = [];
 let processing = false;
 
+function toRow(entry) {
+  return {
+    tenant_id: entry.tenantId,
+    user_id: entry.userId,
+    action: entry.action,
+    entity_type: entry.entityType,
+    entity_id: entry.entityId,
+    old_values: entry.oldValues ? JSON.stringify(entry.oldValues) : null,
+    new_values: entry.newValues ? JSON.stringify(entry.newValues) : null,
+    ip_address: entry.ipAddress,
+    user_agent: entry.userAgent,
+  };
+}
+
+function requeue(entry) {
+  if (entry._retries < MAX_RETRIES) {
+    queue.push({ ...entry, _retries: (entry._retries || 0) + 1 });
+  } else {
+    logger.error('Audit entry dropped after retries', { entityType: entry.entityType, entityId: entry.entityId });
+  }
+}
+
 async function processQueue() {
   if (processing || queue.length === 0) return;
   processing = true;
   const batch = queue.splice(0);
   try {
-    await db.insertInto('audit_logs')
-      .values(batch.map(entry => ({
-        tenant_id: entry.tenantId,
-        user_id: entry.userId,
-        action: entry.action,
-        entity_type: entry.entityType,
-        entity_id: entry.entityId,
-        old_values: entry.oldValues ? JSON.stringify(entry.oldValues) : null,
-        new_values: entry.newValues ? JSON.stringify(entry.newValues) : null,
-        ip_address: entry.ipAddress,
-        user_agent: entry.userAgent,
-      })))
-      .execute();
+    await db.insertInto('audit_logs').values(batch.map(toRow)).execute();
   } catch (error) {
-    logger.error('Audit batch insert failed, entries queued for retry', { error: error.message, batchSize: batch.length });
+    // One invalid entry (e.g. a non-UUID entity_id) must not take the rest of
+    // the batch down with it: fall back to row-by-row and retry only failures.
+    logger.error('Audit batch insert failed, retrying entries individually', { error: error.message, batchSize: batch.length });
     for (const entry of batch) {
-      if (entry._retries < MAX_RETRIES) {
-        queue.push({ ...entry, _retries: (entry._retries || 0) + 1 });
+      try {
+        await db.insertInto('audit_logs').values(toRow(entry)).execute();
+      } catch (rowError) {
+        logger.error('Audit entry insert failed', { error: rowError.message, entityType: entry.entityType });
+        requeue(entry);
       }
     }
   } finally {

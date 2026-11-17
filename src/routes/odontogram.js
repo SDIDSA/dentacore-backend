@@ -252,7 +252,7 @@ router.delete('/:patientId/tooth/:toothNumber',
         await req.audit.log({
           action: 'DELETE',
           entityType: 'odontogram_conditions',
-          entityId: `${patientId}:${toothNumber}`,
+          entityId: patientId,
           tenantId: req.tenantId,
           oldValues: condition
         });

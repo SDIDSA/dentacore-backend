@@ -30,7 +30,7 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 - Route responses are returned bare (arrays/objects directly via `res.json`); `src/middleware/responseFormatter.js` exists but is **not mounted** in `src/app.js` — do not claim a `{ data, meta }` envelope on the wire
 - Auth via JWT bearer tokens, middleware in `auth.js`; access/refresh expiry defaults to `24h`/`7d` when `JWT_EXPIRES_IN`/`JWT_REFRESH_EXPIRES_IN` are unset
 - Rate limiting applied to all mutation routes via `rateLimiter.js` — `apiLimiter` (60/min) and `mutationLimiter` (30/min) are mounted **before** the routers in `src/app.js`; `mutationLimiter` counts mutation methods only (GET/HEAD/OPTIONS skip); both are bypassed when `NODE_ENV=test`. `src/app.js` sets `trust proxy = 1` (the nginx hop) so per-IP limits see real client addresses behind the reverse proxy
-- Audit logging via `auditLogger.js` middleware (in-memory queue capped at 1000 entries); DB-side retention is handled by the hosting box (`deploy/backup.sh` trims `audit_logs` older than 180 days)
+- Audit logging via `auditLogger.js` middleware (in-memory queue capped at 1000 entries; a failed batch insert falls back to row-by-row so one bad entry can't drop the others). `entity_id` is a **UUID column** — pass the entity's UUID (put compound keys such as a tooth number in `oldValues`/`newValues`, never in `entityId`); DB-side retention is handled by the hosting box (`deploy/backup.sh` trims `audit_logs` older than 180 days)
 - API usage logging via `apiUsageLogger.js` (non-blocking, writes to `api_usage_logs`, auto-prunes entries >30 days); mounted after `auditLogger` in `src/app.js`
 - Stack traces hidden in production (`NODE_ENV=production`); production 500s also return the generic `error.internal_server` key and fire an optional `ERROR_WEBHOOK_URL` alert
 - Logs mirror to `logs/backend.log` with size rotation (`LOG_FILE=false` disables); unhandled rejections are logged and uncaught exceptions trigger graceful shutdown
@@ -49,7 +49,7 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 ## Work Guidance
 
 ## Verification
-- `npm test` runs the Jest suite (supertest API tests) — 228 pass across 16 files (incl. `clinic.test.js`: clinic profile, opening hours → portal slots, dentist hour sync, self-service password, notification mutes). Needs a DB with `db.sql` + `seed-prod.sql` + `seed.sql` applied under `ON_ERROR_STOP=1` (same as CI); DB settings can be overridden by env vars (`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`), which take precedence over `.env`
+- `npm test` runs the Jest suite (supertest API tests) — 230 pass across 17 files (incl. `clinic.test.js`: clinic profile, opening hours → portal slots, dentist hour sync, self-service password, notification mutes, reminder delivery status; `auditQueue.test.js`: bad-entry isolation). Needs a DB with `db.sql` + `seed-prod.sql` + `seed.sql` applied under `ON_ERROR_STOP=1` (same as CI); DB settings can be overridden by env vars (`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`), which take precedence over `.env`
 - Packaging: `package-backend.ps1 -OutDir <scratch dir>` gates every staged `.js` with `node --check` and checks LF purity; `bash -n prod.sh` for shell syntax
 - SonarQube real-scan (projectVersion 1.3): bugs 0, vulnerabilities 0, code_smells 14, reliability_rating 1.0
 
@@ -59,6 +59,6 @@ Node.js/Express REST API for the Algerian Dental Management System. Serves as th
 - `src/routes/` — API route definitions for the 19 entity types + public booking portal
 - `src/services/` — Business logic services (notifications, reminder scheduling)
 - `src/utils/` — Shared utilities: CSV, logger, pagination, file upload, availability
-- `src/__tests__/` — Jest test suite, 16 files (incl. `platform.test.js` for the operator console API)
+- `src/__tests__/` — Jest test suite, 17 files (incl. `platform.test.js` for the operator console API)
 - `scripts/` — Database recreate, seed, and verify scripts
 - `.github/` — CI workflow

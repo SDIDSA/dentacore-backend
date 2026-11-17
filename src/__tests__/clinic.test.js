@@ -56,6 +56,9 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable || !ctx) return;
   try {
+    // appointments.dentist_id is ON DELETE RESTRICT: clear them before the tenant cascade
+    await db.deleteFrom('notifications').where('tenant_id', '=', ctx.tenant.id).execute();
+    await db.deleteFrom('appointments').where('tenant_id', '=', ctx.tenant.id).execute();
     await db.deleteFrom('tenants').where('id', '=', ctx.tenant.id).execute();
   } catch (_) { /* ignore cleanup errors */ }
 });
@@ -208,5 +211,46 @@ describe('Notification type mutes', () => {
     const junk = await request(app).get('/api/v1/notifications')
       .query({ exclude_types: "x'); DROP TABLE users;--" }).set(auth(ctx.adminToken));
     expect(junk.statusCode).toBe(200);
+  });
+});
+
+describe('Appointment reminders', () => {
+  it('records an undeliverable reminder as failed, never as sent, and does not retry it', async () => {
+    if (!dbAvailable) return;
+    const { checkUpcomingAppointments } = require('../services/notificationService');
+    const savedSmtp = process.env.SMTP_HOST;
+    delete process.env.SMTP_HOST; // never send real mail from tests
+    try {
+      const [patient] = await db.insertInto('patients').values({
+        tenant_id: ctx.tenant.id,
+        patient_code: `R${ctx.suffix}`.slice(0, 20),
+        full_name: `Reminder Patient ${ctx.suffix}`,
+        phone: `+213${String(Date.now() + 77).slice(-9)}`,
+        email: `patient-${ctx.suffix}@test.dz`,
+      }).returning('id').execute();
+      const [appt] = await db.insertInto('appointments').values({
+        tenant_id: ctx.tenant.id,
+        patient_id: patient.id,
+        dentist_id: ctx.dentist.id,
+        appointment_date: new Date(Date.now() + 3 * 3600000),
+        status_key: 'appt.status.scheduled',
+      }).returning('id').execute();
+
+      const sent = await checkUpcomingAppointments(ctx.tenant.id);
+      expect(sent.find((s) => s.appointmentId === appt.id)).toBeUndefined();
+
+      const rows = await db.selectFrom('notifications').selectAll()
+        .where('appointment_id', '=', appt.id).execute();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ type: 'reminder', channel: 'email', status: 'failed' });
+      expect(rows[0].sent_at).toBeNull();
+
+      await checkUpcomingAppointments(ctx.tenant.id);
+      const again = await db.selectFrom('notifications').select('id')
+        .where('appointment_id', '=', appt.id).execute();
+      expect(again).toHaveLength(1);
+    } finally {
+      if (savedSmtp !== undefined) process.env.SMTP_HOST = savedSmtp;
+    }
   });
 });
