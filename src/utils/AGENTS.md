@@ -11,11 +11,13 @@ Shared utility modules used across routes and services.
 - `fileSink.js` — Size-rotated file log sink (`logs/backend.log`, 5 MB × 5 files; `LOG_DIR`/`LOG_MAX_SIZE_BYTES`/`LOG_MAX_FILES` override) — best-effort, never crashes the process
 - `paginate.js` — Kysely-based pagination helper (page/limit/sort/order)
 - `upload.js` — Multer-based file upload configuration
+- `email.js` — `EMAIL_NORMALIZE`: the only allowed `normalizeEmail()` options (lowercase only, provider rewrites such as Gmail dot / `+tag` stripping off)
 
 ## Local Contracts
 - `paginate.js` is the standard pagination interface for all list endpoints; the `{data, total, limit, offset}` envelope is returned ONLY when `?limit=` is explicitly present — param-less requests get bare id arrays (the JavaFX client relies on this)
 - `csv.js` handles both export (rows → CSV string) and import (CSV → rows)
 - `upload.js` configured for Cloudinary-compatible file handling
+- Every `body(...).normalizeEmail()` passes `EMAIL_NORMALIZE`: validator defaults strip Gmail dots, so the normalized login address no longer matches the stored one (operator login broke on `first.last@gmail.com`); scripts that write `users.email` trim + lowercase to the same form
 
 ## Work Guidance
 

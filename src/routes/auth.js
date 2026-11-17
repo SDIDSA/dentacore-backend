@@ -9,6 +9,7 @@ const { sql } = require('kysely');
 const { authenticate } = require('../middleware/auth');
 const logger = require('../config/logger');
 const { primaryRoleKey } = require('../utils/roleUtil');
+const { EMAIL_NORMALIZE } = require('../utils/email');
 
 const router = express.Router();
 
@@ -26,7 +27,7 @@ const error = (res, code, err) => {
 }
 
 router.post('/login', loginLimiter,
-  body('email').isEmail().normalizeEmail(),
+  body('email').isEmail().normalizeEmail(EMAIL_NORMALIZE),
   body('password').notEmpty(),
   async (req, res, next) => {
 

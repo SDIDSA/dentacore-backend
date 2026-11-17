@@ -79,9 +79,10 @@ curl.exe http://127.0.0.1:4000/health
 
 - `-Service` registers the `Sera` SYSTEM Scheduled Task (at boot: start PG if needed, run node,
   output to `logs\service.log`). The script installs deps, hands PG over to the task and exits.
-- `-Domain` downloads Caddy into `.prod-tools\caddy\`, installs it as the `Caddy` Windows service
-  with automatic Let's Encrypt TLS, and re-homes the API to port 4000. Open ports 80 + 443 in the
-  Windows firewall (`New-NetFirewallRule -DisplayName Sera-Web -Direction Inbound -Protocol TCP -LocalPort 80,443 -Action Allow`).
+- `-Domain` downloads Caddy into `.prod-tools\caddy\` and runs it as the `Sera-Caddy` SYSTEM Scheduled Task
+  (`logs\caddy.log`, certificates in `.prod-tools\caddy\data`) with automatic Let's Encrypt TLS, and re-homes the API to port 4000. Open ports 80 + 443 in the
+  Windows firewall, and forward both ports on the router; a home connection behind ISP CGNAT
+  (your router's WAN address is private, e.g. `10.x` / `100.64.x`) cannot receive them at all (`New-NetFirewallRule -DisplayName Sera-Web -Direction Inbound -Protocol TCP -LocalPort 80,443 -Action Allow`).
 - `-BackupCron` registers `Sera-Backup` (daily 02:30, `deploy\backup.ps1` → `C:\ProgramData\Sera\backups`).
 - Restart after editing `.env`: `schtasks /End /TN Sera; schtasks /Run /TN Sera`.
 
