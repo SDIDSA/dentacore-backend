@@ -457,27 +457,51 @@ if ($BackupCron) {
 }
 
 # ── Caddy reverse proxy (-Domain) ──────────────────────────────
+# Caddy v2 has no Windows-service installer (`caddy install` does not exist), so it runs
+# like the API: a SYSTEM Scheduled Task ("Sera-Caddy", at boot) executing `caddy run`.
+# Certificates/ACME state live in .prod-tools\caddy\data (XDG_DATA_HOME) so they survive
+# re-runs and do not depend on whichever profile the task runs under.
 if ($Domain) {
     Write-Step "Installing Caddy reverse proxy for $Domain"
     $caddy = Ensure-Caddy
+    $caddyDir = Split-Path $caddy -Parent
+    $caddyData = Join-Path $caddyDir "data"
+    $caddyConf = Join-Path $caddyDir "config"
+    New-Item -ItemType Directory -Force $caddyData, $caddyConf, (Join-Path $ROOT "logs") | Out-Null
     $deployDir = Join-Path $ROOT "deploy"
     New-Item -ItemType Directory -Force $deployDir | Out-Null
     $caddyfile = Join-Path $deployDir "Caddyfile"
-    @"
-$Domain {
-    reverse_proxy localhost:$Port
-}
-"@ | Set-Content -Path $caddyfile -Encoding UTF8 -NoNewline
+    # no BOM: Caddy's Caddyfile parser rejects a leading U+FEFF
+    [IO.File]::WriteAllText($caddyfile, "$Domain {`n    reverse_proxy localhost:$Port`n}`n", [Text.UTF8Encoding]::new($false))
     Write-Sub "Caddyfile written to $caddyfile"
-    $caddySvc = Get-Service -Name "Caddy" -ErrorAction SilentlyContinue
-    if ($caddySvc -and $caddySvc.Status -eq "Running") {
-        Stop-Service -Name "Caddy" -Force -ErrorAction SilentlyContinue
+
+    & $caddy validate --config $caddyfile --adapter caddyfile 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: Caddyfile failed validation:" -ForegroundColor Red
+        & $caddy validate --config $caddyfile --adapter caddyfile
+        exit 1
     }
-    & $caddy stop 2>$null
-    & $caddy install --config $caddyfile --adapter caddyfile 2>$null
-    Start-Service -Name "Caddy" -ErrorAction SilentlyContinue
-    Write-Sub "Caddy service installed and started"
-    Write-Sub "https://$Domain -> http://localhost:$Port"
+
+    $caddyRunner = Join-Path $ROOT "run-caddy.cmd"
+    @"
+@echo off
+cd /d "$ROOT"
+set XDG_DATA_HOME=$caddyData
+set XDG_CONFIG_HOME=$caddyConf
+"$caddy" run --config "$caddyfile" --adapter caddyfile >> "$ROOT\logs\caddy.log" 2>&1
+"@ | Set-Content -Path $caddyRunner -Encoding Ascii
+
+    # replace any earlier attempt (the old script tried a "Caddy" Windows service)
+    $oldSvc = Get-Service -Name "Caddy" -ErrorAction SilentlyContinue
+    if ($oldSvc) { Stop-Service -Name "Caddy" -Force -ErrorAction SilentlyContinue }
+    schtasks /End /TN "Sera-Caddy" 2>$null | Out-Null
+    Get-Process caddy -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $caddy } | Stop-Process -Force -ErrorAction SilentlyContinue
+
+    schtasks /Create /F /TN "Sera-Caddy" /RU SYSTEM /RL HIGHEST /SC ONSTART /TR "`"$caddyRunner`"" | Out-Null
+    if ($LASTEXITCODE -ne 0) { Write-Host "ERROR: could not register the Sera-Caddy task" -ForegroundColor Red; exit 1 }
+    schtasks /Run /TN "Sera-Caddy" | Out-Null
+    Write-Sub "Caddy running as the 'Sera-Caddy' Scheduled Task (logs\caddy.log)"
+    Write-Sub "https://$Domain -> http://localhost:$Port (certificate is fetched on first start; ports 80+443 must reach this machine)"
 }
 
 Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
