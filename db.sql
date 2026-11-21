@@ -434,7 +434,7 @@ CREATE INDEX IF NOT EXISTS idx_invoice_items_treatment ON invoice_items(treatmen
 CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
     payment_method_id UUID NOT NULL REFERENCES payment_methods(id) ON DELETE RESTRICT,
     amount_dzd DECIMAL(12, 2) NOT NULL,
     payment_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -667,7 +667,7 @@ CREATE INDEX IF NOT EXISTS idx_po_items_expiry ON purchase_order_items(expiry_da
 CREATE TABLE IF NOT EXISTS stock_movements (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    inventory_item_id UUID NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
+    inventory_item_id UUID NOT NULL REFERENCES inventory_items(id) ON DELETE RESTRICT,
     movement_type VARCHAR(50) NOT NULL,
     quantity DECIMAL(10, 3) NOT NULL,
     unit_cost_dzd DECIMAL(12, 2),
@@ -935,7 +935,7 @@ BEGIN
     
     -- Get the next sequence number for this tenant and month
     SELECT COALESCE(MAX(
-        CAST(SUBSTRING(invoice_number FROM 13) AS INTEGER)
+        CAST(SUBSTRING(invoice_number FROM 12) AS INTEGER)
     ), 0) + 1
     INTO sequence_num
     FROM invoices
@@ -1009,7 +1009,7 @@ BEGIN
     month_str := TO_CHAR(CURRENT_DATE, 'MM');
     
     SELECT COALESCE(MAX(
-        CAST(SUBSTRING(po_number FROM 12) AS INTEGER)
+        CAST(SUBSTRING(po_number FROM 11) AS INTEGER)
     ), 0) + 1
     INTO sequence_num
     FROM purchase_orders
@@ -1035,7 +1035,7 @@ BEGIN
     month_str := TO_CHAR(CURRENT_DATE, 'MM');
     
     SELECT COALESCE(MAX(
-        CAST(SUBSTRING(expense_number FROM 13) AS INTEGER)
+        CAST(SUBSTRING(expense_number FROM 12) AS INTEGER)
     ), 0) + 1
     INTO sequence_num
     FROM expenses
@@ -1179,6 +1179,26 @@ CREATE OR REPLACE TRIGGER trg_update_stock_levels
 -- ============================================================================
 
 CREATE OR REPLACE VIEW v_patient_summary AS
+WITH appt_agg AS (
+    SELECT tenant_id, patient_id, 
+           COUNT(*) AS total_appointments, 
+           MAX(appointment_date) AS last_appointment_date
+    FROM appointments
+    GROUP BY tenant_id, patient_id
+),
+treat_agg AS (
+    SELECT tenant_id, patient_id, 
+           COUNT(*) AS total_treatments
+    FROM treatment_records
+    GROUP BY tenant_id, patient_id
+),
+inv_agg AS (
+    SELECT tenant_id, patient_id, 
+           COALESCE(SUM(total_dzd), 0) AS total_billed_dzd,
+           COALESCE(SUM(paid_amount_dzd), 0) AS total_paid_dzd
+    FROM invoices
+    GROUP BY tenant_id, patient_id
+)
 SELECT 
     p.tenant_id,
     p.id,
@@ -1187,18 +1207,16 @@ SELECT
     p.phone,
     p.email,
     w.name_key AS wilaya_name_key,
-    COUNT(DISTINCT a.id) AS total_appointments,
-    COUNT(DISTINCT tr.id) AS total_treatments,
-    COALESCE(SUM(i.total_dzd), 0) AS total_billed_dzd,
-    COALESCE(SUM(i.paid_amount_dzd), 0) AS total_paid_dzd,
-    MAX(a.appointment_date) AS last_appointment_date
+    COALESCE(a.total_appointments, 0) AS total_appointments,
+    COALESCE(tr.total_treatments, 0) AS total_treatments,
+    COALESCE(i.total_billed_dzd, 0) AS total_billed_dzd,
+    COALESCE(i.total_paid_dzd, 0) AS total_paid_dzd,
+    a.last_appointment_date
 FROM patients p
 LEFT JOIN wilayas w ON p.wilaya_id = w.id
-LEFT JOIN appointments a ON p.id = a.patient_id AND p.tenant_id = a.tenant_id
-LEFT JOIN treatment_records tr ON p.id = tr.patient_id AND p.tenant_id = tr.tenant_id
-LEFT JOIN invoices i ON p.id = i.patient_id AND p.tenant_id = i.tenant_id
-GROUP BY p.tenant_id, p.id, p.patient_code, p.full_name,  
-         p.phone, p.email, w.name_key;
+LEFT JOIN appt_agg a ON p.id = a.patient_id AND p.tenant_id = a.tenant_id
+LEFT JOIN treat_agg tr ON p.id = tr.patient_id AND p.tenant_id = tr.tenant_id
+LEFT JOIN inv_agg i ON p.id = i.patient_id AND p.tenant_id = i.tenant_id;
 
 CREATE OR REPLACE VIEW v_outstanding_invoices AS
 SELECT 

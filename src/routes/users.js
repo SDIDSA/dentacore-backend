@@ -93,13 +93,19 @@ router.get('/search', async (req, res, next) => {
 const createUserLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10,
-  message: { error: 'auth.error.too_many_requests', details: 'Too many user creation attempts, please try again later' }
+  message: { error: 'auth.error.too_many_requests', details: 'Too many user creation attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
 });
 
 const changePasswordLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5,
-  message: { error: 'auth.error.too_many_requests', details: 'Too many password change attempts, please try again later' }
+  message: { error: 'auth.error.too_many_requests', details: 'Too many password change attempts, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
 });
 
 

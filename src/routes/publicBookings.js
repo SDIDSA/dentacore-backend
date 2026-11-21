@@ -201,34 +201,42 @@ router.post(
         .execute();
       const patient_code = `PAT-${year}-${String(Number(maxnum) + 1).padStart(4, '0')}`;
 
-      const patient = await db
-        .insertInto('patients')
-        .values({
-          tenant_id: req.tenantId,
-          patient_code,
-          full_name: full_name.trim(),
-          phone,
-        })
-        .returningAll()
-        .executeTakeFirst();
-
-      // 6. appointment; uq_appt_active_slot arbitrates concurrent grabs
+      // 5 & 6. Guest patient and appointment created atomically in a transaction;
+      // uq_appt_active_slot arbitrates concurrent grabs and rolls back the patient stub on conflict.
+      let patient;
       let appointment;
       try {
-        appointment = await db
-          .insertInto('appointments')
-          .values({
-            tenant_id: req.tenantId,
-            patient_id: patient.id,
-            dentist_id,
-            appointment_date: when,
-            duration_minutes: group.slot_minutes,
-            status_key: 'appt.status.scheduled',
-            reason,
-            notes: notes || null,
-          })
-          .returningAll()
-          .executeTakeFirst();
+        const created = await db.transaction().execute(async (trx) => {
+          const p = await trx
+            .insertInto('patients')
+            .values({
+              tenant_id: req.tenantId,
+              patient_code,
+              full_name: full_name.trim(),
+              phone,
+            })
+            .returningAll()
+            .executeTakeFirst();
+
+          const a = await trx
+            .insertInto('appointments')
+            .values({
+              tenant_id: req.tenantId,
+              patient_id: p.id,
+              dentist_id,
+              appointment_date: when,
+              duration_minutes: group.slot_minutes,
+              status_key: 'appt.status.scheduled',
+              reason,
+              notes: notes || null,
+            })
+            .returningAll()
+            .executeTakeFirst();
+
+          return { patient: p, appointment: a };
+        });
+        patient = created.patient;
+        appointment = created.appointment;
       } catch (err) {
         if (err.code === '23505') {
           return res.status(409).json({ error: 'public.booking.slot_taken' });
