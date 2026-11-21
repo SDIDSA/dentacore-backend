@@ -85,12 +85,18 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   }
 
+  // Preflight OPTIONS without Origin (e.g. CLI / health / proxy probes): answer directly
+  if (req.method === 'OPTIONS' && !origin) {
+    return res.sendStatus(204);
+  }
+
   // No Origin header => same-origin browser fetch; nothing to do.
   if (!origin) return next();
 
   // Explicit allow-list (CORS_ORIGIN), incl. wildcard.
   if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
     allow(origin);
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
     return next();
   }
 
@@ -100,6 +106,7 @@ app.use((req, res, next) => {
   try { sameHost = new URL(origin).host === host; } catch (_) { /* ignore */ }
   if (sameHost) {
     allow(origin);
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
     return next();
   }
 

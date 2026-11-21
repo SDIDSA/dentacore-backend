@@ -282,8 +282,8 @@ router.post('/',
           .select('appointments.id')
           .where('dentist_id', '=', dentist_id)
           .where('tenant_id', '=', req.tenantId)
-          .where('appointment_date', '<', sql`${appointment_date}::timestamp + (${duration_minutes} || ' minutes')::interval`)
-          .where(sql`${appointment_date}`, '<', sql`appointment_date + (duration_minutes || ' minutes')::interval`)
+          .where('appointment_date', '<', sql`${appointment_date}::timestamptz + (${duration_minutes} || ' minutes')::interval`)
+          .where(sql`${appointment_date}::timestamptz`, '<', sql`appointment_date + (duration_minutes || ' minutes')::interval`)
           .where('status_key', 'not in', ['appt.status.cancelled', 'appt.status.no_show'])
           .executeTakeFirst();
 
@@ -400,8 +400,8 @@ router.patch('/:id',
           .where('dentist_id', '=', targetDentistId)
           .where('tenant_id', '=', req.tenantId)
           .where('id', '!=', req.params.id)
-          .where('appointment_date', '<', sql`${targetDate}::timestamp + (${targetDuration} || ' minutes')::interval`)
-          .where(sql`${targetDate}`, '<', sql`appointment_date + (duration_minutes || ' minutes')::interval`)
+          .where('appointment_date', '<', sql`${targetDate}::timestamptz + (${targetDuration} || ' minutes')::interval`)
+          .where(sql`${targetDate}::timestamptz`, '<', sql`appointment_date + (duration_minutes || ' minutes')::interval`)
           .where('status_key', 'not in', ['appt.status.cancelled', 'appt.status.no_show'])
           .forUpdate()
           .executeTakeFirst();
