@@ -10,13 +10,14 @@ Express middleware pipeline — authentication, authorization, audit logging, ra
 - `tenantBySlug.js` — Public-route tenant resolution: maps the `:clinic` subdomain slug to `req.tenantId` + `req.tenant`; unknown/malformed slugs all return the same generic 404 (`public.clinic_not_found`) so the clinic namespace can't be probed. Must be attached as `router.use('/:clinic', …)` — a bare `router.use(fn)` matches everything but captures no params
 - `errorHandler.js` — Global error handler (hides stack traces in production)
 - `responseFormatter.js` — `{ data, meta }` envelope helper; **not mounted** in `src/app.js` (routes return bare responses today)
-- `conflictResolution.js` — Conflict resolution for offline sync
+- `conflictResolution.js` — Stale-write guard for offline sync (`res.conflictCheck(record)` → 409 `conflict.detected`)
 
 ## Local Contracts
 - Auth middleware must run before all protected routes
 - `responseFormatter` is not part of the active pipeline; `errorHandler` wraps all errors — in production, statuses ≥ 500 return the generic `error.internal_server` key, never the raw `err.message` (dev keeps real messages), and POST a non-blocking alert to `ERROR_WEBHOOK_URL` when set
 - Rate limiter configurable per-route via factory function; `mutationLimiter` skips safe methods (GET/HEAD/OPTIONS); all limiters bypassed when `NODE_ENV=test`
 - Audit logger skips non-mutation methods (GET/HEAD/OPTIONS)
+- **Conflict check never compares a raw client clock with server time (durable)**: client clocks drift (a PC 1 min slow had every calendar drag rejected). A live edit (only the `X-Client-Timestamp` send-time header) is never treated as stale; only an edit carrying its own edit time (`body.clientTimestamp`, offline replay) is checked, after shifting it by the sender's offset `serverNow - X-Client-Timestamp`. Covered by `__tests__/conflictResolution.test.js`
 - Socket.IO patient rooms are tenant-scoped (`patient:<tenantId>:<patientId>`; `emitToPatient(tenantId, patientId, …)`). The legacy `/api/v1/updates/*` local-file channel was removed 2026-08-25 — updates ship via GitHub Releases (`SDIDSA/packages`) consumed by the bootstrapper
 
 ## Work Guidance
