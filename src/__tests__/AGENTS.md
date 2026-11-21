@@ -28,7 +28,7 @@ Jest test suite for backend API endpoints, RBAC, multi-tenancy, and business log
 ## Work Guidance
 
 ## Verification
-- `npm test` from project root runs the full Jest suite (166 passing, 13 files)
+- `npm test` from project root runs the full Jest suite (235 passing across 18 files)
 - `crossTenantIsolation.test.js` also covers invoice line-item `treatment_record_id` and treatments.js reference tenancy (regression tests for the guards added pre-delivery)
 
 ## Child DOX Index
