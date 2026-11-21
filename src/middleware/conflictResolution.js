@@ -32,17 +32,29 @@ function conflictCheck(req, res, next) {
     return Number.NaN;
   };
 
-  const rawClientTimestamp = req.headers['x-client-timestamp'] ?? req.body?.clientTimestamp;
-  const clientTimestamp = parseTimestamp(rawClientTimestamp);
-  if (Number.isNaN(clientTimestamp)) {
-    return next();
-  }
-
-  req.clientTimestamp = clientTimestamp;
+  // Two client clocks are involved and they are NOT the server's clock:
+  //  - X-Client-Timestamp header: the client's clock when it SENT this request
+  //  - body.clientTimestamp:      the client's clock when the edit was MADE
+  //                               (only an offline-replayed edit carries one)
+  // Comparing either raw value with the server's updated_at turns any clock
+  // skew into false conflicts: a PC running 1 minute slow had every save of a
+  // just-created appointment rejected with 409 (calendar drags snapped back).
+  // So: a live edit (no edit time) is happening now and is never stale; an
+  // offline edit's time is shifted into server time by the sender's measured
+  // offset (server now - header).
+  const editTime = parseTimestamp(req.body?.clientTimestamp);
+  const sentTime = parseTimestamp(req.headers['x-client-timestamp']);
 
   if (req.body?.clientTimestamp !== undefined) {
     delete req.body.clientTimestamp;
   }
+
+  if (Number.isNaN(editTime)) {
+    return next();
+  }
+
+  const clockOffset = Number.isNaN(sentTime) ? 0 : Date.now() - sentTime;
+  req.clientTimestamp = editTime + clockOffset;
 
   res.conflictCheck = (record) => {
     if (!record?.updated_at) return false;
