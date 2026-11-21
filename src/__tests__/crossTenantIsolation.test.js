@@ -68,7 +68,7 @@ beforeAll(async () => {
       })
       .returning('id')
       .execute();
-    await db.insertInto('user_roles').values({ user_id: user2[0].id, role_id: role.id }).execute();
+    await db.insertInto('user_roles').values({ user_id: user2.id, role_id: role.id }).execute();
 
     const user2Login = await request(app)
       .post('/api/v1/auth/login')

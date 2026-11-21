@@ -8,6 +8,7 @@ const { sql } = require('kysely');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const { primaryRoleKey } = require('../utils/roleUtil');
+const { sanitizeCsvValue, escapeCsv, sendCsv } = require('../utils/csv');
 const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
@@ -177,13 +178,20 @@ router.get('/tenants/export',
         q = q.where('tenants.subscription_status', '=', `tenant.status.${req.query.status}`);
       }
       const rows = await q.orderBy('tenants.created_at', 'desc').execute();
-      const header = 'Name,Subdomain,Status,Plan,Users,Patients,Appointments,Created\n';
-      const csv = header + rows.map(r =>
-        `"${(r.name||'').replace(/"/g,'""')}","${r.subdomain}","${r.subscription_status.replace('tenant.status.','')}","${r.subscription_plan||''}",${r.user_count},${r.patient_count},${r.appointment_count},"${r.created_at}"`
+      const header = 'Name,Subdomain,Status,Plan,Users,Patients,Appointments,Created';
+      const csv = header + '\n' + rows.map(r =>
+        [
+          escapeCsv(sanitizeCsvValue(r.name || '')),
+          escapeCsv(r.subdomain),
+          escapeCsv((r.subscription_status || '').replace('tenant.status.', '')),
+          escapeCsv(r.subscription_plan || ''),
+          r.user_count,
+          r.patient_count,
+          r.appointment_count,
+          escapeCsv(r.created_at ? new Date(r.created_at).toISOString() : '')
+        ].join(',')
       ).join('\n');
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', 'attachment; filename=clinics.csv');
-      return res.send(csv);
+      return sendCsv(res, csv, 'clinics.csv');
     } catch (e) { next(e); }
   }
 );
