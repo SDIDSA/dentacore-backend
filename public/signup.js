@@ -171,7 +171,14 @@
         if (res.ok) {
           $('doneEmail').textContent = email;
           $('doneClinic').textContent = res.body.tenant.name;
-          $('doneSlug').textContent = bookBase + '?clinic=' + res.body.tenant.subdomain;
+          var bookingUrl = window.location.origin + '/book?clinic=' + encodeURIComponent(res.body.tenant.subdomain);
+          var doneSlug = $('doneSlug');
+          if (doneSlug) {
+            doneSlug.textContent = bookingUrl;
+            if (doneSlug.tagName === 'A') {
+              doneSlug.href = bookingUrl;
+            }
+          }
           $('doneTrial').textContent = new Date(res.body.trial_ends_at)
             .toLocaleDateString(SITE.lang === 'ar' ? 'ar-DZ' : (SITE.lang === 'fr' ? 'fr-FR' : 'en-GB'));
           flow.classList.add('hidden');

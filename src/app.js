@@ -238,12 +238,21 @@ const PUBLIC_PAGES = {
   '/platform': 'platform.html'
 };
 app.get(Object.keys(PUBLIC_PAGES), (req, res) => {
-  res.sendFile(require('node:path').resolve('public', PUBLIC_PAGES[req.path]));
+  const cleanPath = req.path.replace(/\/+$/, '') || '/';
+  const file = PUBLIC_PAGES[cleanPath] || PUBLIC_PAGES[req.path];
+  if (file) {
+    return res.sendFile(require('node:path').resolve('public', file));
+  }
+  res.status(404).end();
 });
 // Booking portal also accepts the pretty /book/<slug> form and rewrites it to
 // the query param the page reads (/book?clinic=<slug>), so either link works.
 app.get('/book/:clinic', (req, res) => {
-  res.redirect(301, '/book?clinic=' + encodeURIComponent(req.params.clinic));
+  const clinic = String(req.params.clinic || '').replace(/\/+$/, '').trim();
+  if (!clinic) {
+    return res.sendFile(require('node:path').resolve('public', 'book.html'));
+  }
+  res.redirect(301, '/book?clinic=' + encodeURIComponent(clinic));
 });
 app.use((req, res, next) => {
   const m = /^\/(book|signup|platform)\.html(\?.*)?$/.exec(req.path);
