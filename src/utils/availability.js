@@ -73,9 +73,19 @@ async function getDayAvailability({ tenantId, date, dentistId = null }) {
     .where(sql`(appointment_date AT TIME ZONE 'Africa/Algiers')::date = ${date}`)
     .execute();
 
+  const pendingWeb = await db
+    .selectFrom('web_bookings')
+    .select(['dentist_id', 'appointment_date', 'duration_minutes'])
+    .where('tenant_id', '=', tenantId)
+    .where('status_key', '=', 'web_booking.status.pending')
+    .where('dentist_id', 'in', dentistIds)
+    .where(sql`(appointment_date AT TIME ZONE 'Africa/Algiers')::date = ${date}`)
+    .execute()
+    .catch(() => []);
+
   // per-dentist busy minute ranges
   const busyByDentist = new Map();
-  for (const b of booked) {
+  for (const b of [...booked, ...pendingWeb]) {
     if (!busyByDentist.has(b.dentist_id)) busyByDentist.set(b.dentist_id, []);
     busyByDentist.get(b.dentist_id).push({
       start: algiersMinutes(b.appointment_date),

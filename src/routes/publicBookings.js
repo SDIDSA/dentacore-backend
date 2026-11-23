@@ -171,7 +171,19 @@ router.post(
         .where('a.appointment_date', '>=', new Date())
         .limit(1)
         .execute();
-      if (upcoming.length) {
+      
+      const pendingWeb = await db
+        .selectFrom('web_bookings')
+        .select('id')
+        .where('tenant_id', '=', req.tenantId)
+        .where('phone', '=', phone)
+        .where('status_key', '=', 'web_booking.status.pending')
+        .where('appointment_date', '>=', new Date())
+        .limit(1)
+        .execute()
+        .catch(() => []);
+
+      if (upcoming.length || pendingWeb.length) {
         return res.status(409).json({ error: 'public.booking.limit_reached' });
       }
 
@@ -191,53 +203,25 @@ router.post(
         reason = cat.category_key;
       }
 
-      // 5. guest patient stub (staff completes profile at first visit)
-      const year = new Date().getFullYear();
-      const [{ maxnum }] = await db
-        .selectFrom('patients')
-        .select(sql`COALESCE(MAX(CAST(SUBSTRING(patient_code FROM '[0-9]+$') AS INTEGER)), 0)`.as('maxnum'))
-        .where('patient_code', 'like', `PAT-${year}-%`)
-        .where('tenant_id', '=', req.tenantId)
-        .execute();
-      const patient_code = `PAT-${year}-${String(Number(maxnum) + 1).padStart(4, '0')}`;
-
-      // 5 & 6. Guest patient and appointment created atomically in a transaction;
-      // uq_appt_active_slot arbitrates concurrent grabs and rolls back the patient stub on conflict.
-      let patient;
-      let appointment;
+      // 5. Staging isolation: insert directly into web_bookings
+      // Official patients and appointments are NOT created until staff review & approval.
+      let webBooking;
       try {
-        const created = await db.transaction().execute(async (trx) => {
-          const p = await trx
-            .insertInto('patients')
-            .values({
-              tenant_id: req.tenantId,
-              patient_code,
-              full_name: full_name.trim(),
-              phone,
-            })
-            .returningAll()
-            .executeTakeFirst();
-
-          const a = await trx
-            .insertInto('appointments')
-            .values({
-              tenant_id: req.tenantId,
-              patient_id: p.id,
-              dentist_id,
-              category_id: category_id || null,
-              appointment_date: when,
-              duration_minutes: group.slot_minutes,
-              status_key: 'appt.status.scheduled',
-              reason,
-              notes: notes || null,
-            })
-            .returningAll()
-            .executeTakeFirst();
-
-          return { patient: p, appointment: a };
-        });
-        patient = created.patient;
-        appointment = created.appointment;
+        webBooking = await db
+          .insertInto('web_bookings')
+          .values({
+            tenant_id: req.tenantId,
+            full_name: full_name.trim(),
+            phone,
+            dentist_id,
+            category_id: category_id || null,
+            appointment_date: when,
+            duration_minutes: group.slot_minutes,
+            status_key: 'web_booking.status.pending',
+            notes: notes || null,
+          })
+          .returningAll()
+          .executeTakeFirst();
       } catch (err) {
         if (err.code === '23505') {
           return res.status(409).json({ error: 'public.booking.slot_taken' });
@@ -245,18 +229,25 @@ router.post(
         throw err;
       }
 
-      logger.info('public booking created', {
+      logger.info('public web booking created (pending staff approval)', {
         requestId: req.requestId,
         tenant: req.tenant.subdomain,
-        appointmentId: appointment.id,
+        webBookingId: webBooking.id,
       });
 
+      try {
+        const { emitToTenant } = require('../socket');
+        emitToTenant(req.tenantId, 'web_booking_created', webBooking);
+      } catch {
+        // socket notification is non-blocking
+      }
+
       res.status(201).json({
-        id: appointment.id,
-        patient_code: patient.patient_code,
-        appointment_date: appointment.appointment_date,
-        duration_minutes: appointment.duration_minutes,
-        status_key: appointment.status_key,
+        id: webBooking.id,
+        patient_code: 'WEB-' + webBooking.id.slice(0, 8).toUpperCase(),
+        appointment_date: webBooking.appointment_date,
+        duration_minutes: webBooking.duration_minutes,
+        status_key: webBooking.status_key,
       });
     } catch (err) {
       next(err);

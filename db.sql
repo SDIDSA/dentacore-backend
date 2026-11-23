@@ -199,6 +199,7 @@ CREATE TABLE IF NOT EXISTS patients (
     medical_history TEXT,
     allergies TEXT,
     blood_type VARCHAR(5),
+    remarks TEXT,
     status_key VARCHAR(50) NOT NULL DEFAULT 'patient.status.new',
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -2060,6 +2061,47 @@ DO $$ BEGIN
     ALTER TABLE tenants ADD COLUMN plan_id UUID REFERENCES platform_plans(id) ON DELETE SET NULL;
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
+
+DO $$ BEGIN
+    ALTER TABLE patients ADD COLUMN remarks TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- Dedicated staging table for public web bookings
+CREATE TABLE IF NOT EXISTS web_bookings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    full_name VARCHAR(120) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    dentist_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    category_id UUID REFERENCES treatment_categories(id) ON DELETE SET NULL,
+    appointment_date TIMESTAMPTZ NOT NULL,
+    duration_minutes INTEGER NOT NULL DEFAULT 30,
+    status_key VARCHAR(50) NOT NULL DEFAULT 'web_booking.status.pending',
+    notes TEXT,
+    created_patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
+    created_appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+    reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMPTZ,
+    rejection_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_web_booking_status CHECK (status_key IN (
+        'web_booking.status.pending',
+        'web_booking.status.approved',
+        'web_booking.status.rejected'
+    )),
+    CONSTRAINT chk_web_booking_phone CHECK (phone ~ '^\+213[0-9]{9}$')
+);
+
+CREATE INDEX IF NOT EXISTS idx_web_bookings_tenant ON web_bookings(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_web_bookings_tenant_status ON web_bookings(tenant_id, status_key);
+CREATE INDEX IF NOT EXISTS idx_web_bookings_dentist_date ON web_bookings(tenant_id, dentist_id, appointment_date);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_web_booking_pending_slot
+    ON web_bookings(dentist_id, appointment_date)
+    WHERE status_key = 'web_booking.status.pending';
 
 -- ============================================================================
 -- COMPLETION MESSAGE
