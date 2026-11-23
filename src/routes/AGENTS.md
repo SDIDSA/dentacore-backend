@@ -16,7 +16,7 @@ Express route handlers for the API: 19 authenticated entity modules + 2 public m
 - `invoices.js` — Invoice and billing CRUD (generic PATCH strips direct balance edits; DELETE blocked when payments exist; `PATCH /:id/payment` deleted)
 - `media.js` — File/image upload and management via Cloudinary
 - `notifications.js` — Notification creation and retrieval; `GET /` and `GET /unread-count` accept `?exclude_types=a,b` (per-user mutes from the desktop client; `^[a-z_]+$` entries only)
-- `odontogram.js` — Dental chart data CRUD (FDI teeth 11–85 whitelisted, adult + deciduous quadrants)
+- `odontogram.js` — Dental chart data CRUD (FDI teeth 11–85 whitelisted, adult + deciduous quadrants; `POST /condition` for direct condition upsert)
 - `patients.js` — Patient CRUD + import/export CSV
 - `payments.js` — Payment recording CRUD (`DELETE /payments/:id` returns HTTP 405; refunds issued via credit notes)
 - `prescriptions.js` — Prescription/eRx CRUD with RX-numbering (multi-drug line items via `prescription_items` with legacy fallback)
@@ -26,7 +26,7 @@ Express route handlers for the API: 19 authenticated entity modules + 2 public m
 - `purchaseOrders.js` — Purchase order CRUD
 - `reports.js` — Aggregated report endpoints
 - `treatmentPlans.js` — Treatment plan CRUD with status workflow
-- `treatments.js` — Individual treatment record CRUD; exposes `GET /categories` for global and tenant clinical acts
+- `treatments.js` — Individual treatment record CRUD with Bill of Materials (BOM) inventory depletion on `clinical_act_id`; exposes `GET /categories` for global and tenant clinical acts
 - `users.js` — User/staff account CRUD (admin-only, incl. `PATCH /:id/password` to reset someone else's password); create / role change / status change call `syncDentistHours` so dentists' `working_hours` follow the clinic hours
 - `xrays.js` — X-ray image CRUD
 
@@ -53,6 +53,8 @@ Express route handlers for the API: 19 authenticated entity modules + 2 public m
 - **Search hygiene**: full-text search uses `plainto_tsquery('simple', …)`; non-search `ilike` filters escape `%`, `_`, `\` from user input
 - CSV exports neutralize formula injection via `sanitizeCsvValue` (`utils/csv.js`) on user-entered fields
 - **Audit action contract (durable)**: `req.audit.log` emits only `CREATE` / `UPDATE` / `DELETE` — specialized mutations log as `UPDATE` and carry the distinction in `old_values`/`new_values` (expense/PO status endpoints: `status_key` change; PO receive-items: `items_received` present; inventory adjust-stock: `current_stock` delta + `adjustment`/`reason`). Never introduce new action strings; the frontend derives subtypes from the diff.
+- **Treatment BOM inventory depletion**: `POST /api/v1/treatments` accepts optional `clinical_act_id`. In an atomic transaction, the treatment record is saved and any linked consumables from `clinical_act_materials` create `stock_movements` rows (`movement_type = 'OUT'`), automatically deducting `inventory_items.current_stock` via DB trigger. `GET /treatments`, `GET /treatments/:id`, and `GET /batch` include `clinical_act_id`.
+- **Odontogram condition upsert**: `POST /api/v1/odontogram/condition` allows atomic upsert of patient tooth condition and notes (`{ patient_id, tooth_number, condition, notes }`) without requiring full-chart replacement.
 
 ## Work Guidance
 
