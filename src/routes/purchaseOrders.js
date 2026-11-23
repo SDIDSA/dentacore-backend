@@ -603,6 +603,7 @@ router.patch('/:id/receive',
         .selectFrom('purchase_orders')
         .selectAll()
         .where('id', '=', order.id)
+        .where('tenant_id', '=', req.tenantId)
         .executeTakeFirst();
 
       if (req.audit) {

@@ -27,7 +27,6 @@ function escapeIlike(str) {
 
 const SORT_FIELDS_MAP = {
   created_at: 'prescriptions.created_at',
-  medication_name: 'prescriptions.medication_name',
   status_key: 'prescriptions.status_key',
   updated_at: 'prescriptions.updated_at',
 };
@@ -46,14 +45,16 @@ router.get('/search', async (req, res, next) => {
       .selectFrom('prescriptions')
       .select('prescriptions.id')
       .innerJoin('patients', 'prescriptions.patient_id', 'patients.id')
+      .leftJoin('prescription_items', 'prescriptions.id', 'prescription_items.prescription_id')
       .where('prescriptions.tenant_id', '=', req.tenantId)
       .where((eb) =>
         eb.or([
-          eb('prescriptions.medication_name', 'ilike', `%${sanitized}%`),
+          eb('prescription_items.medication_name', 'ilike', `%${sanitized}%`),
           eb('prescriptions.prescription_number', 'ilike', `%${sanitized}%`),
           eb('patients.full_name', 'ilike', `%${sanitized}%`),
         ])
       )
+      .distinct()
       .limit(20)
       .execute();
 
@@ -63,6 +64,7 @@ router.get('/search', async (req, res, next) => {
   }
 });
 
+// List prescriptions
 router.get('/',
   query('patient_id').optional().isUUID(),
   query('search').optional().isString(),
@@ -78,15 +80,11 @@ router.get('/',
       const pag = parsePagination(req);
       const { patient_id, search, sort_by, sort_order } = req.query;
 
-      let query = db
+      let qb = db
         .selectFrom('prescriptions')
         .select([
           'prescriptions.id',
           'prescriptions.prescription_number',
-          'prescriptions.medication_name',
-          'prescriptions.dosage',
-          'prescriptions.frequency',
-          'prescriptions.duration',
           'prescriptions.status_key',
           'prescriptions.patient_id',
           'prescriptions.dentist_id',
@@ -97,25 +95,29 @@ router.get('/',
         .where('prescriptions.tenant_id', '=', req.tenantId);
 
       if (patient_id) {
-        query = query.where('prescriptions.patient_id', '=', patient_id);
+        qb = qb.where('prescriptions.patient_id', '=', patient_id);
       }
 
       if (search) {
-        query = query.where((eb) =>
-          eb.or([
-            eb('prescriptions.medication_name', 'ilike', `%${escapeIlike(search)}%`),
-          ])
-        );
+        qb = qb
+          .leftJoin('prescription_items', 'prescriptions.id', 'prescription_items.prescription_id')
+          .where((eb) =>
+            eb.or([
+              eb('prescription_items.medication_name', 'ilike', `%${escapeIlike(search)}%`),
+              eb('prescriptions.prescription_number', 'ilike', `%${escapeIlike(search)}%`),
+            ])
+          )
+          .distinct();
       }
 
       if (pag.paginate) {
-        query = query.select([sql`COUNT(*) OVER()`.as('count')]);
+        qb = qb.select([sql`COUNT(*) OVER()`.as('count')]);
       }
 
       const sortField = sort_by && SORT_FIELDS_MAP[sort_by] ? SORT_FIELDS_MAP[sort_by] : 'prescriptions.created_at';
       const sortDir = sort_order && SORT_ORDERS.includes(sort_order) ? sort_order : 'desc';
 
-      const items = await query
+      const items = await qb
         .orderBy(sortField, sortDir)
         .limit(pag.paginate ? pag.limit : null)
         .offset(pag.paginate ? pag.offset : null)
@@ -134,6 +136,7 @@ router.get('/',
   }
 );
 
+// Get prescriptions by IDs (batch)
 router.get('/batch',
   query('ids').optional().isString(),
   async (req, res, next) => {
@@ -148,16 +151,12 @@ router.get('/batch',
         return res.json([]);
       }
 
-      const items = await db
+      const prescriptions = await db
         .selectFrom('prescriptions')
         .leftJoin('patients', 'prescriptions.patient_id', 'patients.id')
         .select([
           'prescriptions.id',
           'prescriptions.prescription_number',
-          'prescriptions.medication_name',
-          'prescriptions.dosage',
-          'prescriptions.frequency',
-          'prescriptions.duration',
           'prescriptions.notes',
           'prescriptions.status_key',
           'prescriptions.patient_id',
@@ -171,13 +170,43 @@ router.get('/batch',
         .where('prescriptions.tenant_id', '=', req.tenantId)
         .execute();
 
-      res.json(items);
+      if (prescriptions.length === 0) {
+        return res.json([]);
+      }
+
+      const pIds = prescriptions.map(p => p.id);
+      const allItems = await db
+        .selectFrom('prescription_items')
+        .selectAll()
+        .where('prescription_id', 'in', pIds)
+        .where('tenant_id', '=', req.tenantId)
+        .orderBy('created_at', 'asc')
+        .execute();
+
+      const itemsByPrescription = {};
+      for (const it of allItems) {
+        if (!itemsByPrescription[it.prescription_id]) itemsByPrescription[it.prescription_id] = [];
+        itemsByPrescription[it.prescription_id].push(it);
+      }
+
+      for (const p of prescriptions) {
+        p.items = itemsByPrescription[p.id] || [];
+        if (p.items.length > 0) {
+          p.medication_name = p.items[0].medication_name;
+          p.dosage = p.items[0].dosage;
+          p.frequency = p.items[0].frequency_key;
+          p.duration = String(p.items[0].duration_days);
+        }
+      }
+
+      res.json(prescriptions);
     } catch (error) {
       next(error);
     }
   }
 );
 
+// Get single prescription
 router.get('/:id',
   param('id').isUUID(),
   async (req, res, next) => {
@@ -193,10 +222,6 @@ router.get('/:id',
         .select([
           'prescriptions.id',
           'prescriptions.prescription_number',
-          'prescriptions.medication_name',
-          'prescriptions.dosage',
-          'prescriptions.frequency',
-          'prescriptions.duration',
           'prescriptions.notes',
           'prescriptions.status_key',
           'prescriptions.patient_id',
@@ -214,6 +239,22 @@ router.get('/:id',
         return res.status(404).json({ error: 'prescription.error.not_found' });
       }
 
+      const items = await db
+        .selectFrom('prescription_items')
+        .selectAll()
+        .where('prescription_id', '=', item.id)
+        .where('tenant_id', '=', req.tenantId)
+        .orderBy('created_at', 'asc')
+        .execute();
+
+      item.items = items;
+      if (items.length > 0) {
+        item.medication_name = items[0].medication_name;
+        item.dosage = items[0].dosage;
+        item.frequency = items[0].frequency_key;
+        item.duration = String(items[0].duration_days);
+      }
+
       res.json(item);
     } catch (error) {
       next(error);
@@ -221,13 +262,18 @@ router.get('/:id',
   }
 );
 
+// Create prescription (supports multi-drug line items and legacy single-drug fallback)
 router.post('/',
   body('patient_id').isUUID(),
-  body('medication_name').trim().notEmpty(),
-  body('dosage').trim().notEmpty(),
-  body('frequency').trim().notEmpty(),
-  body('duration').optional().isString(),
+  body('items').optional().isArray({ min: 1 }),
+  body('items.*.medication_name').optional().trim().notEmpty(),
+  body('items.*.dosage').optional().trim().notEmpty(),
+  body('medication_name').optional().trim(),
+  body('dosage').optional().trim(),
   body('notes').optional().isString(),
+  body('status_key').optional().isIn([
+    'prescription.status.active', 'prescription.status.completed', 'prescription.status.cancelled'
+  ]),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -235,9 +281,34 @@ router.post('/',
     }
 
     try {
-      const { patient_id, medication_name, dosage, frequency, duration, notes } = req.body;
+      const { patient_id, notes, status_key } = req.body;
 
-      const item = await db.transaction().execute(async (trx) => {
+      // Extract items or convert legacy single-drug fields
+      let itemsList = [];
+      if (Array.isArray(req.body.items) && req.body.items.length > 0) {
+        itemsList = req.body.items.map(it => ({
+          medication_name: it.medication_name,
+          dosage: it.dosage,
+          frequency_key: it.frequency_key || it.frequency || 'prescription.frequency.once_daily',
+          duration_days: Math.max(1, Number.parseInt(it.duration_days || (it.duration ? parseInt(it.duration, 10) : 7), 10) || 7),
+          instructions: it.instructions || null,
+        }));
+      } else if (req.body.medication_name) {
+        itemsList = [{
+          medication_name: req.body.medication_name,
+          dosage: req.body.dosage || '1 unit',
+          frequency_key: req.body.frequency_key || req.body.frequency || 'prescription.frequency.once_daily',
+          duration_days: Math.max(1, Number.parseInt(req.body.duration_days || (req.body.duration ? parseInt(req.body.duration, 10) : 7), 10) || 7),
+          instructions: req.body.instructions || null,
+        }];
+      } else {
+        return res.status(400).json({
+          error: 'validation.error',
+          details: 'Prescription must contain either items array or medication_name'
+        });
+      }
+
+      const result = await db.transaction().execute(async (trx) => {
         const patient = await trx
           .selectFrom('patients')
           .select('full_name')
@@ -274,36 +345,66 @@ router.post('/',
         }
         const prescriptionNumber = prefix + String(seq).padStart(4, '0');
 
-        return await trx
+        const createdHeader = await trx
           .insertInto('prescriptions')
           .values({
             tenant_id: req.tenantId,
             patient_id,
-            dentist_id: req.user.id,
-            medication_name,
-            dosage,
-            frequency,
+            dentist_id: req.user?.id || null,
             prescription_number: prescriptionNumber,
-            duration: duration || null,
             notes: notes || null,
-            created_by: req.user.id,
+            status_key: status_key || 'prescription.status.active',
+            created_by: req.user?.id || null,
           })
           .returningAll()
-          .executeTakeFirst()
-          .then((created) => ({ created, patientName: patient.full_name }));
+          .executeTakeFirst();
+
+        const lineItemsToInsert = itemsList.map(it => ({
+          tenant_id: req.tenantId,
+          prescription_id: createdHeader.id,
+          medication_name: it.medication_name,
+          dosage: it.dosage,
+          frequency_key: it.frequency_key,
+          duration_days: it.duration_days,
+          instructions: it.instructions || null
+        }));
+
+        const createdItems = await trx
+          .insertInto('prescription_items')
+          .values(lineItemsToInsert)
+          .returningAll()
+          .execute();
+
+        return {
+          header: createdHeader,
+          items: createdItems,
+          patientName: patient.full_name
+        };
       });
 
       if (req.audit) {
         await req.audit.log({
           action: 'CREATE',
           entityType: 'prescriptions',
-          entityId: item.created.id,
+          entityId: result.header.id,
           tenantId: req.tenantId,
-          newValues: item.created,
+          newValues: { ...result.header, items: result.items },
         });
       }
 
-      res.status(201).json({ ...item.created, patient_name: item.patientName });
+      const legacyFields = result.items.length > 0 ? {
+        medication_name: result.items[0].medication_name,
+        dosage: result.items[0].dosage,
+        frequency: result.items[0].frequency_key,
+        duration: String(result.items[0].duration_days),
+      } : {};
+
+      res.status(201).json({
+        ...result.header,
+        ...legacyFields,
+        patient_name: result.patientName,
+        items: result.items
+      });
     } catch (error) {
       if (error.statusCode === 400) {
         return res.status(400).json({ error: 'validation.error', details: 'patient_id is invalid' });
@@ -313,12 +414,9 @@ router.post('/',
   }
 );
 
+// Update prescription header
 router.patch('/:id',
   param('id').isUUID(),
-  body('medication_name').optional().trim().notEmpty(),
-  body('dosage').optional().trim().notEmpty(),
-  body('frequency').optional().trim().notEmpty(),
-  body('duration').optional().isString(),
   body('notes').optional().isString(),
   body('status_key').optional().isIn([
     'prescription.status.active', 'prescription.status.completed', 'prescription.status.cancelled'
@@ -343,12 +441,8 @@ router.patch('/:id',
 
       if (res.conflictCheck(current)) return;
 
-      const { medication_name, dosage, frequency, duration, notes, status_key } = req.body;
+      const { notes, status_key } = req.body;
       const updateData = {};
-      if (medication_name !== undefined) updateData.medication_name = medication_name;
-      if (dosage !== undefined) updateData.dosage = dosage;
-      if (frequency !== undefined) updateData.frequency = frequency;
-      if (duration !== undefined) updateData.duration = duration;
       if (notes !== undefined) updateData.notes = notes;
       if (status_key !== undefined) updateData.status_key = status_key;
 
@@ -376,6 +470,22 @@ router.patch('/:id',
         });
       }
 
+      const items = await db
+        .selectFrom('prescription_items')
+        .selectAll()
+        .where('prescription_id', '=', item.id)
+        .where('tenant_id', '=', req.tenantId)
+        .orderBy('created_at', 'asc')
+        .execute();
+
+      item.items = items;
+      if (items.length > 0) {
+        item.medication_name = items[0].medication_name;
+        item.dosage = items[0].dosage;
+        item.frequency = items[0].frequency_key;
+        item.duration = String(items[0].duration_days);
+      }
+
       res.json(item);
     } catch (error) {
       next(error);
@@ -383,6 +493,7 @@ router.patch('/:id',
   }
 );
 
+// Delete prescription
 router.delete('/:id',
   param('id').isUUID(),
   async (req, res, next) => {

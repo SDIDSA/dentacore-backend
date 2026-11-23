@@ -101,6 +101,28 @@ CREATE INDEX IF NOT EXISTS idx_payment_methods_key ON payment_methods(method_key
 CREATE INDEX IF NOT EXISTS idx_payment_methods_active ON payment_methods(is_active);
 
 -- ============================================================================
+-- 4b. MEDICAL RISK FACTORS (Global)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS medical_risk_factors (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    code VARCHAR(50) UNIQUE NOT NULL,
+    category VARCHAR(50) NOT NULL,
+    name_key VARCHAR(100) NOT NULL,
+    severity_level VARCHAR(20) NOT NULL DEFAULT 'HIGH',
+    clinical_advisory TEXT NOT NULL
+);
+
+COMMENT ON TABLE medical_risk_factors IS 'Global reference list of medical risk factors and allergies';
+COMMENT ON COLUMN medical_risk_factors.code IS 'Unique identifier code (e.g., RISK-PENICILLIN)';
+COMMENT ON COLUMN medical_risk_factors.category IS 'Category (e.g., ALLERGY, CARDIOVASCULAR, HEMATOLOGY, ENDOCRINE, PREGNANCY)';
+COMMENT ON COLUMN medical_risk_factors.name_key IS 'Translation key for display';
+COMMENT ON COLUMN medical_risk_factors.severity_level IS 'Severity: CRITICAL, HIGH, MODERATE';
+
+CREATE INDEX IF NOT EXISTS idx_medical_risk_factors_code ON medical_risk_factors(code);
+CREATE INDEX IF NOT EXISTS idx_medical_risk_factors_category ON medical_risk_factors(category);
+
+-- ============================================================================
 -- 5. USER MANAGEMENT (Tenant-Scoped)
 -- ============================================================================
 
@@ -206,6 +228,27 @@ CREATE INDEX IF NOT EXISTS idx_patients_phone ON patients(tenant_id, phone);
 CREATE INDEX IF NOT EXISTS idx_patients_status ON patients(tenant_id, status_key);
 CREATE INDEX IF NOT EXISTS idx_patients_dob ON patients(date_of_birth);
 
+-- ============================================================================
+-- 6b. PATIENT MEDICAL ALERTS (Tenant-Scoped)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS patient_medical_alerts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+    risk_factor_id UUID NOT NULL REFERENCES medical_risk_factors(id) ON DELETE RESTRICT,
+    specific_notes TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_patient_risk UNIQUE (tenant_id, patient_id, risk_factor_id)
+);
+
+COMMENT ON TABLE patient_medical_alerts IS 'Tenant-scoped patient medical alerts, allergies, and systemic conditions';
+
+CREATE INDEX IF NOT EXISTS idx_patient_alerts_tenant ON patient_medical_alerts(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_patient_alerts_patient ON patient_medical_alerts(tenant_id, patient_id);
+CREATE INDEX IF NOT EXISTS idx_patient_alerts_active ON patient_medical_alerts(tenant_id, patient_id) WHERE is_active = TRUE;
+
 
 
 -- ============================================================================
@@ -218,11 +261,13 @@ CREATE TABLE IF NOT EXISTS treatment_categories (
     category_key VARCHAR(100) NOT NULL,
     parent_id UUID REFERENCES treatment_categories(id) ON DELETE CASCADE,
     description TEXT,
+    default_duration_minutes INTEGER NOT NULL DEFAULT 30,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
-    CONSTRAINT uq_treatment_cat_key UNIQUE (tenant_id, category_key)
+    CONSTRAINT uq_treatment_cat_key UNIQUE (tenant_id, category_key),
+    CONSTRAINT chk_cat_duration CHECK (default_duration_minutes > 0 AND default_duration_minutes <= 480)
 );
 
 COMMENT ON TABLE treatment_categories IS 'Hybrid: NULL tenant_id = Global defaults, SET tenant_id = Custom categories';
@@ -234,6 +279,30 @@ CREATE INDEX IF NOT EXISTS idx_treatment_cat_parent ON treatment_categories(pare
 CREATE INDEX IF NOT EXISTS idx_treatment_cat_global ON treatment_categories(tenant_id) WHERE tenant_id IS NULL;
 
 -- ============================================================================
+-- 7b. CLINICAL ACTS (Procedure Catalog - Hybrid: System Standard + Tenant Custom)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS clinical_acts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    category_id UUID REFERENCES treatment_categories(id) ON DELETE SET NULL,
+    act_code VARCHAR(30) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    standard_cost_dzd DECIMAL(12, 2) NOT NULL CHECK (standard_cost_dzd >= 0),
+    default_duration_minutes INTEGER NOT NULL DEFAULT 30,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE clinical_acts IS 'Master procedure catalog with standard cost, duration, and optional tenant scope';
+COMMENT ON COLUMN clinical_acts.tenant_id IS 'NULL = System Standard Act, UUID = Tenant Custom Act';
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_clinical_act_system ON clinical_acts (act_code) WHERE tenant_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_clinical_act_tenant ON clinical_acts (tenant_id, act_code) WHERE tenant_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_clinical_acts_category ON clinical_acts(tenant_id, category_id);
+CREATE INDEX IF NOT EXISTS idx_clinical_acts_tenant ON clinical_acts(tenant_id);
+
+-- ============================================================================
 -- 8. APPOINTMENTS (Tenant-Scoped)
 -- ============================================================================
 
@@ -242,6 +311,7 @@ CREATE TABLE IF NOT EXISTS appointments (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     dentist_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    category_id UUID REFERENCES treatment_categories(id) ON DELETE SET NULL,
     appointment_date TIMESTAMPTZ NOT NULL,
     duration_minutes INTEGER NOT NULL DEFAULT 30,
     status_key VARCHAR(50) NOT NULL,
@@ -267,6 +337,7 @@ COMMENT ON TABLE appointments IS 'Tenant-scoped patient appointments';
 CREATE INDEX IF NOT EXISTS idx_appt_tenant ON appointments(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_appt_patient ON appointments(tenant_id, patient_id);
 CREATE INDEX IF NOT EXISTS idx_appt_dentist ON appointments(tenant_id, dentist_id);
+CREATE INDEX IF NOT EXISTS idx_appt_category ON appointments(category_id);
 CREATE INDEX IF NOT EXISTS idx_appt_date ON appointments(tenant_id, appointment_date);
 CREATE INDEX IF NOT EXISTS idx_appt_status ON appointments(tenant_id, status_key);
 CREATE INDEX IF NOT EXISTS idx_appt_dentist_date ON appointments(tenant_id, dentist_id, appointment_date);
@@ -319,6 +390,7 @@ CREATE TABLE IF NOT EXISTS treatment_records (
     appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
     dentist_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     category_id UUID REFERENCES treatment_categories(id) ON DELETE SET NULL,
+    clinical_act_id UUID REFERENCES clinical_acts(id) ON DELETE SET NULL,
     treatment_date TIMESTAMPTZ NOT NULL,
     tooth_number VARCHAR(10),
     diagnosis TEXT NOT NULL,
@@ -329,11 +401,18 @@ CREATE TABLE IF NOT EXISTS treatment_records (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     
     CONSTRAINT chk_tooth_number CHECK (
-        tooth_number ~ '^[0-9]{1,2}$' OR 
-        tooth_number IN ('11', '12', '13', '14', '15', '16', '17', '18',
-                         '21', '22', '23', '24', '25', '26', '27', '28',
-                         '31', '32', '33', '34', '35', '36', '37', '38',
-                         '41', '42', '43', '44', '45', '46', '47', '48')
+        tooth_number IS NULL OR tooth_number IN (
+            -- Permanent (Adult) Dentition (32)
+            '11', '12', '13', '14', '15', '16', '17', '18',
+            '21', '22', '23', '24', '25', '26', '27', '28',
+            '31', '32', '33', '34', '35', '36', '37', '38',
+            '41', '42', '43', '44', '45', '46', '47', '48',
+            -- Deciduous (Pediatric) Dentition (20)
+            '51', '52', '53', '54', '55',
+            '61', '62', '63', '64', '65',
+            '71', '72', '73', '74', '75',
+            '81', '82', '83', '84', '85'
+        )
     ),
     CONSTRAINT chk_treatment_cost CHECK (estimated_cost_dzd >= 0)
 );
@@ -345,6 +424,7 @@ CREATE INDEX IF NOT EXISTS idx_treatment_patient ON treatment_records(tenant_id,
 CREATE INDEX IF NOT EXISTS idx_treatment_dentist ON treatment_records(tenant_id, dentist_id);
 CREATE INDEX IF NOT EXISTS idx_treatment_date ON treatment_records(tenant_id, treatment_date);
 CREATE INDEX IF NOT EXISTS idx_treatment_category ON treatment_records(category_id);
+CREATE INDEX IF NOT EXISTS idx_treatment_clinical_act ON treatment_records(clinical_act_id);
 
 
 
@@ -423,9 +503,31 @@ COMMENT ON TABLE invoice_items IS 'Tenant-scoped line items for invoices';
 
 CREATE INDEX IF NOT EXISTS idx_invoice_items_tenant ON invoice_items(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(tenant_id, invoice_id);
-CREATE INDEX IF NOT EXISTS idx_invoice_items_treatment ON invoice_items(treatment_record_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_invoice_items_treatment ON invoice_items (treatment_record_id) WHERE treatment_record_id IS NOT NULL;
 
+-- ============================================================================
+-- 11b. CASH REGISTER SESSIONS (Caisse Shifts - Tenant-Scoped)
+-- ============================================================================
 
+CREATE TABLE IF NOT EXISTS cash_register_sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    opened_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    closed_by UUID REFERENCES users(id) ON DELETE RESTRICT,
+    opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    closed_at TIMESTAMPTZ,
+    opening_float_dzd DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+    expected_cash_dzd DECIMAL(12, 2),
+    counted_cash_dzd DECIMAL(12, 2),
+    discrepancy_dzd DECIMAL(12, 2),
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSED')),
+    notes TEXT
+);
+
+COMMENT ON TABLE cash_register_sessions IS 'Tenant-scoped daily cash desk shifts and reconciliation';
+
+CREATE INDEX IF NOT EXISTS idx_cash_sessions_tenant ON cash_register_sessions(tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_cash_sessions_opened_by ON cash_register_sessions(opened_by);
 
 -- ============================================================================
 -- 12. PAYMENTS (Tenant-Scoped)
@@ -436,6 +538,7 @@ CREATE TABLE IF NOT EXISTS payments (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
     payment_method_id UUID NOT NULL REFERENCES payment_methods(id) ON DELETE RESTRICT,
+    cash_session_id UUID REFERENCES cash_register_sessions(id) ON DELETE RESTRICT,
     amount_dzd DECIMAL(12, 2) NOT NULL,
     payment_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     transaction_reference VARCHAR(100),
@@ -452,6 +555,30 @@ CREATE INDEX IF NOT EXISTS idx_payment_tenant ON payments(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_payment_invoice ON payments(tenant_id, invoice_id);
 CREATE INDEX IF NOT EXISTS idx_payment_method ON payments(payment_method_id);
 CREATE INDEX IF NOT EXISTS idx_payment_date ON payments(tenant_id, payment_date);
+CREATE INDEX IF NOT EXISTS idx_payments_cash_session ON payments(cash_session_id);
+
+-- ============================================================================
+-- 12b. CREDIT NOTES (Avoirs - Tenant-Scoped)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS credit_notes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    credit_note_number VARCHAR(30) NOT NULL,
+    invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE RESTRICT,
+    patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE RESTRICT,
+    amount_dzd DECIMAL(12, 2) NOT NULL CHECK (amount_dzd > 0),
+    reason TEXT NOT NULL,
+    issued_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_credit_notes_tenant_number UNIQUE (tenant_id, credit_note_number)
+);
+
+COMMENT ON TABLE credit_notes IS 'Tenant-scoped credit notes (Avoirs) for invoice refunds and adjustments';
+
+CREATE INDEX IF NOT EXISTS idx_credit_notes_tenant ON credit_notes(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_credit_notes_invoice ON credit_notes(tenant_id, invoice_id);
+CREATE INDEX IF NOT EXISTS idx_credit_notes_patient ON credit_notes(tenant_id, patient_id);
 
 
 
@@ -573,6 +700,23 @@ CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory_items(category_id
 CREATE INDEX IF NOT EXISTS idx_inventory_status ON inventory_items(tenant_id, status_key);
 CREATE INDEX IF NOT EXISTS idx_inventory_low_stock ON inventory_items(tenant_id, current_stock, min_stock_level) 
     WHERE current_stock <= min_stock_level;
+
+-- ============================================================================
+-- 15b. CLINICAL ACT MATERIALS (Bill of Materials - Tenant-Scoped / Act-Scoped)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS clinical_act_materials (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    clinical_act_id UUID NOT NULL REFERENCES clinical_acts(id) ON DELETE CASCADE,
+    inventory_item_id UUID NOT NULL REFERENCES inventory_items(id) ON DELETE RESTRICT,
+    quantity_consumed DECIMAL(10, 3) NOT NULL CHECK (quantity_consumed > 0),
+    CONSTRAINT uq_act_material UNIQUE (clinical_act_id, inventory_item_id)
+);
+
+COMMENT ON TABLE clinical_act_materials IS 'Bill of Materials linking clinical acts to inventory consumables deducted upon execution';
+
+CREATE INDEX IF NOT EXISTS idx_act_materials_act ON clinical_act_materials(clinical_act_id);
+CREATE INDEX IF NOT EXISTS idx_act_materials_item ON clinical_act_materials(inventory_item_id);
 
 -- ============================================================================
 -- 16. PURCHASE ORDERS (Tenant-Scoped)
@@ -719,6 +863,7 @@ CREATE TABLE IF NOT EXISTS expenses (
     payment_method_id UUID REFERENCES payment_methods(id) ON DELETE SET NULL,
     supplier_id UUID REFERENCES suppliers(id) ON DELETE SET NULL,
     purchase_order_id UUID REFERENCES purchase_orders(id) ON DELETE SET NULL,
+    cash_session_id UUID REFERENCES cash_register_sessions(id) ON DELETE RESTRICT,
     receipt_number VARCHAR(100),
     is_recurring BOOLEAN NOT NULL DEFAULT FALSE,
     recurring_frequency VARCHAR(20),
@@ -756,6 +901,7 @@ CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(tenant_id, expense_date
 CREATE INDEX IF NOT EXISTS idx_expenses_status ON expenses(tenant_id, status_key);
 CREATE INDEX IF NOT EXISTS idx_expenses_supplier ON expenses(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_expenses_po ON expenses(purchase_order_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_cash_session ON expenses(cash_session_id);
 
 -- ============================================================================
 -- 20. AUDIT LOG (Tenant-Scoped)
@@ -1346,6 +1492,7 @@ RETURNS TABLE (
     category_key VARCHAR(100),
     parent_id UUID,
     description TEXT,
+    default_duration_minutes INTEGER,
     is_global BOOLEAN
 ) AS $$
 BEGIN
@@ -1355,6 +1502,7 @@ BEGIN
         tc.category_key,
         tc.parent_id,
         tc.description,
+        tc.default_duration_minutes,
         (tc.tenant_id IS NULL) AS is_global
     FROM treatment_categories tc
     WHERE tc.tenant_id IS NULL -- Global defaults
@@ -1571,10 +1719,6 @@ CREATE TABLE IF NOT EXISTS prescriptions (
     patient_id UUID NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
     dentist_id UUID REFERENCES users(id) ON DELETE SET NULL,
     prescription_number VARCHAR(20) NOT NULL,
-    medication_name VARCHAR(255) NOT NULL,
-    dosage VARCHAR(100) NOT NULL,
-    frequency VARCHAR(100) NOT NULL,
-    duration VARCHAR(100),
     notes TEXT,
     status_key VARCHAR(50) NOT NULL DEFAULT 'prescription.status.active',
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -1586,8 +1730,31 @@ CREATE TABLE IF NOT EXISTS prescriptions (
     CONSTRAINT uq_prescriptions_tenant_number UNIQUE (tenant_id, prescription_number)
 );
 
+COMMENT ON TABLE prescriptions IS 'Tenant-scoped prescription headers (eRx)';
+
 CREATE INDEX IF NOT EXISTS idx_prescriptions_tenant ON prescriptions(tenant_id, patient_id);
 CREATE INDEX IF NOT EXISTS idx_prescriptions_patient ON prescriptions(tenant_id, patient_id, status_key);
+
+-- ============================================================================
+-- 27b. PRESCRIPTION ITEMS (v3.0 - Prescriptions / eRx Line Items)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS prescription_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    prescription_id UUID NOT NULL REFERENCES prescriptions(id) ON DELETE CASCADE,
+    medication_name VARCHAR(255) NOT NULL,
+    dosage VARCHAR(100) NOT NULL,
+    frequency_key VARCHAR(50) NOT NULL,
+    duration_days INTEGER NOT NULL CHECK (duration_days > 0),
+    instructions TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE prescription_items IS 'Line items for prescriptions (multiple medications per prescription)';
+
+CREATE INDEX IF NOT EXISTS idx_prescription_items_header ON prescription_items(tenant_id, prescription_id);
+CREATE INDEX IF NOT EXISTS idx_prescription_items_tenant ON prescription_items(tenant_id);
 
 -- Prescription auto-numbering (RX-YYYYMM-NNNN, per tenant)
 CREATE OR REPLACE FUNCTION generate_prescription_number(p_tenant_id UUID)

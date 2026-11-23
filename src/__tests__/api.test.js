@@ -625,7 +625,7 @@ describe('DELETE /api/v1/inventory/items/:id', () => {
         name: 'Delete Test Item',
         unit_of_measure: 'unit',
         item_code: delCode,
-        current_stock: 5,
+        current_stock: 0,
         min_stock_level: 2,
         unit_cost_dzd: 25.0,
         selling_price_dzd: 50.0,

@@ -50,8 +50,8 @@ ON CONFLICT (name) DO NOTHING;
 -- Guarded by NOT EXISTS on the NULL-tenant key (the UNIQUE(tenant_id,
 -- category_key) constraint cannot dedupe NULL tenant_id rows, so ON CONFLICT
 -- would not work here).
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, v.key, NULL, v.description, TRUE FROM (VALUES
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, v.key, NULL, v.description, 30, TRUE FROM (VALUES
   ('cat.preventive', 'Preventive dental care'),
   ('cat.restorative', 'Restorative procedures'),
   ('cat.surgery', 'Oral and maxillofacial surgery'),
@@ -65,89 +65,96 @@ WHERE NOT EXISTS (
   SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = v.key
 );
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.preventive.cleaning', p.id, 'Professional teeth cleaning', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.preventive.cleaning', p.id, 'Professional teeth cleaning', 30, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.preventive' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.preventive.cleaning');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.preventive.fluoride', p.id, 'Fluoride treatment', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.preventive.fluoride', p.id, 'Fluoride treatment', 15, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.preventive' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.preventive.fluoride');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.preventive.sealants', p.id, 'Dental sealants', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.preventive.sealants', p.id, 'Dental sealants', 30, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.preventive' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.preventive.sealants');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.restorative.filling', p.id, 'Dental fillings (composite/amalgam)', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.restorative.filling', p.id, 'Dental fillings (composite/amalgam)', 45, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.restorative' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.restorative.filling');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.restorative.crown', p.id, 'Dental crowns', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.restorative.crown', p.id, 'Dental crowns', 60, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.restorative' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.restorative.crown');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.restorative.bridge', p.id, 'Dental bridges', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.restorative.bridge', p.id, 'Dental bridges', 60, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.restorative' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.restorative.bridge');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.surgery.extraction', p.id, 'Tooth extraction (simple/surgical)', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.surgery.extraction', p.id, 'Tooth extraction (simple/surgical)', 30, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.surgery' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.surgery.extraction');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.surgery.implant', p.id, 'Dental implant placement', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.surgery.implant', p.id, 'Dental implant placement', 90, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.surgery' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.surgery.implant');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.surgery.wisdom_tooth', p.id, 'Wisdom tooth removal', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.surgery.wisdom_tooth', p.id, 'Wisdom tooth removal', 45, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.surgery' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.surgery.wisdom_tooth');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.endodontics.root_canal', p.id, 'Root canal therapy', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.endodontics.root_canal', p.id, 'Root canal therapy', 60, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.endodontics' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.endodontics.root_canal');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.orthodontics.braces', p.id, 'Traditional metal braces', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.orthodontics.braces', p.id, 'Traditional metal braces', 45, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.orthodontics' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.orthodontics.braces');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.orthodontics.clear_aligners', p.id, 'Clear aligners (Invisalign-type)', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.orthodontics.clear_aligners', p.id, 'Clear aligners (Invisalign-type)', 30, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.orthodontics' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.orthodontics.clear_aligners');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.cosmetic.whitening', p.id, 'Teeth whitening', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.cosmetic.whitening', p.id, 'Teeth whitening', 45, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.cosmetic' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.cosmetic.whitening');
 
-INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
-SELECT NULL, 'cat.cosmetic.veneers', p.id, 'Dental veneers', TRUE
+INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
+SELECT NULL, 'cat.cosmetic.veneers', p.id, 'Dental veneers', 60, TRUE
 FROM treatment_categories p
 WHERE p.category_key = 'cat.cosmetic' AND p.tenant_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM treatment_categories WHERE tenant_id IS NULL AND category_key = 'cat.cosmetic.veneers');
+
+-- Sync default durations on existing global categories
+UPDATE treatment_categories SET default_duration_minutes = 15 WHERE category_key = 'cat.preventive.fluoride' AND tenant_id IS NULL;
+UPDATE treatment_categories SET default_duration_minutes = 30 WHERE category_key IN ('cat.preventive.cleaning', 'cat.preventive.sealants', 'cat.surgery.extraction', 'cat.orthodontics.clear_aligners') AND tenant_id IS NULL;
+UPDATE treatment_categories SET default_duration_minutes = 45 WHERE category_key IN ('cat.restorative.filling', 'cat.surgery.wisdom_tooth', 'cat.orthodontics.braces', 'cat.cosmetic.whitening') AND tenant_id IS NULL;
+UPDATE treatment_categories SET default_duration_minutes = 60 WHERE category_key IN ('cat.restorative.crown', 'cat.restorative.bridge', 'cat.endodontics.root_canal', 'cat.cosmetic.veneers') AND tenant_id IS NULL;
+UPDATE treatment_categories SET default_duration_minutes = 90 WHERE category_key = 'cat.surgery.implant' AND tenant_id IS NULL;
 
 
 -- ----------------------------------------------------------------------------

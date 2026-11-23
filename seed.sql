@@ -177,12 +177,13 @@ BEGIN
     RAISE NOTICE 'Created Patient: Leila Mansouri (Code: PAT-2025-0002)';
 
     -- Create Tenant-Specific Custom Treatment Category
-    INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, is_active)
+    INSERT INTO treatment_categories (tenant_id, category_key, parent_id, description, default_duration_minutes, is_active)
     SELECT 
         v_tenant_id,
         'cat.custom.pediatric',
         NULL,
         'Pediatric Dentistry (Custom for El-Qods)',
+        30,
         TRUE;
 
     RAISE NOTICE 'Created custom treatment category for El-Qods';
@@ -1415,7 +1416,7 @@ DECLARE
     -- Loop variables
     v_i INT; v_j INT;
     -- IDs for created records
-    v_plan_id UUID; v_tr_id UUID; v_inv_id UUID; v_po_id UUID;
+    v_plan_id UUID; v_tr_id UUID; v_inv_id UUID; v_po_id UUID; v_pres_id UUID;
     v_media_id UUID; v_appt_id UUID; v_patient_id UUID; v_dentist_id UUID;
     v_tr_count INT := 0; v_inv_count INT := 0; v_pres_count INT := 0;
     -- Appointment date variable for treatment records
@@ -1659,37 +1660,117 @@ BEGIN
 
     -- ========================================================================
     -- 6.5: PRESCRIPTIONS (El-Qods: 10, Sourire: 2, Teyar: 3)
-    -- Note: prescription_number is provided explicitly (the auto-numbering
-    -- trigger trg_set_prescription_number in db.sql only fills it when NULL).
+    -- Canonical Header (prescriptions) + Line Items (prescription_items)
     -- Format: RX-YYYYMM-NNNN
     -- ========================================================================
-    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, notes, status_key, created_by)
+
+    -- El-Qods: RX-202606-0001
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid, v_pat1, v_dent1, 'RX-202606-0001', 'Take after meals. Complete full course.', 'prescription.status.active', v_dent1)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
     VALUES
-    (v_tid, v_pat1, v_dent1, 'RX-202606-0001', 'Amoxicillin 500mg', '500 mg', '3 times daily', '7 days', 'Take after meals. Complete full course.', 'prescription.status.active', v_dent1),
-    (v_tid, v_pat2, v_dent2, 'RX-202606-0002', 'Ibuprofen 400mg', '400 mg', '3 times daily as needed', '5 days', 'For post-operative pain management', 'prescription.status.active', v_dent2),
-    (v_tid, v_pat1, v_dent1, 'RX-202606-0003', 'Chlorhexidine Mouthwash 0.12%', '15 ml', '2 times daily after brushing', '14 days', 'Do not swallow. Use for 2 weeks.', 'prescription.status.active', v_dent1),
-    (v_tid, v_pat2, v_dent2, 'RX-202606-0004', 'Metronidazole 250mg', '250 mg', '3 times daily', '7 days', 'For periodontal infection', 'prescription.status.completed', v_dent2),
-    (v_tid, v_pat1, v_dent3, 'RX-202606-0005', 'Paracetamol 500mg', '500 mg', '4 times daily as needed', '3 days', NULL, 'prescription.status.active', v_dent3),
-    (v_tid, v_pat2, v_dent1, 'RX-202606-0006', 'Amoxicillin + Clavulanic Acid 875/125mg', '1 tablet', '2 times daily', '7 days', 'Stronger antibiotic for severe infection', 'prescription.status.cancelled', v_dent1),
-    (v_tid, v_pat1, v_dent2, 'RX-202606-0007', 'Lidocaine Viscous 2%', '5 ml', 'Swish for 1 min as needed', '5 days', 'For oral ulcer pain relief', 'prescription.status.active', v_dent2),
-    (v_tid, v_pat2, v_dent3, 'RX-202606-0008', 'Fluconazole 100mg', '100 mg', 'Once daily', '14 days', 'For oral thrush treatment', 'prescription.status.completed', v_dent3),
-    (v_tid, v_pat1, v_dent1, 'RX-202606-0009', 'Prednisolone 5mg', '5 mg', '3 times daily tapering dose', '8 days', 'Taper: 3x3d, 2x2d, 1x3d', 'prescription.status.active', v_dent1),
-    (v_tid, v_pat2, v_dent2, 'RX-202606-0010', 'Doxycycline 100mg', '100 mg', 'Once daily', '10 days', 'For periodontal disease', 'prescription.status.active', v_dent2);
+    (v_tid, v_pres_id, 'Amoxicillin 500mg', '500 mg', 'prescription.frequency.three_daily', 7, 'Take after meals. Complete full course.'),
+    (v_tid, v_pres_id, 'Clavulanic Acid 125mg', '125 mg', 'prescription.frequency.three_daily', 7, 'Take with antibiotic');
+
+    -- El-Qods: RX-202606-0002
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid, v_pat2, v_dent2, 'RX-202606-0002', 'For post-operative pain management', 'prescription.status.active', v_dent2)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES
+    (v_tid, v_pres_id, 'Ibuprofen 400mg', '400 mg', 'prescription.frequency.three_daily_prn', 5, 'For post-operative pain management'),
+    (v_tid, v_pres_id, 'Paracetamol 500mg', '500 mg', 'prescription.frequency.four_daily_prn', 3, 'Alternate with ibuprofen if needed');
+
+    -- El-Qods: RX-202606-0003
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid, v_pat1, v_dent1, 'RX-202606-0003', 'Do not swallow. Use for 2 weeks.', 'prescription.status.active', v_dent1)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid, v_pres_id, 'Chlorhexidine Mouthwash 0.12%', '15 ml', 'prescription.frequency.twice_daily', 14, '2 times daily after brushing. Do not swallow.');
+
+    -- El-Qods: RX-202606-0004
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid, v_pat2, v_dent2, 'RX-202606-0004', 'For periodontal infection', 'prescription.status.completed', v_dent2)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid, v_pres_id, 'Metronidazole 250mg', '250 mg', 'prescription.frequency.three_daily', 7, 'For periodontal infection');
+
+    -- El-Qods: RX-202606-0005
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid, v_pat1, v_dent3, 'RX-202606-0005', NULL, 'prescription.status.active', v_dent3)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid, v_pres_id, 'Paracetamol 500mg', '500 mg', 'prescription.frequency.four_daily_prn', 3, '4 times daily as needed for pain');
+
+    -- El-Qods: RX-202606-0006
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid, v_pat2, v_dent1, 'RX-202606-0006', 'Stronger antibiotic for severe infection', 'prescription.status.cancelled', v_dent1)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid, v_pres_id, 'Amoxicillin + Clavulanic Acid 875/125mg', '1 tablet', 'prescription.frequency.twice_daily', 7, 'Stronger antibiotic for severe infection');
+
+    -- El-Qods: RX-202606-0007
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid, v_pat1, v_dent2, 'RX-202606-0007', 'For oral ulcer pain relief', 'prescription.status.active', v_dent2)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid, v_pres_id, 'Lidocaine Viscous 2%', '5 ml', 'prescription.frequency.prn', 5, 'Swish for 1 min as needed');
+
+    -- El-Qods: RX-202606-0008
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid, v_pat2, v_dent3, 'RX-202606-0008', 'For oral thrush treatment', 'prescription.status.completed', v_dent3)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid, v_pres_id, 'Fluconazole 100mg', '100 mg', 'prescription.frequency.once_daily', 14, 'For oral thrush treatment');
+
+    -- El-Qods: RX-202606-0009
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid, v_pat1, v_dent1, 'RX-202606-0009', 'Taper: 3x3d, 2x2d, 1x3d', 'prescription.status.active', v_dent1)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid, v_pres_id, 'Prednisolone 5mg', '5 mg', 'prescription.frequency.tapering', 8, 'Taper: 3x3d, 2x2d, 1x3d');
+
+    -- El-Qods: RX-202606-0010
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid, v_pat2, v_dent2, 'RX-202606-0010', 'For periodontal disease', 'prescription.status.active', v_dent2)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid, v_pres_id, 'Doxycycline 100mg', '100 mg', 'prescription.frequency.once_daily', 10, 'For periodontal disease');
+
     v_pres_count := 10;
 
     -- Sourire prescriptions
-    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, status_key, created_by)
-    VALUES (v_sid, v_spat, v_s_admin, 'RX-202606-0001', 'Amoxicillin 500mg', '500 mg', '3 times daily', '7 days', 'prescription.status.active', v_s_admin);
-    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, status_key, created_by)
-    VALUES (v_sid, v_spat, v_s_admin, 'RX-202606-0002', 'Ibuprofen 400mg', '400 mg', '3 times daily', '3 days', 'prescription.status.active', v_s_admin);
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, status_key, created_by)
+    VALUES (v_sid, v_spat, v_s_admin, 'RX-202606-0001', 'prescription.status.active', v_s_admin)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_sid, v_pres_id, 'Amoxicillin 500mg', '500 mg', 'prescription.frequency.three_daily', 7, '3 times daily');
+
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, status_key, created_by)
+    VALUES (v_sid, v_spat, v_s_admin, 'RX-202606-0002', 'prescription.status.active', v_s_admin)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_sid, v_pres_id, 'Ibuprofen 400mg', '400 mg', 'prescription.frequency.three_daily', 3, '3 times daily');
 
     -- Teyar prescriptions
-    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, notes, status_key, created_by)
-    VALUES (v_tid3, v_tpat, v_t_dent, 'RX-202606-0001', 'Amoxicillin 1g', '1 g', '2 times daily', '7 days', 'Prophylactic antibiotic before implant surgery', 'prescription.status.active', v_t_dent);
-    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, status_key, created_by)
-    VALUES (v_tid3, v_tpat, v_t_dent, 'RX-202606-0002', 'Ketoprofen 100mg', '100 mg', '2 times daily', '5 days', 'prescription.status.active', v_t_dent);
-    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, medication_name, dosage, frequency, duration, notes, status_key, created_by)
-    VALUES (v_tid3, v_tpat, v_t_dent, 'RX-202606-0003', 'Chlorhexidine Gel 0.2%', 'Apply thin layer', '2 times daily', '14 days', 'Apply to surgical site after implant placement', 'prescription.status.active', v_t_dent);
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid3, v_tpat, v_t_dent, 'RX-202606-0001', 'Prophylactic antibiotic before implant surgery', 'prescription.status.active', v_t_dent)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid3, v_pres_id, 'Amoxicillin 1g', '1 g', 'prescription.frequency.twice_daily', 7, 'Prophylactic antibiotic before implant surgery');
+
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, status_key, created_by)
+    VALUES (v_tid3, v_tpat, v_t_dent, 'RX-202606-0002', 'prescription.status.active', v_t_dent)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid3, v_pres_id, 'Ketoprofen 100mg', '100 mg', 'prescription.frequency.twice_daily', 5, '2 times daily');
+
+    INSERT INTO prescriptions (tenant_id, patient_id, dentist_id, prescription_number, notes, status_key, created_by)
+    VALUES (v_tid3, v_tpat, v_t_dent, 'RX-202606-0003', 'Apply to surgical site after implant placement', 'prescription.status.active', v_t_dent)
+    RETURNING id INTO v_pres_id;
+    INSERT INTO prescription_items (tenant_id, prescription_id, medication_name, dosage, frequency_key, duration_days, instructions)
+    VALUES (v_tid3, v_pres_id, 'Chlorhexidine Gel 0.2%', 'Apply thin layer', 'prescription.frequency.twice_daily', 14, 'Apply to surgical site after implant placement');
 
     RAISE NOTICE '6.5: Created prescriptions (El-Qods: 10, Sourire: 2, Teyar: 3)';
 

@@ -2,9 +2,10 @@ const conflictResolution = require('../middleware/conflictResolution');
 
 // Runs the middleware against a record updated at `updatedAt` and reports
 // whether the route's conflictCheck(record) rejected the write with 409.
-function check({ header, body = {}, updatedAt }) {
+function check({ header, editHeader, body = {}, updatedAt }) {
   const req = { method: 'PATCH', headers: {}, body: { ...body } };
   if (header !== undefined) req.headers['x-client-timestamp'] = String(header);
+  if (editHeader !== undefined) req.headers['x-client-edit-timestamp'] = String(editHeader);
   const res = {
     statusCode: 200,
     status(code) { this.statusCode = code; return this; },
@@ -53,5 +54,27 @@ describe('conflictResolution', () => {
       updatedAt: now - 2 * 60 * 1000,
     });
     expect(r.rejected).toBe(false);
+  });
+
+  it('rejects an offline edit using X-Client-Edit-Timestamp header made before server change', () => {
+    const skew = 5 * 60 * 1000;
+    const r = check({
+      header: now - skew,
+      editHeader: now - skew - 2 * 60 * 1000,
+      updatedAt: now - 60 * 1000,
+    });
+    expect(r.rejected).toBe(true);
+    expect(r.status).toBe(409);
+  });
+
+  it('accepts an offline edit using X-Client-Edit-Timestamp header made after server change', () => {
+    const skew = 5 * 60 * 1000;
+    const r = check({
+      header: now - skew,
+      editHeader: now - skew - 30 * 1000,
+      updatedAt: now - 60 * 1000,
+    });
+    expect(r.rejected).toBe(false);
+    expect(r.status).toBe(200);
   });
 });

@@ -464,6 +464,7 @@ router.patch('/:id',
           .selectFrom('users')
           .select(sql`COUNT(*)`.as('c'))
           .where('users.id', '=', userId)
+          .where('users.tenant_id', '=', req.tenantId)
           .where(hasRoleSql('auth.role.admin'))
           .executeTakeFirst();
         const currentlyAdmin = Number(currentAdmin.c) > 0;
@@ -622,6 +623,7 @@ router.patch('/:id/status',
         .selectFrom('users')
         .select(sql`COUNT(*)`.as('c'))
         .where('users.id', '=', userId)
+        .where('users.tenant_id', '=', req.tenantId)
         .where(hasRoleSql('auth.role.admin'))
         .executeTakeFirst();
       if (Number(statusAdmin.c) > 0 && status_key !== 'user.status.active' && (await isLastAdmin(req.tenantId, userId))) {
@@ -684,6 +686,7 @@ router.delete('/:id', async (req, res, next) => {
       .selectFrom('users')
       .select(sql`COUNT(*)`.as('c'))
       .where('users.id', '=', userId)
+      .where('users.tenant_id', '=', req.tenantId)
       .where(hasRoleSql('auth.role.admin'))
       .executeTakeFirst();
     if (Number(delAdmin.c) > 0 && (await isLastAdmin(req.tenantId, userId))) {

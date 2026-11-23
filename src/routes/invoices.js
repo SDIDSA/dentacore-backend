@@ -401,97 +401,12 @@ router.patch('/:id/status',
   }
 );
 
-// Update paid amount (when payments are made)
-router.patch('/:id/payment',
-  param('id').isUUID(),
-  body('paid_amount_dzd').isFloat({ min: 0 }),
-  async (req, res, next) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ error: 'validation.error', details: errors.array() });
-    }
-
-    try {
-      const { paid_amount_dzd } = req.body;
-
-      // Get current invoice
-      const currentInvoice = await db
-        .selectFrom('invoices')
-        .selectAll()
-        .where('id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
-        .executeTakeFirst();
-
-      if (!currentInvoice) {
-        return res.status(404).json({ error: 'invoice.error.not_found' });
-      }
-
-      if (res.conflictCheck(currentInvoice)) return;
-
-      // money integrity: same overpayment guard as payments.js — a direct
-      // PATCH must not set paid above the invoice total
-      if (paid_amount_dzd > currentInvoice.total_dzd) {
-        return res.status(400).json({
-          error: 'validation.error',
-          details: `paid_amount_dzd (${paid_amount_dzd}) exceeds invoice total (${currentInvoice.total_dzd})`
-        });
-      }
-
-      // Determine new status based on payment
-      let newStatus;
-      if (paid_amount_dzd >= currentInvoice.total_dzd) {
-        newStatus = 'invoice.status.paid';
-      } else if (paid_amount_dzd > 0) {
-        newStatus = 'invoice.status.partial';
-      } else {
-        newStatus = 'invoice.status.unpaid';
-      }
-
-      const invoice = await db
-        .updateTable('invoices')
-        .set({
-          paid_amount_dzd,
-          payment_status_key: newStatus,
-          updated_at: new Date()
-        })
-        .where('id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
-        .returningAll()
-        .executeTakeFirst();
-
-      // Log the payment update
-      if (req.audit) {
-        await req.audit.log({
-          action: 'UPDATE',
-          entityType: 'invoices',
-          entityId: invoice.id,
-          tenantId: req.tenantId,
-          oldValues: { 
-            paid_amount_dzd: currentInvoice.paid_amount_dzd,
-            payment_status_key: currentInvoice.payment_status_key 
-          },
-          newValues: { 
-            paid_amount_dzd: invoice.paid_amount_dzd,
-            payment_status_key: invoice.payment_status_key 
-          }
-        }, db);
-      }
-
-      res.json(invoice);
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
 const updateInvoice = [
   param('id').isUUID(),
   body('patient_id').optional().isUUID(),
   body('issue_date').optional().isISO8601(),
   body('due_date').optional({ values: 'null' }).isISO8601(),
   body('discount_dzd').optional().isFloat({ min: 0 }),
-  body('paid_amount_dzd').optional().isFloat({ min: 0 }),
-  body('payment_status_key').optional().isString(),
   body('notes').optional().isString(),
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -513,7 +428,7 @@ const updateInvoice = [
 
       if (res.conflictCheck(currentInvoice)) return;
 
-      const { patient_id, issue_date, due_date, discount_dzd, paid_amount_dzd, payment_status_key, notes } = req.body;
+      const { patient_id, issue_date, due_date, discount_dzd, notes } = req.body;
 
       const updateData = {};
       if (patient_id !== undefined) {
@@ -530,21 +445,9 @@ const updateInvoice = [
       }
       if (issue_date !== undefined) updateData.issue_date = issue_date;
       if (due_date !== undefined) updateData.due_date = due_date;
-      if (discount_dzd !== undefined) updateData.discount_dzd = discount_dzd;
-
-      if (paid_amount_dzd !== undefined) {
-        updateData.paid_amount_dzd = paid_amount_dzd;
-        let newStatus = 'invoice.status.unpaid';
-        if (paid_amount_dzd >= currentInvoice.total_dzd) {
-          newStatus = 'invoice.status.paid';
-        } else if (paid_amount_dzd > 0) {
-          newStatus = 'invoice.status.partial';
-        }
-        updateData.payment_status_key = newStatus;
-      }
-
-      if (payment_status_key !== undefined && paid_amount_dzd === undefined) {
-        updateData.payment_status_key = payment_status_key;
+      if (discount_dzd !== undefined) {
+        updateData.discount_dzd = Number(discount_dzd);
+        updateData.total_dzd = Number(currentInvoice.subtotal_dzd) - Number(discount_dzd);
       }
 
       if (notes !== undefined) updateData.notes = notes;
@@ -600,14 +503,21 @@ router.delete('/:id',
         return res.status(404).json({ error: 'invoice.error.not_found' });
       }
 
-      // payments cascade via FK — record how much payment history dies with
-      // the invoice so the audit trail reflects the full destruction
-      const paymentCount = (await db
+      // Check if any payment rows exist for this invoice
+      const paymentCountResult = await db
         .selectFrom('payments')
         .select(sql`COUNT(*)`.as('count'))
         .where('invoice_id', '=', req.params.id)
         .where('tenant_id', '=', req.tenantId)
-        .executeTakeFirst())?.count ?? 0;
+        .executeTakeFirst();
+
+      const paymentCount = Number(paymentCountResult?.count ?? 0);
+      if (paymentCount > 0) {
+        return res.status(400).json({
+          error: 'invoice.error.has_payments',
+          message: 'Cannot delete invoice with existing payments'
+        });
+      }
 
       await db
         .deleteFrom('invoices')
@@ -623,7 +533,7 @@ router.delete('/:id',
           entityType: 'invoices',
           entityId: req.params.id,
           tenantId: req.tenantId,
-          oldValues: { ...invoice, cascaded_payments: Number(paymentCount) }
+          oldValues: invoice
         });
       }
 

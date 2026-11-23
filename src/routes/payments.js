@@ -443,52 +443,14 @@ router.patch('/:id',
   }
 );
 
-// Delete payment
+// Payments cannot be deleted; issue a credit note for refunds
 router.delete('/:id',
   param('id').isUUID(),
   async (req, res, next) => {
-    try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ error: 'validation.error', details: errors.array() });
-      }
-
-      const payment = await db
-        .selectFrom('payments')
-        .selectAll()
-        .where('id', '=', req.params.id)
-        .where('tenant_id', '=', req.tenantId)
-        .executeTakeFirst();
-
-      if (!payment) {
-        return res.status(404).json({ error: 'payment.error.not_found' });
-      }
-
-      await db.transaction().execute(async (trx) => {
-        await trx
-          .deleteFrom('payments')
-          .where('id', '=', req.params.id)
-          .where('tenant_id', '=', req.tenantId)
-          .execute();
-
-        await syncInvoicePaidAmount(trx, payment.invoice_id, req.tenantId);
-      });
-
-      if (req.audit) {
-        await req.audit.log({
-          action: 'DELETE',
-          entityType: 'payments',
-          entityId: req.params.id,
-          tenantId: req.tenantId,
-          oldValues: payment
-        }, db);
-      }
-
-
-      res.status(204).end();
-    } catch (error) {
-      next(error);
-    }
+    return res.status(405).json({
+      error: 'payment.error.cannot_delete',
+      message: 'Payments cannot be deleted; issue a credit note for refunds.'
+    });
   }
 );
 

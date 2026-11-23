@@ -19,12 +19,22 @@ function isValidISO8601(dateString) {
 }
 
 async function tenantRefExists(tenantId, table, id) {
-  const row = await db
+  if (!id) return true;
+  let query = db
     .selectFrom(table)
     .select('id')
-    .where('id', '=', id)
-    .where('tenant_id', '=', tenantId)
-    .executeTakeFirst();
+    .where('id', '=', id);
+  if (table === 'treatment_categories') {
+    query = query.where((eb) =>
+      eb.or([
+        eb('tenant_id', '=', tenantId),
+        eb('tenant_id', 'is', null)
+      ])
+    );
+  } else {
+    query = query.where('tenant_id', '=', tenantId);
+  }
+  const row = await query.executeTakeFirst();
   return !!row;
 }
 
@@ -175,10 +185,12 @@ router.get('/batch', async (req, res, next) => {
       .selectFrom('appointments')
       .innerJoin('patients', 'appointments.patient_id', 'patients.id')
       .innerJoin('users', 'appointments.dentist_id', 'users.id')
+      .leftJoin('treatment_categories as tc', 'appointments.category_id', 'tc.id')
       .select([
         'appointments.id',
         'appointments.patient_id',
         'appointments.dentist_id',
+        'appointments.category_id',
         'appointments.appointment_date',
         'appointments.duration_minutes',
         'appointments.status_key',
@@ -187,7 +199,8 @@ router.get('/batch', async (req, res, next) => {
         'appointments.created_at',
         'patients.full_name as patient_name',
         'patients.phone as patient_phone',
-        'users.full_name as dentist_name'
+        'users.full_name as dentist_name',
+        'tc.category_key as category_key'
       ])
       .where('appointments.id', 'in', idArray)
       .where('appointments.tenant_id', '=', req.tenantId)
@@ -212,10 +225,12 @@ router.get('/:id',
         .selectFrom('appointments')
         .innerJoin('patients', 'appointments.patient_id', 'patients.id')
         .innerJoin('users', 'appointments.dentist_id', 'users.id')
+        .leftJoin('treatment_categories as tc', 'appointments.category_id', 'tc.id')
         .select([
           'appointments.id',
           'appointments.patient_id',
           'appointments.dentist_id',
+          'appointments.category_id',
           'appointments.appointment_date',
           'appointments.duration_minutes',
           'appointments.status_key',
@@ -224,7 +239,8 @@ router.get('/:id',
           'appointments.created_at',
           'patients.full_name as patient_name',
           'patients.phone as patient_phone',
-          'users.full_name as dentist_name'
+          'users.full_name as dentist_name',
+          'tc.category_key as category_key'
         ])
         .where('appointments.id', '=', req.params.id)
         .where('appointments.tenant_id', '=', req.tenantId)
@@ -256,6 +272,7 @@ router.get('/:id',
 router.post('/',
   body('patient_id').isUUID(),
   body('dentist_id').isUUID(),
+  body('category_id').optional({ nullable: true }).isUUID(),
   body('appointment_date').isISO8601(),
   body('duration_minutes').isInt({ min: 1, max: 480 }),
   async (req, res, next) => {
@@ -265,10 +282,10 @@ router.post('/',
     }
 
     try {
-      const { patient_id, dentist_id, appointment_date, duration_minutes, reason, notes } = req.body;
+      const { patient_id, dentist_id, category_id, appointment_date, duration_minutes, reason, notes } = req.body;
 
-      for (const [field, table] of [['patient_id', 'patients'], ['dentist_id', 'users']]) {
-        if (!(await tenantRefExists(req.tenantId, table, req.body[field]))) {
+      for (const [field, table] of [['patient_id', 'patients'], ['dentist_id', 'users'], ['category_id', 'treatment_categories']]) {
+        if (req.body[field] && !(await tenantRefExists(req.tenantId, table, req.body[field]))) {
           return res.status(400).json({ error: 'validation.error', details: `${field} is invalid` });
         }
       }
@@ -298,6 +315,7 @@ router.post('/',
           .values({
             patient_id,
             dentist_id,
+            category_id: category_id || null,
             appointment_date,
             duration_minutes,
             status_key: 'appt.status.scheduled',
@@ -341,6 +359,7 @@ router.patch('/:id',
   param('id').isUUID(),
   body('patient_id').optional().isUUID(),
   body('dentist_id').optional().isUUID(),
+  body('category_id').optional({ nullable: true }).isUUID(),
   body('appointment_date').optional().isISO8601(),
   body('duration_minutes').optional().isInt({ min: 1, max: 480 }),
   body('status_key').optional().isIn([
@@ -370,9 +389,9 @@ router.patch('/:id',
 
       if (res.conflictCheck(currentAppointment)) return;
 
-      const { patient_id, dentist_id, appointment_date, duration_minutes, status_key, reason, notes } = req.body;
+      const { patient_id, dentist_id, category_id, appointment_date, duration_minutes, status_key, reason, notes } = req.body;
 
-      for (const [field, table] of [['patient_id', 'patients'], ['dentist_id', 'users']]) {
+      for (const [field, table] of [['patient_id', 'patients'], ['dentist_id', 'users'], ['category_id', 'treatment_categories']]) {
         if (req.body[field] !== undefined && !(await tenantRefExists(req.tenantId, table, req.body[field]))) {
           return res.status(400).json({ error: 'validation.error', details: `${field} is invalid` });
         }
@@ -382,6 +401,7 @@ router.patch('/:id',
       const updateData = {};
       if (patient_id !== undefined) updateData.patient_id = patient_id;
       if (dentist_id !== undefined) updateData.dentist_id = dentist_id;
+      if (category_id !== undefined) updateData.category_id = category_id || null;
       if (appointment_date !== undefined) updateData.appointment_date = appointment_date;
       if (duration_minutes !== undefined) updateData.duration_minutes = duration_minutes;
       if (status_key !== undefined) updateData.status_key = status_key;

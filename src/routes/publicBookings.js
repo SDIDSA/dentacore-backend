@@ -73,7 +73,7 @@ router.get(
     try {
       const services = await db
         .selectFrom('treatment_categories as tc')
-        .select(['tc.id', 'tc.category_key', 'tc.description'])
+        .select(['tc.id', 'tc.category_key', 'tc.description', 'tc.default_duration_minutes'])
         .select(sql`CASE WHEN tc.tenant_id IS NULL THEN true ELSE false END`.as('is_global'))
         .where((eb) =>
           eb.or([eb('tc.tenant_id', 'is', null), eb('tc.tenant_id', '=', req.tenantId)])
@@ -224,6 +224,7 @@ router.post(
               tenant_id: req.tenantId,
               patient_id: p.id,
               dentist_id,
+              category_id: category_id || null,
               appointment_date: when,
               duration_minutes: group.slot_minutes,
               status_key: 'appt.status.scheduled',

@@ -42,7 +42,7 @@ function conflictCheck(req, res, next) {
   // So: a live edit (no edit time) is happening now and is never stale; an
   // offline edit's time is shifted into server time by the sender's measured
   // offset (server now - header).
-  const editTime = parseTimestamp(req.body?.clientTimestamp);
+  const editTime = parseTimestamp(req.headers['x-client-edit-timestamp'] ?? req.body?.clientTimestamp);
   const sentTime = parseTimestamp(req.headers['x-client-timestamp']);
 
   if (req.body?.clientTimestamp !== undefined) {

@@ -13,6 +13,10 @@ const FDI_TEETH = [
   '21', '22', '23', '24', '25', '26', '27', '28',
   '31', '32', '33', '34', '35', '36', '37', '38',
   '41', '42', '43', '44', '45', '46', '47', '48',
+  '51', '52', '53', '54', '55',
+  '61', '62', '63', '64', '65',
+  '71', '72', '73', '74', '75',
+  '81', '82', '83', '84', '85',
 ];
 
 const QUADRANTS = {
@@ -20,6 +24,10 @@ const QUADRANTS = {
   '2': { label: 'Upper Left', region: 'upper' },
   '3': { label: 'Lower Left', region: 'lower' },
   '4': { label: 'Lower Right', region: 'lower' },
+  '5': { label: 'Upper Right (Deciduous)', region: 'upper' },
+  '6': { label: 'Upper Left (Deciduous)', region: 'upper' },
+  '7': { label: 'Lower Left (Deciduous)', region: 'lower' },
+  '8': { label: 'Lower Right (Deciduous)', region: 'lower' },
 };
 
 function getToothInfo(fdiNumber) {
@@ -145,6 +153,10 @@ router.get('/:patientId',
           { id: 2, label: 'Upper Left', teeth: FDI_TEETH.filter(t => t.startsWith('2')) },
           { id: 3, label: 'Lower Left', teeth: FDI_TEETH.filter(t => t.startsWith('3')) },
           { id: 4, label: 'Lower Right', teeth: FDI_TEETH.filter(t => t.startsWith('4')) },
+          { id: 5, label: 'Upper Right (Deciduous)', teeth: FDI_TEETH.filter(t => t.startsWith('5')) },
+          { id: 6, label: 'Upper Left (Deciduous)', teeth: FDI_TEETH.filter(t => t.startsWith('6')) },
+          { id: 7, label: 'Lower Left (Deciduous)', teeth: FDI_TEETH.filter(t => t.startsWith('7')) },
+          { id: 8, label: 'Lower Right (Deciduous)', teeth: FDI_TEETH.filter(t => t.startsWith('8')) },
         ],
       });
     } catch (error) {
@@ -193,6 +205,7 @@ router.put('/:patientId/tooth/:toothNumber',
             updated_at: sql`NOW()`,
           })
           .where('id', '=', existing.id)
+          .where('tenant_id', '=', req.tenantId)
           .execute();
       } else {
         await db

@@ -66,7 +66,11 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!dbAvailable) return;
   try {
+    if (paymentId) {
+      await db.deleteFrom('payments').where('id', '=', paymentId).execute();
+    }
     if (invoiceId) {
+      await db.deleteFrom('invoice_items').where('invoice_id', '=', invoiceId).execute();
       await request(app)
         .delete(`/api/v1/invoices/${invoiceId}`)
         .set('Authorization', `Bearer ${adminToken}`);
@@ -111,19 +115,33 @@ describe('Payment <-> invoice reconciliation', () => {
     expect(res.body.error).toMatch(/validation/i);
   });
 
-  it('deleting the payment recomputes the invoice back to unpaid / 0 paid', async () => {
+  it('deleting a payment is rejected with 405 Method Not Allowed', async () => {
     if (!dbAvailable || !paymentId) return;
     const del = await request(app)
       .delete(`/api/v1/payments/${paymentId}`)
       .set('Authorization', `Bearer ${adminToken}`);
-    expect(del.statusCode).toBe(204);
-    const consumed = paymentId;
-    paymentId = null;
+    expect(del.statusCode).toBe(405);
+    expect(del.body.error).toBe('payment.error.cannot_delete');
+  });
 
+  it('deleting an invoice with existing payments is rejected with 400', async () => {
+    if (!dbAvailable || !invoiceId) return;
+    const del = await request(app)
+      .delete(`/api/v1/invoices/${invoiceId}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(del.statusCode).toBe(400);
+    expect(del.body.error).toBe('invoice.error.has_payments');
+  });
+
+  it('generic PATCH /invoices/:id ignores paid_amount_dzd and prevents balance tampering', async () => {
+    if (!dbAvailable || !invoiceId) return;
+    const res = await request(app)
+      .patch(`/api/v1/invoices/${invoiceId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ paid_amount_dzd: 99999 });
+    expect(res.statusCode).toBe(200);
     const invoice = await getInvoice(invoiceId);
-    expect(Number(invoice.paid_amount_dzd)).toBe(0);
-    expect(invoice.payment_status_key).toBe('invoice.status.unpaid');
-    expect(invoice.payments.find((p) => p.id === consumed)).toBeUndefined();
+    expect(Number(invoice.paid_amount_dzd)).toBe(2000);
   });
 
   it('PATCH invoice status with a garbage payment_status_key is rejected with 400', async () => {
@@ -136,8 +154,8 @@ describe('Payment <-> invoice reconciliation', () => {
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toMatch(/validation/i);
 
-    // whitelist must not have been applied
+    // status must remain partial
     const invoice = await getInvoice(invoiceId);
-    expect(invoice.payment_status_key).toBe('invoice.status.unpaid');
+    expect(invoice.payment_status_key).toBe('invoice.status.partial');
   });
 });
