@@ -289,4 +289,34 @@ describe('Public booking portal', () => {
     expect(res.statusCode).toBe(400);
     expect(res.body.error).toBe('validation.error');
   });
+
+  describe('Clean URL & Public Page Routing', () => {
+    it('serves /book, /book/, and query variations cleanly without 500', async () => {
+      const resClean = await request(app).get('/book');
+      expect(resClean.statusCode).toBe(200);
+      expect(resClean.headers['content-type']).toContain('text/html');
+
+      const resTrailing = await request(app).get('/book/');
+      expect(resTrailing.statusCode).toBe(200);
+      expect(resTrailing.headers['content-type']).toContain('text/html');
+
+      const resWithQuery = await request(app).get('/book/?clinic=test-clinic');
+      expect(resWithQuery.statusCode).toBe(200);
+      expect(resWithQuery.headers['content-type']).toContain('text/html');
+    });
+
+    it('redirects /book/:clinic to /book?clinic=:clinic', async () => {
+      const res = await request(app).get('/book/my-special-clinic');
+      expect(res.statusCode).toBe(301);
+      expect(res.headers.location).toBe('/book?clinic=my-special-clinic');
+    });
+
+    it('serves /signup and /signup/ without 500', async () => {
+      const resClean = await request(app).get('/signup');
+      expect(resClean.statusCode).toBe(200);
+
+      const resTrailing = await request(app).get('/signup/');
+      expect(resTrailing.statusCode).toBe(200);
+    });
+  });
 });
