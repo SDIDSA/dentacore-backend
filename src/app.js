@@ -31,6 +31,7 @@ const platformRoutes = require('./routes/platform');
 const clinicRoutes = require('./routes/clinic');
 const creditNoteRoutes = require('./routes/creditNotes');
 const cashRegisterSessionRoutes = require('./routes/cashRegisterSessions');
+const webBookingRoutes = require('./routes/webBookings');
 
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
@@ -186,6 +187,8 @@ app.use('/api/v1/credit-notes', mutationLimiter);
 app.use('/api/v1/credit_notes', mutationLimiter);
 app.use('/api/v1/cash-register-sessions', mutationLimiter);
 app.use('/api/v1/cash_register_sessions', mutationLimiter);
+app.use('/api/v1/web-bookings', mutationLimiter);
+app.use('/api/v1/web_bookings', mutationLimiter);
 
 // API v1 routes
 app.use('/api/v1/auth', authRoutes);
@@ -203,6 +206,8 @@ app.use('/api/v1/credit-notes', creditNoteRoutes);
 app.use('/api/v1/credit_notes', creditNoteRoutes);
 app.use('/api/v1/cash-register-sessions', cashRegisterSessionRoutes);
 app.use('/api/v1/cash_register_sessions', cashRegisterSessionRoutes);
+app.use('/api/v1/web-bookings', webBookingRoutes);
+app.use('/api/v1/web_bookings', webBookingRoutes);
 app.use('/api/v1/invoices', invoiceRoutes);
 app.use('/api/v1/expenses', expenseRoutes);
 app.use('/api/v1/purchase-orders', purchaseOrderRoutes);

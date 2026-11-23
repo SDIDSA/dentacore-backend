@@ -173,7 +173,7 @@ describe('Public booking portal', () => {
     ctx.firstSlot = group.slots[0];
   });
 
-  it('books a slot as a guest: patient stub + appointment visible to staff', async () => {
+  it('books a slot as a guest: staged in web_bookings, isolated from official records until staff approval', async () => {
     if (!dbAvailable) return;
     const wallHour = Number(ctx.firstSlot.slice(0, 2));
     const when = `${ctx.date}T${String(wallHour - 1).padStart(2, '0')}:${ctx.firstSlot.slice(3)}:00.000Z`;
@@ -188,18 +188,34 @@ describe('Public booking portal', () => {
         notes: 'portal prototype booking',
       });
     expect(res.statusCode).toBe(201);
-    expect(res.body.patient_code).toMatch(/^PAT-\d{4}-\d{4}$/);
-    expect(res.body.status_key).toBe('appt.status.scheduled');
+    expect(res.body.patient_code).toMatch(/^WEB-[A-Z0-9]+$/);
+    expect(res.body.status_key).toBe('web_booking.status.pending');
 
-    // staff-side visibility through the authenticated desktop API
+    // staff-side visibility: web booking is staged in web-bookings, NOT in official appointments
     const token = await loginAs(app, ctx.adminEmail, ctx.password);
     const list = await request(app)
-      .get('/api/v1/appointments')
+      .get('/api/v1/web-bookings')
       .set('Authorization', `Bearer ${token}`);
     expect(list.statusCode).toBe(200);
-    // param-less list returns bare id arrays (JavaFX client contract)
-    const ids = Array.isArray(list.body) ? list.body : [];
-    expect(ids).toContain(res.body.id);
+    const items = list.body.items || list.body;
+    expect(items.some((b) => b.id === res.body.id)).toBe(true);
+
+    // Official appointments must NOT contain this appointment before approval
+    const appts = await request(app)
+      .get('/api/v1/appointments')
+      .set('Authorization', `Bearer ${token}`);
+    expect(appts.statusCode).toBe(200);
+    const apptIds = Array.isArray(appts.body) ? appts.body : [];
+    expect(apptIds).not.toContain(res.body.id);
+
+    // Staff approves the web booking: converts to official patient & appointment
+    const approve = await request(app)
+      .post(`/api/v1/web-bookings/${res.body.id}/approve`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(approve.statusCode).toBe(200);
+    expect(approve.body.booking.status_key).toBe('web_booking.status.approved');
+    expect(approve.body.patient.patient_code).toMatch(/^PAT-\d{4}-\d{4}$/);
+    expect(approve.body.appointment.status_key).toBe('appt.status.confirmed');
 
     ctx.bookedWhen = when;
   });

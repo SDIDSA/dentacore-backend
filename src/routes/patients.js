@@ -122,6 +122,7 @@ router.get('/batch', async (req, res, next) => {
         'patients.medical_history',
         'patients.allergies',
         'patients.blood_type',
+        'patients.remarks',
         'patients.status_key',
         'patients.created_at',
         'wilayas.name_key as wilaya_name_key',
@@ -235,6 +236,7 @@ router.get('/:id', async (req, res, next) => {
         'patients.medical_history',
         'patients.allergies',
         'patients.blood_type',
+        'patients.remarks',
         'patients.status_key',
         'patients.created_at',
         'wilayas.name_key as wilaya_name_key',
@@ -293,6 +295,7 @@ router.post('/',
   body('gender').isIn(['patient.gender.male', 'patient.gender.female']),
   body('phone').matches(/^\+213\d{9}$/),
   body('blood_type').optional().isString(),
+  body('remarks').optional().isString(),
   async (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -303,7 +306,7 @@ router.post('/',
       const {
         full_name, date_of_birth, gender, phone, email,
         wilaya_id, address, emergency_contact_name, emergency_contact_phone,
-        medical_history, allergies, blood_type
+        medical_history, allergies, blood_type, remarks
       } = req.body;
 
       // Generate patient code in a transaction to prevent duplicates
@@ -341,6 +344,7 @@ router.post('/',
             medical_history: medical_history || null,
             allergies: allergies || null,
             blood_type: blood_type || null,
+            remarks: remarks || null,
             created_by: req.user.id
           })
           .returningAll()
@@ -371,6 +375,8 @@ router.patch('/:id',
   body('date_of_birth').optional().isDate(),
   body('gender').optional().isIn(['patient.gender.male', 'patient.gender.female']),
   body('phone').optional().matches(/^\+213\d{9}$/),
+  body('blood_type').optional().isString(),
+  body('remarks').optional().isString(),
   body('status_key').optional().isIn([
     'patient.status.active',
     'patient.status.new',
@@ -388,7 +394,7 @@ router.patch('/:id',
       const {
         full_name, date_of_birth, gender, phone, email,
         wilaya_id, address, emergency_contact_name, emergency_contact_phone,
-        medical_history, allergies, blood_type, status_key
+        medical_history, allergies, blood_type, remarks, status_key
       } = req.body;
 
       // Get current state for audit logging
@@ -418,6 +424,7 @@ router.patch('/:id',
       if (medical_history !== undefined) updateData.medical_history = medical_history;
       if (allergies !== undefined) updateData.allergies = allergies;
       if (blood_type !== undefined) updateData.blood_type = blood_type;
+      if (remarks !== undefined) updateData.remarks = remarks;
       if (status_key !== undefined) updateData.status_key = status_key;
       updateData.updated_at = new Date();
 
@@ -583,6 +590,7 @@ router.get('/:id/detail', async (req, res, next) => {
         'patients.medical_history',
         'patients.allergies',
         'patients.blood_type',
+        'patients.remarks',
         'patients.status_key',
         'patients.created_at',
         'wilayas.name_key as wilaya_name_key',
