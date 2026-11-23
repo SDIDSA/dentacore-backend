@@ -830,7 +830,9 @@ CREATE TABLE IF NOT EXISTS stock_movements (
         'stock.movement.transfer',
         'stock.movement.expired',
         'stock.movement.damaged',
-        'stock.movement.return'
+        'stock.movement.return',
+        'OUT',
+        'IN'
     )),
     CONSTRAINT chk_movement_quantity CHECK (quantity != 0),
     CONSTRAINT chk_movement_cost CHECK (unit_cost_dzd IS NULL OR unit_cost_dzd >= 0)

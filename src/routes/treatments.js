@@ -17,8 +17,8 @@ async function tenantRefExists(tenantId, table, id) {
     .selectFrom(table)
     .select('id')
     .where('id', '=', id);
-  // treatment_categories is hybrid: NULL tenant_id = global defaults
-  if (table === 'treatment_categories') {
+  // treatment_categories and clinical_acts are hybrid: NULL tenant_id = global defaults
+  if (table === 'treatment_categories' || table === 'clinical_acts') {
     query = query.where((eb) =>
       eb.or([
         eb('tenant_id', '=', tenantId),
@@ -38,7 +38,8 @@ async function validateTreatmentRefs(req, res) {
     ['dentist_id', 'users'],
     ['appointment_id', 'appointments'],
     ['plan_id', 'treatment_plans'],
-    ['category_id', 'treatment_categories']
+    ['category_id', 'treatment_categories'],
+    ['clinical_act_id', 'clinical_acts']
   ];
   for (const [field, table] of refs) {
     if (req.body[field] !== undefined && !(await tenantRefExists(req.tenantId, table, req.body[field]))) {
@@ -73,12 +74,15 @@ router.get('/search', async (req, res, next) => {
       .selectFrom('treatment_records')
       .select('treatment_records.id')
       .innerJoin('patients', 'treatment_records.patient_id', 'patients.id')
+      .leftJoin('clinical_acts', 'treatment_records.clinical_act_id', 'clinical_acts.id')
       .where('treatment_records.tenant_id', '=', req.tenantId)
       .where((eb) =>
         eb.or([
           eb('treatment_records.diagnosis', 'ilike', `%${sanitized}%`),
           eb('treatment_records.treatment_performed', 'ilike', `%${sanitized}%`),
           eb('patients.full_name', 'ilike', `%${sanitized}%`),
+          eb('clinical_acts.name', 'ilike', `%${sanitized}%`),
+          eb('clinical_acts.act_code', 'ilike', `%${sanitized}%`),
         ])
       )
       .limit(20)
@@ -113,7 +117,7 @@ router.get('/categories', async (req, res, next) => {
 router.get('/', async (req, res, next) => {
   try {
     const pag = parsePagination(req);
-    const { patient_id, dentist_id, plan_id, start_date, end_date, treatment_type } = req.query;
+    const { patient_id, dentist_id, plan_id, start_date, end_date, treatment_type, clinical_act_id } = req.query;
 
     let query = db
       .selectFrom('treatment_records')
@@ -142,6 +146,10 @@ router.get('/', async (req, res, next) => {
 
     if (treatment_type) {
       query = query.where('treatment_records.category_id', '=', treatment_type);
+    }
+
+    if (clinical_act_id) {
+      query = query.where('treatment_records.clinical_act_id', '=', clinical_act_id);
     }
 
     if (pag.paginate) {
@@ -189,6 +197,7 @@ router.get('/batch', async (req, res, next) => {
         'treatment_records.appointment_id',
         'treatment_records.dentist_id',
         'treatment_records.category_id',
+        'treatment_records.clinical_act_id',
         'treatment_records.treatment_date',
         'treatment_records.tooth_number',
         'treatment_records.diagnosis',
@@ -231,6 +240,7 @@ router.get('/:id',
           'treatment_records.appointment_id',
           'treatment_records.dentist_id',
           'treatment_records.category_id',
+          'treatment_records.clinical_act_id',
           'treatment_records.treatment_date',
           'treatment_records.tooth_number',
           'treatment_records.diagnosis',
@@ -305,6 +315,7 @@ router.post('/',
   body('appointment_id').optional().isUUID(),
   body('plan_id').optional().isUUID(),
   body('category_id').optional().isUUID(),
+  body('clinical_act_id').optional().isUUID(),
   body('tooth_number').optional().isIn(VALID_TOOTH_NUMBERS),
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -315,26 +326,69 @@ router.post('/',
     try {
       if (!(await validateTreatmentRefs(req, res))) return;
 
-      const { patient_id, dentist_id, treatment_date, appointment_id, plan_id, category_id, tooth_number, diagnosis, treatment_performed, notes, estimated_cost_dzd } = req.body;
+      const {
+        patient_id,
+        dentist_id,
+        treatment_date,
+        appointment_id,
+        plan_id,
+        category_id,
+        clinical_act_id,
+        tooth_number,
+        diagnosis,
+        treatment_performed,
+        notes,
+        estimated_cost_dzd
+      } = req.body;
 
-      const treatment = await db
-        .insertInto('treatment_records')
-        .values({
-          patient_id,
-          dentist_id,
-          treatment_date,
-          appointment_id: appointment_id || null,
-          plan_id: plan_id || null,
-          category_id: category_id || null,
-          tooth_number: tooth_number || null,
-          diagnosis,
-          treatment_performed,
-          notes: notes || null,
-          estimated_cost_dzd,
-          tenant_id: req.tenantId
-        })
-        .returningAll()
-        .executeTakeFirst();
+      const treatment = await db.transaction().execute(async (trx) => {
+        const createdTreatment = await trx
+          .insertInto('treatment_records')
+          .values({
+            patient_id,
+            dentist_id,
+            treatment_date,
+            appointment_id: appointment_id || null,
+            plan_id: plan_id || null,
+            category_id: category_id || null,
+            clinical_act_id: clinical_act_id || null,
+            tooth_number: tooth_number || null,
+            diagnosis,
+            treatment_performed,
+            notes: notes || null,
+            estimated_cost_dzd,
+            tenant_id: req.tenantId
+          })
+          .returningAll()
+          .executeTakeFirst();
+
+        if (clinical_act_id) {
+          const materials = await trx
+            .selectFrom('clinical_act_materials')
+            .select(['inventory_item_id', 'quantity_consumed'])
+            .where('clinical_act_id', '=', clinical_act_id)
+            .execute();
+
+          for (const mat of materials) {
+            const qtyConsumed = Number(mat.quantity_consumed);
+            await trx
+              .insertInto('stock_movements')
+              .values({
+                tenant_id: req.tenantId,
+                inventory_item_id: mat.inventory_item_id,
+                movement_type: 'OUT',
+                quantity: -qtyConsumed,
+                reference_type: 'treatment_record',
+                reference_id: createdTreatment.id,
+                notes: `Treatment record ${createdTreatment.id}`,
+                created_by: req.user ? req.user.id : null
+              })
+              .execute();
+          }
+        }
+
+        return createdTreatment;
+      });
 
       // Log the treatment creation
       if (req.audit) {
@@ -363,6 +417,7 @@ router.patch('/:id',
   body('appointment_id').optional().isUUID(),
   body('plan_id').optional().isUUID(),
   body('category_id').optional().isUUID(),
+  body('clinical_act_id').optional().isUUID(),
   body('tooth_number').optional().isIn(VALID_TOOTH_NUMBERS),
   body('diagnosis').optional().notEmpty(),
   body('treatment_performed').optional().notEmpty(),
@@ -390,7 +445,20 @@ router.patch('/:id',
 
       if (res.conflictCheck(currentTreatment)) return;
 
-      const { patient_id, dentist_id, treatment_date, appointment_id, plan_id, category_id, tooth_number, diagnosis, treatment_performed, notes, estimated_cost_dzd } = req.body;
+      const {
+        patient_id,
+        dentist_id,
+        treatment_date,
+        appointment_id,
+        plan_id,
+        category_id,
+        clinical_act_id,
+        tooth_number,
+        diagnosis,
+        treatment_performed,
+        notes,
+        estimated_cost_dzd
+      } = req.body;
 
       // Build update object with only provided fields
       const updateData = {};
@@ -400,6 +468,7 @@ router.patch('/:id',
       if (appointment_id !== undefined) updateData.appointment_id = appointment_id;
       if (plan_id !== undefined) updateData.plan_id = plan_id;
       if (category_id !== undefined) updateData.category_id = category_id;
+      if (clinical_act_id !== undefined) updateData.clinical_act_id = clinical_act_id;
       if (tooth_number !== undefined) updateData.tooth_number = tooth_number;
       if (diagnosis !== undefined) updateData.diagnosis = diagnosis;
       if (treatment_performed !== undefined) updateData.treatment_performed = treatment_performed;

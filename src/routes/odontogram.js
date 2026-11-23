@@ -57,6 +57,67 @@ function determineStatus(treatments, xrays) {
   return 'healthy';
 }
 
+// Add or update a tooth condition (direct condition payload)
+router.post('/condition',
+  body('patient_id').isUUID(),
+  body('tooth_number').isIn(FDI_TEETH),
+  body('condition').isString().notEmpty(),
+  body('notes').optional().isString(),
+  async (req, res, next) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'validation.error', details: errors.array() });
+      }
+
+      const { patient_id, tooth_number, condition, notes } = req.body;
+
+      await db
+        .selectFrom('patients')
+        .select('id')
+        .where('id', '=', patient_id)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirstOrThrow(() => Object.assign(new Error('patient.error.not_found'), { status: 404 }));
+
+      const existing = await db
+        .selectFrom('odontogram_conditions')
+        .select('id')
+        .where('patient_id', '=', patient_id)
+        .where('tooth_number', '=', tooth_number)
+        .where('tenant_id', '=', req.tenantId)
+        .executeTakeFirst();
+
+      if (existing) {
+        await db
+          .updateTable('odontogram_conditions')
+          .set({
+            condition,
+            notes: notes || null,
+            updated_at: sql`NOW()`,
+          })
+          .where('id', '=', existing.id)
+          .where('tenant_id', '=', req.tenantId)
+          .execute();
+      } else {
+        await db
+          .insertInto('odontogram_conditions')
+          .values({
+            patient_id,
+            tooth_number,
+            condition,
+            notes: notes || null,
+            tenant_id: req.tenantId,
+          })
+          .execute();
+      }
+
+      res.status(201).json({ success: true, patient_id, tooth_number, condition, notes: notes || null });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 router.get('/:patientId',
   param('patientId').isUUID(),
   async (req, res, next) => {
