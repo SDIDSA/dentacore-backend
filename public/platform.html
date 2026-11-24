@@ -161,6 +161,7 @@ input:focus{outline:none;border-color:var(--primary)}
       <button type="button" class="tab" id="tabHealth"><span class="idx">07</span><span data-i="tab_health">Health</span></button>
       <button type="button" class="tab" id="tabAudit"><span class="idx">08</span><span data-i="tab_audit">Audit</span></button>
       <button type="button" class="tab" id="tabAnnounce"><span class="idx">09</span><span data-i="tab_announce">Announcements</span></button>
+      <button type="button" class="tab" id="tabCrashes"><span class="idx">10</span><span data-i="tab_crashes">Crashes</span></button>
     </div>
 
     <!-- 01 overview -->
@@ -383,7 +384,69 @@ input:focus{outline:none;border-color:var(--primary)}
         </div>
       </div>
     </section>
+    <!-- 10 crashes -->
+    <section id="viewCrashes" class="hidden">
+      <div class="stats" id="crashStats"></div>
+      <div class="toolbar">
+        <input type="search" id="crashSearch" data-i-ph="crash_search_ph" placeholder="Search error type, message, stack...">
+        <div class="chips" id="crashChips">
+          <button type="button" class="chip on" data-val="" data-i="all">All</button>
+          <button type="button" class="chip" data-val="false" data-i="unresolved">Unresolved</button>
+          <button type="button" class="chip" data-val="true" data-i="resolved">Resolved</button>
+        </div>
+        <select id="crashPlatformSelect" style="width:auto;padding:7px 12px;font-size:.85rem">
+          <option value="">All Platforms</option>
+          <option value="Windows">Windows</option>
+          <option value="Android">Android</option>
+        </select>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th data-i="th_time">Time</th>
+        <th data-i="th_platform">Platform</th>
+        <th data-i="th_app_version">Version</th>
+        <th data-i="th_clinic">Clinic</th>
+        <th data-i="th_error_type">Error Type</th>
+        <th data-i="th_message">Message / Stack</th>
+        <th data-i="th_status">Status</th>
+      </tr></thead><tbody id="crashesBody"></tbody></table></div>
+      <div class="pager">
+        <span class="note" id="crashPagerInfo"></span>
+        <button type="button" id="crashPrevBtn" data-i="prev">&#8249; Prev</button>
+        <button type="button" id="crashNextBtn" data-i="next">Next &#8250;</button>
+      </div>
+    </section>
   </main>
+
+  <div id="crashModal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">
+    <div class="card" style="width:min(900px,95vw);max-height:92vh;overflow-y:auto;background:var(--card);border-top:3px solid var(--primary);padding:20px;box-shadow:0 20px 40px rgba(0,0,0,0.4)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
+        <div>
+          <h3 id="modalCrashTitle" style="margin:0;font-size:1.15rem;font-family:'Fira Code',monospace"></h3>
+          <p id="modalCrashSubtitle" class="note" style="margin:4px 0 0"></p>
+        </div>
+        <button type="button" class="btn sm outline" id="modalCloseBtn" style="font-size:1.1rem;padding:2px 8px;line-height:1">&times;</button>
+      </div>
+      <div class="grid2" style="margin-top:10px;margin-bottom:14px">
+        <div>
+          <dl class="kv" id="modalCrashMeta"></dl>
+        </div>
+        <div>
+          <label style="margin-top:0" data-i="th_status">Status</label>
+          <div id="modalCrashResolution" style="margin-top:6px"></div>
+          <label for="crashNotesInput" style="margin-top:12px">Resolution Notes</label>
+          <textarea id="crashNotesInput" rows="3" style="width:100%;border:1px solid var(--line-strong);border-radius:0;padding:8px 10px;font:inherit;font-size:.85rem;color:var(--ink);background:var(--card);resize:vertical"></textarea>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button type="button" class="btn sm" id="modalToggleResolveBtn">Mark Resolved</button>
+            <button type="button" class="btn sm danger" id="modalDeleteBtn">Delete</button>
+          </div>
+        </div>
+      </div>
+      <label>Stack Trace</label>
+      <pre id="modalStackTrace" style="background:#0f172a;color:#f1f5f9;padding:12px;font-family:'Fira Code',monospace;font-size:.78rem;line-height:1.45;overflow:auto;max-height:300px;white-space:pre-wrap;border:1px solid var(--line-strong)"></pre>
+      <label style="margin-top:12px">Device Info</label>
+      <pre id="modalDeviceInfo" style="background:#0f172a;color:#94a3b8;padding:8px 12px;font-family:'Fira Code',monospace;font-size:.75rem;overflow:auto;max-height:120px;white-space:pre-wrap;border:1px solid var(--line-strong)"></pre>
+    </div>
+  </div>
 
   <footer>
     <span>sera &middot; <span data-i="footer">operator console &middot; internal use</span></span>

@@ -2104,6 +2104,37 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_web_booking_pending_slot
     WHERE status_key = 'web_booking.status.pending';
 
 -- ============================================================================
+-- 26. CLIENT CRASHES & ERROR LOGS (Cross-Tenant / Diagnostics)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS client_crashes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID REFERENCES tenants(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    app_version VARCHAR(50) NOT NULL,
+    platform VARCHAR(50) NOT NULL,
+    os_version VARCHAR(100),
+    error_type VARCHAR(255) NOT NULL,
+    message TEXT,
+    stack_trace TEXT NOT NULL,
+    component VARCHAR(100),
+    device_info JSONB DEFAULT '{}'::jsonb,
+    resolved BOOLEAN NOT NULL DEFAULT FALSE,
+    resolved_at TIMESTAMPTZ,
+    resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    resolution_notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE client_crashes IS 'Client-reported unhandled crashes, fatal errors, and diagnostics across desktop and mobile';
+
+CREATE INDEX IF NOT EXISTS idx_client_crashes_created_at ON client_crashes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_client_crashes_tenant ON client_crashes(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_client_crashes_resolved ON client_crashes(resolved);
+CREATE INDEX IF NOT EXISTS idx_client_crashes_error_type ON client_crashes(error_type);
+CREATE INDEX IF NOT EXISTS idx_client_crashes_platform ON client_crashes(platform);
+
+-- ============================================================================
 -- COMPLETION MESSAGE
 -- ============================================================================
 
