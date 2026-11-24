@@ -32,6 +32,7 @@ const clinicRoutes = require('./routes/clinic');
 const creditNoteRoutes = require('./routes/creditNotes');
 const cashRegisterSessionRoutes = require('./routes/cashRegisterSessions');
 const webBookingRoutes = require('./routes/webBookings');
+const clientLogRoutes = require('./routes/clientLogs');
 
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
@@ -215,6 +216,8 @@ app.use('/api/v1/media', mediaRoutes);
 app.use('/api/v1/xrays', xrayRoutes);
 
 app.use('/api/v1/audit-logs', auditLogsRoutes);
+app.use('/api/v1/client-logs', clientLogRoutes);
+app.use('/api/v1/crashes', clientLogRoutes);
 app.use('/api/v1/treatment-plans', treatmentPlanRoutes);
 app.use('/api/v1/prescriptions', prescriptionRoutes);
 app.use('/api/v1/reports', reportRoutes);

@@ -47,7 +47,13 @@
       send: 'Send', active_count: 'Active', trial_count: 'Trial', suspended_count: 'Suspended',
       cancelled_count: 'Cancelled', expired_count: 'Expired', requests_24h: 'Requests (24h)',
       avg_response: 'Avg response', error_rate: 'Error rate', total_requests: 'Total',
-      churn_90d: 'Churn (90d)', total_patients: 'Total patients', read_count: 'Reads'
+      churn_90d: 'Churn (90d)', total_patients: 'Total patients', read_count: 'Reads',
+      tab_crashes: 'Crashes', stat_crashes: 'Total Crashes', stat_unresolved: 'Unresolved',
+      stat_crashes_24h: 'Last 24h', stat_top_error: 'Top Error', th_platform: 'Platform',
+      th_app_version: 'Version', th_error_type: 'Error Type', th_message: 'Message / Stack',
+      resolved: 'Resolved', unresolved: 'Unresolved', mark_resolved: 'Mark Resolved',
+      mark_unresolved: 'Mark Unresolved', delete_crash: 'Delete Report',
+      crash_search_ph: 'Search error type, message, stack trace\u2026', all: 'All'
     },
     fr: {
       doc_title: 'Sera Plateforme', kicker: 'Plateforme', title: 'Console op\u00e9rateur',
@@ -85,7 +91,13 @@
       send: 'Envoyer', active_count: 'Actifs', trial_count: 'Essai', suspended_count: 'Suspendus',
       cancelled_count: 'Annul\u00e9s', expired_count: 'Expir\u00e9s', requests_24h: 'Requ\u00eates (24h)',
       avg_response: 'Temps moy.', error_rate: 'Taux erreur', total_requests: 'Total',
-      churn_90d: 'D\u00e9part (90j)', total_patients: 'Total patients', read_count: 'Lectures'
+      churn_90d: 'D\u00e9part (90j)', total_patients: 'Total patients', read_count: 'Lectures',
+      tab_crashes: 'Crashs', stat_crashes: 'Total crashs', stat_unresolved: 'Non r\u00e9solus',
+      stat_crashes_24h: 'Derni\u00e8res 24h', stat_top_error: 'Erreur fr\u00e9quente', th_platform: 'Plateforme',
+      th_app_version: 'Version', th_error_type: 'Type d\u2019erreur', th_message: 'Message / Pile',
+      resolved: 'R\u00e9solu', unresolved: 'Non r\u00e9solu', mark_resolved: 'Marquer r\u00e9solu',
+      mark_unresolved: 'Marquer non r\u00e9solu', delete_crash: 'Supprimer',
+      crash_search_ph: 'Rechercher erreur, message, trace\u2026', all: 'Tous'
     },
     ar: {
       doc_title: '\u0645\u0646\u0635\u0629 Sera', kicker: '\u0627\u0644\u0645\u0646\u0635\u0629', title: '\u0644\u0648\u062d\u0629 \u0627\u0644\u0645\u0634\u063a\u0644',
@@ -123,7 +135,16 @@
       send: '\u0625\u0631\u0633\u0627\u0644', active_count: '\u0646\u0634\u0637\u0629', trial_count: '\u062a\u062c\u0631\u064a\u0628\u064a\u0629', suspended_count: '\u0645\u0648\u0642\u0648\u0641\u0629',
       cancelled_count: '\u0645\u0644\u063a\u0627\u0629', expired_count: '\u0645\u0646\u062a\u0647\u064a\u0629', requests_24h: '\u0627\u0644\u0637\u0644\u0628\u0627\u062a (24\u0633\u0627\u0639\u0629)',
       avg_response: '\u0627\u0644\u0645\u062a\u0648\u0633\u0637', error_rate: '\u0645\u0639\u0631\u0636 \u0627\u0644\u0623\u062e\u0637\u0627\u0621', total_requests: '\u0627\u0644\u0625\u062c\u0645\u0627\u0644\u064a',
-      churn_90d: '\u0627\u0644\u0645\u063a\u0627\u062f\u0631\u064a\u0646 (90\u064a\u0648\u0645)', total_patients: '\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u0631\u0636\u0649', read_count: '\u0627\u0644\u0642\u0631\u0627\u0621\u0629'
+      churn_90d: '\u0627\u0644\u0645\u063a\u0627\u062f\u0631\u064a\u0646 (90\u064a\u0648\u0645)', total_patients: '\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0645\u0631\u0636\u0649', read_count: '\u0627\u0644\u0642\u0631\u0627\u0621\u0629',
+      tab_crashes: '\u0627\u0644\u0623\u0639\u0637\u0627\u0644', stat_crashes: '\u0625\u062c\u0645\u0627\u0644\u064a \u0627\u0644\u0623\u0639\u0637\u0627\u0644',
+      stat_unresolved: '\u063a\u064a\u0631 \u0645\u062d\u0644\u0648\u0644\u0629', stat_crashes_24h: '\u0622\u062e\u0631 24 \u0633\u0627\u0639\u0629',
+      stat_top_error: '\u0627\u0644\u062e\u0637\u0623 \u0627\u0644\u0623\u0643\u062b\u0631 \u062a\u0643\u0631\u0627\u0631\u0627\u064b',
+      th_platform: '\u0627\u0644\u0645\u0646\u0635\u0629', th_app_version: '\u0627\u0644\u0625\u0635\u062f\u0627\u0631',
+      th_error_type: '\u0646\u0648\u0639 \u0627\u0644\u062e\u0637\u0623', th_message: '\u0627\u0644\u0631\u0633\u0627\u0644\u0629 / \u0627\u0644\u062a\u062a\u0628\u0639',
+      resolved: '\u062a\u0645 \u0627\u0644\u062d\u0644', unresolved: '\u0642\u064a\u062f \u0627\u0644\u0645\u0639\u0627\u0644\u062c\u0629',
+      mark_resolved: '\u062a\u0639\u0644\u064a\u0645 \u0643\u0645\u062d\u0644\u0648\u0644', mark_unresolved: '\u062a\u0639\u0644\u064a\u0645 \u0643\u063a\u064a\u0631 \u0645\u062d\u0644\u0648\u0644',
+      delete_crash: '\u062d\u0630\u0641', crash_search_ph: '\u0627\u0628\u062d\u062b \u0639\u0646 \u062e\u0637\u0623\u060c \u0631\u0633\u0627\u0644\u0629\u060c \u062a\u062a\u0628\u0639\u2026',
+      all: '\u0627\u0644\u0643\u0644'
     }
   };
 
@@ -139,6 +160,12 @@
     if (!v) return t('never');
     return new Date(v).toLocaleDateString(locale(), { year: 'numeric', month: 'short', day: 'numeric' });
   }
+  function fmtDateTime(v) {
+    if (!v) return t('never');
+    var d = new Date(v);
+    return d.toLocaleDateString(locale(), { year: 'numeric', month: 'short', day: 'numeric' }) + ' ' +
+           d.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  }
   function fmtDZD(v) { return Number(v || 0).toLocaleString(locale()); }
   function statusKey(full) { return full ? full.replace('tenant.status.', '') : ''; }
   function statusLabel(full) {
@@ -149,7 +176,9 @@
   function invoiceStatusKey(full) { return full ? full.replace('platform_invoice.', '') : ''; }
 
   var state = { view: 'overview', page: 1, limit: 20, total: 0, search: '', status: '', detailId: null,
-                invPage: 1, invStatus: '', annPage: 1, auditPage: 1, auditTimer: null, selected: {} };
+                invPage: 1, invStatus: '', annPage: 1, auditPage: 1, auditTimer: null, selected: {},
+                crashPage: 1, crashLimit: 20, crashSearch: '', crashResolved: '', crashPlatform: '',
+                crashCurrentId: null, crashTimer: null };
 
   // ---- api helper ----------------------------------------------------------
   function api(path, opts) {
@@ -157,7 +186,8 @@
     opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
     var token = sessionStorage.getItem(TOKEN_KEY);
     if (token) opts.headers['Authorization'] = 'Bearer ' + token;
-    return fetch(API + path, opts).then(function (r) {
+    var url = path.startsWith('/api/') ? path : (API + path);
+    return fetch(url, opts).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (body) {
         if (r.status === 401 && token) { signOut(); throw { code: 'session' }; }
         return { ok: r.ok, status: r.status, body: body };
@@ -635,11 +665,132 @@
     }).catch(function () {});
   }
 
+  // ---- crashes -------------------------------------------------------------
+  function renderCrashes() {
+    var statsEl = $('crashStats');
+    var body = $('crashesBody');
+    body.innerHTML = '<tr><td colspan="7" class="note">' + esc(t('loading')) + '</td></tr>';
+
+    // 1. Stats
+    api('/api/v1/client-logs/stats').then(function (res) {
+      if (!res.ok) return;
+      var s = res.body;
+      var topErr = (s.top_errors && s.top_errors.length)
+        ? s.top_errors[0].error_type + ' (' + s.top_errors[0].count + ')'
+        : '\u2014';
+      statsEl.innerHTML =
+        statCard(t('stat_crashes'), s.total) +
+        statCard(t('stat_unresolved'), s.unresolved) +
+        statCard(t('stat_crashes_24h'), s.last_24h) +
+        statCard(t('stat_top_error'), topErr, true);
+    }).catch(function () {});
+
+    // 2. Paginated Crash List
+    var qs = '?limit=' + state.crashLimit + '&page=' + state.crashPage;
+    if (state.crashSearch) qs += '&search=' + encodeURIComponent(state.crashSearch);
+    if (state.crashResolved !== '') qs += '&resolved=' + state.crashResolved;
+    if (state.crashPlatform) qs += '&platform=' + encodeURIComponent(state.crashPlatform);
+
+    api('/api/v1/client-logs' + qs).then(function (res) {
+      if (!res.ok) return;
+      var items = res.body.data || [];
+      var pag = res.body.pagination || {};
+      var total = pag.total || 0;
+      var page = pag.page || 1;
+      var limit = pag.limit || 20;
+      var totalPages = pag.total_pages || 1;
+
+      var from = total === 0 ? 0 : (page - 1) * limit + 1;
+      var to = Math.min(page * limit, total);
+      $('crashPagerInfo').textContent = from + '\u2013' + to + ' / ' + total;
+      $('crashPrevBtn').disabled = page <= 1;
+      $('crashNextBtn').disabled = page >= totalPages;
+
+      if (!items.length) {
+        body.innerHTML = '<tr><td colspan="7" class="note">' + esc(t('no_results')) + '</td></tr>';
+        return;
+      }
+
+      body.innerHTML = items.map(function (c) {
+        var statusClass = c.resolved ? 'active' : 'suspended';
+        var statusText = c.resolved ? t('resolved') : t('unresolved');
+        var tenantDisplay = c.tenant_name ? esc(c.tenant_name) : '<span class="note">\u2014</span>';
+        var preview = esc(c.message || c.stack_trace_preview || '').slice(0, 90);
+        return '<tr data-crash-id="' + esc(c.id) + '">' +
+          '<td class="num">' + esc(fmtDateTime(c.created_at)) + '</td>' +
+          '<td><b>' + esc(c.platform) + '</b>' + (c.os_version ? ' <span class="note num">' + esc(c.os_version) + '</span>' : '') + '</td>' +
+          '<td class="num">' + esc(c.app_version) + '</td>' +
+          '<td>' + tenantDisplay + '</td>' +
+          '<td style="font-family:\'Fira Code\',monospace;font-size:.82rem;font-weight:600;color:var(--primary)">' + esc(c.error_type) + '</td>' +
+          '<td class="note" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + preview + '</td>' +
+          '<td><span class="pill ' + statusClass + '">' + statusText + '</span></td>' +
+          '</tr>';
+      }).join('');
+
+      Array.prototype.forEach.call(body.querySelectorAll('tr[data-crash-id]'), function (row) {
+        row.addEventListener('click', function () {
+          openCrashModal(row.getAttribute('data-crash-id'));
+        });
+      });
+    }).catch(function () {});
+  }
+
+  function openCrashModal(id) {
+    state.crashCurrentId = id;
+    $('crashModal').classList.remove('hidden');
+    $('modalCrashTitle').textContent = t('loading');
+    $('modalCrashSubtitle').textContent = '';
+    $('modalCrashMeta').innerHTML = '';
+    $('modalStackTrace').textContent = '';
+    $('modalDeviceInfo').textContent = '';
+    $('crashNotesInput').value = '';
+
+    api('/api/v1/client-logs/' + id).then(function (res) {
+      if (!res.ok) {
+        $('modalCrashTitle').textContent = t('err_generic');
+        return;
+      }
+      var c = res.body;
+      $('modalCrashTitle').textContent = c.error_type + (c.component ? ' in ' + c.component : '');
+      $('modalCrashSubtitle').textContent = fmtDateTime(c.created_at) + ' \u00b7 ' + c.platform + (c.os_version ? ' (' + c.os_version + ')' : '') + ' \u00b7 v' + c.app_version;
+
+      var metaHtml =
+        '<dt>ID</dt><dd class="num">' + esc(c.id) + '</dd>' +
+        '<dt>' + esc(t('th_clinic')) + '</dt><dd>' + (c.tenant_name ? esc(c.tenant_name) + ' (' + esc(c.tenant_subdomain) + ')' : '<span class="note">\u2014 unauthenticated / pre-login \u2014</span>') + '</dd>' +
+        '<dt>User</dt><dd>' + (c.user_email ? esc(c.user_email) : '<span class="note">\u2014 none \u2014</span>') + '</dd>' +
+        '<dt>' + esc(t('th_message')) + '</dt><dd style="color:var(--primary);font-weight:600">' + esc(c.message || '\u2014') + '</dd>';
+      $('modalCrashMeta').innerHTML = metaHtml;
+
+      var resHtml = '<span class="pill ' + (c.resolved ? 'active' : 'suspended') + '">' + (c.resolved ? t('resolved') : t('unresolved')) + '</span>';
+      if (c.resolved && c.resolved_at) {
+        resHtml += ' <span class="note num">' + fmtDateTime(c.resolved_at) + (c.resolved_by_email ? ' by ' + esc(c.resolved_by_email) : '') + '</span>';
+      }
+      $('modalCrashResolution').innerHTML = resHtml;
+      $('crashNotesInput').value = c.resolution_notes || '';
+
+      $('modalToggleResolveBtn').textContent = c.resolved ? t('mark_unresolved') : t('mark_resolved');
+      $('modalToggleResolveBtn').setAttribute('data-target-status', c.resolved ? 'false' : 'true');
+
+      $('modalStackTrace').textContent = c.stack_trace || 'No stack trace provided';
+
+      var devInfo = c.device_info;
+      if (typeof devInfo === 'string') {
+        try { devInfo = JSON.parse(devInfo); } catch (_) {}
+      }
+      $('modalDeviceInfo').textContent = devInfo && Object.keys(devInfo).length ? JSON.stringify(devInfo, null, 2) : 'No extra device info';
+    }).catch(function () {});
+  }
+
+  function closeCrashModal() {
+    $('crashModal').classList.add('hidden');
+    state.crashCurrentId = null;
+  }
+
   // ---- navigation ----------------------------------------------------------
-  var VIEWS = ['overview', 'clinics', 'detail', 'revenue', 'plans', 'invoices', 'analytics', 'health', 'audit', 'announce'];
+  var VIEWS = ['overview', 'clinics', 'detail', 'revenue', 'plans', 'invoices', 'analytics', 'health', 'audit', 'announce', 'crashes'];
   var VIEW_IDS = { overview: 'viewOverview', clinics: 'viewClinics', detail: 'viewDetail', revenue: 'viewRevenue',
     plans: 'viewPlans', invoices: 'viewInvoices', analytics: 'viewAnalytics', health: 'viewHealth',
-    audit: 'viewAudit', announce: 'viewAnnounce' };
+    audit: 'viewAudit', announce: 'viewAnnounce', crashes: 'viewCrashes' };
 
   function switchView(view, detailId) {
     state.view = view;
@@ -649,7 +800,8 @@
       tab.classList.remove('on');
     });
     var tabMap = { overview: 'tabOverview', clinics: 'tabClinics', revenue: 'tabRevenue', plans: 'tabPlans',
-      invoices: 'tabInvoices', analytics: 'tabAnalytics', health: 'tabHealth', audit: 'tabAudit', announce: 'tabAnnounce' };
+      invoices: 'tabInvoices', analytics: 'tabAnalytics', health: 'tabHealth', audit: 'tabAudit', announce: 'tabAnnounce',
+      crashes: 'tabCrashes' };
     if (tabMap[view]) $(tabMap[view]).classList.add('on');
     if (view === 'overview') renderStats();
     if (view === 'clinics') renderTenants();
@@ -661,6 +813,7 @@
     if (view === 'health') renderHealth();
     if (view === 'audit') renderAudit();
     if (view === 'announce') renderAnnouncements();
+    if (view === 'crashes') renderCrashes();
   }
 
   function wireRows(container) {
@@ -734,6 +887,7 @@
     $('tabHealth').addEventListener('click', function () { switchView('health'); });
     $('tabAudit').addEventListener('click', function () { switchView('audit'); });
     $('tabAnnounce').addEventListener('click', function () { switchView('announce'); });
+    $('tabCrashes').addEventListener('click', function () { switchView('crashes'); });
     $('backBtn').addEventListener('click', function () { switchView('clinics'); });
     $('saveBtn').addEventListener('click', saveDetail);
     $('impersonateBtn').addEventListener('click', impersonate);
@@ -814,6 +968,56 @@
     $('annCancelBtn').addEventListener('click', function () { $('announceForm').classList.add('hidden'); });
     $('annPrevBtn').addEventListener('click', function () { state.annPage--; renderAnnouncements(); });
     $('annNextBtn').addEventListener('click', function () { state.annPage++; renderAnnouncements(); });
+
+    // crashes
+    $('crashPrevBtn').addEventListener('click', function () { if (state.crashPage > 1) { state.crashPage--; renderCrashes(); } });
+    $('crashNextBtn').addEventListener('click', function () { state.crashPage++; renderCrashes(); });
+    $('crashSearch').addEventListener('input', function () {
+      clearTimeout(state.crashTimer);
+      state.crashTimer = setTimeout(function () { state.crashPage = 1; state.crashSearch = $('crashSearch').value.trim(); renderCrashes(); }, 300);
+    });
+    document.querySelectorAll('#crashChips .chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        document.querySelectorAll('#crashChips .chip').forEach(function (c) { c.classList.remove('on'); });
+        chip.classList.add('on');
+        state.crashResolved = chip.getAttribute('data-val');
+        state.crashPage = 1;
+        renderCrashes();
+      });
+    });
+    $('crashPlatformSelect').addEventListener('change', function () {
+      state.crashPlatform = $('crashPlatformSelect').value;
+      state.crashPage = 1;
+      renderCrashes();
+    });
+    $('modalCloseBtn').addEventListener('click', closeCrashModal);
+    $('crashModal').addEventListener('click', function (e) {
+      if (e.target === $('crashModal')) closeCrashModal();
+    });
+    $('modalToggleResolveBtn').addEventListener('click', function () {
+      if (!state.crashCurrentId) return;
+      var targetResolved = $('modalToggleResolveBtn').getAttribute('data-target-status') === 'true';
+      var notes = $('crashNotesInput').value.trim();
+      api('/api/v1/client-logs/' + state.crashCurrentId, {
+        method: 'PATCH',
+        body: JSON.stringify({ resolved: targetResolved, resolution_notes: notes }),
+      }).then(function (res) {
+        if (res.ok) {
+          openCrashModal(state.crashCurrentId);
+          renderCrashes();
+        }
+      });
+    });
+    $('modalDeleteBtn').addEventListener('click', function () {
+      if (!state.crashCurrentId) return;
+      if (!confirm(t('confirm') + '?')) return;
+      api('/api/v1/client-logs/' + state.crashCurrentId, { method: 'DELETE' }).then(function (res) {
+        if (res.ok || res.status === 204) {
+          closeCrashModal();
+          renderCrashes();
+        }
+      });
+    });
 
     // restore session
     if (sessionStorage.getItem(TOKEN_KEY)) {
